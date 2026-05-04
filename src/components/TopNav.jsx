@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { UserButton } from "@clerk/nextjs";
+import { Show, UserButton } from "@clerk/nextjs";
 
 const LINKS = [
   { href: "/", label: "Home" },
@@ -14,13 +14,26 @@ export default function TopNav() {
 
   return (
     <nav style={{
-      position: "fixed", top: 0, left: 0, right: 0, zIndex: 50,
-      height: "76px", display: "flex", alignItems: "center",
-      background: "rgba(5,5,5,0.92)", backdropFilter: "blur(20px)",
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 50,
+      height: "76px",
+      display: "flex",
+      alignItems: "center",
+      background: "rgba(5,5,5,0.92)",
+      backdropFilter: "blur(20px)",
       borderBottom: "1px solid rgba(255,255,255,0.07)",
       padding: "0 24px",
     }}>
-      <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <div style={{
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12
+      }}>
         <Link href="/" style={{ flexShrink: 0, textDecoration: "none" }}>
           <img
             src="/nova/nova-logo-full.png"
@@ -56,38 +69,46 @@ export default function TopNav() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Link href="/sign-in" style={{
-            textDecoration: "none",
-            background: "transparent",
-            color: "rgba(255,255,255,0.85)",
-            fontSize: "11px",
-            fontWeight: 900,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            padding: "8px 12px",
-            borderRadius: "8px",
-            border: "1px solid rgba(255,255,255,0.14)"
-          }}>
-            Sign In
-          </Link>
+          <Show when="signed-out">
+            <Link
+              href="/sign-in"
+              style={{
+                textDecoration: "none",
+                background: "transparent",
+                color: "rgba(255,255,255,0.85)",
+                fontSize: "11px",
+                fontWeight: 900,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                padding: "8px 12px",
+                borderRadius: "8px",
+                border: "1px solid rgba(255,255,255,0.14)"
+              }}
+            >
+              Sign In
+            </Link>
 
-          <Link href="/sign-up" style={{
-            textDecoration: "none",
-            background: "#D7FF00",
-            color: "#000",
-            fontSize: "11px",
-            fontWeight: 900,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            padding: "8px 18px",
-            borderRadius: "8px",
-          }}>
-            Sign Up
-          </Link>
+            <Link
+              href="/sign-up"
+              style={{
+                textDecoration: "none",
+                background: "#D7FF00",
+                color: "#000",
+                fontSize: "11px",
+                fontWeight: 900,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                padding: "8px 18px",
+                borderRadius: "8px",
+              }}
+            >
+              Sign Up
+            </Link>
+          </Show>
 
-          <div style={{ display: "flex", alignItems: "center" }}>
+          <Show when="signed-in">
             <UserButton
-              afterSignOutUrl="/"
+              showName
               appearance={{
                 elements: {
                   userButtonAvatarBox: "h-9 w-9",
@@ -95,7 +116,7 @@ export default function TopNav() {
                 },
               }}
             />
-          </div>
+          </Show>
         </div>
       </div>
     </nav>
