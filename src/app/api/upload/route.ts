@@ -3,10 +3,6 @@ import { auth } from '@clerk/nextjs/server'
 import { uploadToR2 } from '@/lib/r2'
 import { saveProjectRow } from '@/lib/db'
 
-export const config = {
-  api: { bodyParser: false },
-}
-
 export const maxDuration = 60
 
 export async function POST(req: Request) {
@@ -16,9 +12,8 @@ export async function POST(req: Request) {
 
     const contentType = req.headers.get('content-type') || ''
 
-    // Upload direto via presigned URL — só salva no D1
     if (contentType.includes('application/json')) {
-      const { key, publicUrl, title, mimeType, fileSize } = await req.json()
+      const { key, publicUrl, title, mimeType } = await req.json()
       await saveProjectRow({
         user_id: userId,
         title: title || 'Untitled',
@@ -30,7 +25,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true })
     }
 
-    // Upload pequeno via multipart (fallback para imagens)
     const form = await req.formData()
     const file = form.get('file') as File | null
     const type = (form.get('type') as string) || 'image'
