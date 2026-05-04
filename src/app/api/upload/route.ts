@@ -6,19 +6,31 @@ import { saveProjectRow } from '@/lib/db'
 export async function POST(req: Request) {
   try {
     const { userId } = await auth()
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const contentType = req.headers.get('content-type') || ''
+
+    // Upload direto via presigned URL — só salva no D1
+    if (contentType.includes('application/json')) {
+      const { key, publicUrl, title, mimeType, fileSize } = await req.json()
+      await saveProjectRow({
+        user_id: userId,
+        title: title || 'Untitled',
+        type: mimeType?.startsWith('video/') ? 'video' : 'image',
+        r2_key: key,
+        mime_type: mimeType,
+        url: publicUrl,
+      })
+      return NextResponse.json({ ok: true })
     }
 
+    // Upload pequeno via multipart (fallback para imagens)
     const form = await req.formData()
     const file = form.get('file') as File | null
     const type = (form.get('type') as string) || 'image'
     const title = (form.get('title') as string) || 'Untitled'
 
-    if (!file) {
-      return NextResponse.json({ error: 'Missing file' }, { status: 400 })
-    }
+    if (!file) return NextResponse.json({ error: 'Missing file' }, { status: 400 })
 
     const buf = Buffer.from(await file.arrayBuffer())
     const ext = file.name.split('.').pop() || 'bin'
@@ -34,11 +46,8 @@ export async function POST(req: Request) {
       url,
     })
 
-    return NextResponse.json({ ok: true, userId, title, type, key, url })
+    return NextResponse.json({ ok: true, url })
   } catch (error: any) {
-    return NextResponse.json(
-      { error: error?.message || 'Upload failed' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: error?.message || 'Upload failed' }, { status: 500 })
   }
 }

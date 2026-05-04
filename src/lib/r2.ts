@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 export const r2 = new S3Client({
   region: 'auto',
@@ -18,7 +19,17 @@ export async function uploadToR2(key: string, body: Buffer | Uint8Array, content
       ContentType: contentType,
     })
   )
-
   const baseUrl = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '')
   return `${baseUrl}/${key}`
+}
+
+export async function getPresignedUploadUrl(key: string, contentType: string) {
+  const command = new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET,
+    Key: key,
+    ContentType: contentType,
+  })
+  const url = await getSignedUrl(r2, command, { expiresIn: 3600 })
+  const baseUrl = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '')
+  return { uploadUrl: url, publicUrl: `${baseUrl}/${key}` }
 }
