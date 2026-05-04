@@ -170,7 +170,7 @@ export default function Home() {
             ["Product",   [["Studio","/dashboard"],["Models","/dashboard/models"],["Pricing","/pricing"],["Ad Generator","/product-ad-generator"]]],
             ["Use cases", [["Product ads","/product-ad-generator"],["UGC creatives","/product-ad-generator"],["Social videos","/product-ad-generator"]]],
             ["Company",   [["Terms","/terms"],["Privacy","/privacy"],["Contact","/contact"]]],
-          ].map(([col, links]) => (
+          ].map((item) => { const col = item[0] as string; const links = item[1] as string[][]; return (
             <div key={col}>
               <p className="mb-4 text-sm font-black uppercase tracking-[0.16em] text-white/40">{col}</p>
               {links.map(([label, href]) => (
