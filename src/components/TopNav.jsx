@@ -3,51 +3,76 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS = [
-  { href: "/product-ad-generator", label: "Ad Generator" },
-  { href: "/dashboard/models",     label: "Models" },
-  { href: "/pricing",              label: "Pricing" },
-  { href: "/dashboard",            label: "Dashboard" },
+  { href: "/",                    label: "Home"       },
+  { href: "/dashboard",           label: "Dashboard"  },
+  { href: "/dashboard/generate",  label: "Generate"   },
+  { href: "/dashboard/models",    label: "Models"     },
+  { href: "/pricing",             label: "Pricing"    },
+  { href: "/dashboard/brandkit",  label: "Brand Kit"  },
+  { href: "/dashboard/settings",  label: "Settings"   },
 ];
 
 export default function TopNav() {
   const path = usePathname();
+  if (path.startsWith("/dashboard")) return null;
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/8 bg-[#050505]/90 backdrop-blur-xl px-6"
-         style={{height:"72px",display:"flex",alignItems:"center"}}>
-      <div className="w-full flex items-center justify-between gap-6">
+    <nav style={{
+      position:"fixed", top:0, left:0, right:0, zIndex:50,
+      height:"76px", display:"flex", alignItems:"center",
+      background:"rgba(5,5,5,0.92)", backdropFilter:"blur(20px)",
+      borderBottom:"1px solid rgba(255,255,255,0.07)",
+      padding:"0 24px",
+    }}>
+      <div style={{width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8}}>
 
-        <Link href="/" className="flex-shrink-0">
+        {/* LOGO */}
+        <Link href="/" style={{flexShrink:0, textDecoration:"none"}}>
           <img
             src="/nova/nova-logo-full.png"
             alt="NOVA"
-            style={{height:"48px",width:"auto",objectFit:"contain",display:"block"}}
+            style={{height:"56px", width:"auto", objectFit:"contain", display:"block"}}
           />
         </Link>
 
-        <div className="hidden md:flex items-center gap-1 flex-1">
-          {LINKS.map(({ href, label }) => {
-            const active = path === href;
+        {/* LINKS */}
+        <div style={{display:"flex", alignItems:"center", gap:4}}>
+          {LINKS.filter(l=>l.href !== "/").map(({href, label}) => {
+            const active = path === href || (href !== "/dashboard" && href !== "/" && path.startsWith(href));
             return (
-              <Link key={href} href={href}
-                className={"px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition no-underline " +
-                  (active ? "bg-[#D7FF00] text-black" : "text-white/40 hover:text-white hover:bg-white/5")}>
+              <Link key={href} href={href} style={{
+                textDecoration:"none",
+                padding:"6px 12px",
+                borderRadius:"8px",
+                fontSize:"11px",
+                fontWeight:700,
+                letterSpacing:"0.1em",
+                textTransform:"uppercase",
+                transition:"all 0.15s",
+                background: active ? "#D7FF00" : "transparent",
+                color: active ? "#000" : "rgba(255,255,255,0.45)",
+              }}>
                 {label}
               </Link>
             );
           })}
         </div>
 
-        <div className="flex items-center gap-3">
-          <Link href="/pricing"
-            className="hidden md:block text-xs font-bold text-white/40 hover:text-white transition no-underline px-3 py-2">
-            Plans from $5/mo
-          </Link>
-          <Link href="/dashboard"
-            className="flex-shrink-0 bg-[#D7FF00] text-black text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-lg hover:bg-[#c8f000] transition no-underline">
-            Start Free →
-          </Link>
-        </div>
-
+        {/* CTA */}
+        <Link href="/dashboard" style={{
+          textDecoration:"none",
+          background:"#D7FF00",
+          color:"#000",
+          fontSize:"11px",
+          fontWeight:900,
+          letterSpacing:"0.12em",
+          textTransform:"uppercase",
+          padding:"8px 18px",
+          borderRadius:"8px",
+          flexShrink:0,
+          whiteSpace:"nowrap",
+        }}>
+          Start Free →
+        </Link>
       </div>
     </nav>
   );

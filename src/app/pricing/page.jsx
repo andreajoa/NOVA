@@ -3,15 +3,6 @@ import Footer from "@/components/Footer";
 import { useState } from "react";
 import Link from "next/link";
 
-const NAV_LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/generate",  label: "Generate"  },
-  { href: "/explore",   label: "Explore"   },
-  { href: "/originals", label: "Originals" },
-  { href: "/brandkit",  label: "Brand Kit" },
-  { href: "/pricing",   label: "Pricing"   },
-  { href: "/settings",  label: "Settings"  },
-];
 
 const PLANS = [
   {
@@ -141,28 +132,6 @@ export default function PricingPage() {
     <main className="min-h-screen bg-[#050505] text-white">
 
       {/* ── NAV ── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/8 bg-[#050505]/90 backdrop-blur-xl px-6 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-6">
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <img src="/logo-nova.png" alt="Nova" className="h-8 w-auto"
-              onError={e => { e.currentTarget.style.display = "none"; }} />
-            <span className="text-lg font-black uppercase tracking-[-0.05em]">NOVA</span>
-          </Link>
-          <div className="hidden md:flex items-center gap-5">
-            {NAV_LINKS.map(l => (
-              <Link key={l.href} href={l.href}
-                className={"text-xs font-bold uppercase tracking-widest transition hover:text-white " +
-                  (l.href === "/pricing" ? "text-[#D7FF00]" : "text-white/40")}>
-                {l.label}
-              </Link>
-            ))}
-          </div>
-          <Link href="/dashboard"
-            className="bg-[#D7FF00] text-black text-xs font-black uppercase tracking-wider px-4 py-2 rounded-lg hover:bg-[#c8f000] transition shrink-0">
-            Start Free →
-          </Link>
-        </div>
-      </nav>
 
       <div className="pt-28 pb-24 px-6">
         <div className="max-w-7xl mx-auto">

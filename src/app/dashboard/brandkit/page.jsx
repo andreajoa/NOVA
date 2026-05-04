@@ -3,124 +3,124 @@ import { useState } from "react";
 import Link from "next/link";
 
 const assets = [
-  { id: 1, name: "Product Hero — White BG", type: "image", size: "2.4 MB", used: 14, tag: "product" },
-  { id: 2, name: "Logo Horizontal Dark",    type: "image", size: "480 KB", used: 32, tag: "logo" },
-  { id: 3, name: "Brand Video Loop",        type: "video", size: "18 MB",  used: 5,  tag: "video" },
-  { id: 4, name: "Summer Campaign Shot",    type: "image", size: "3.1 MB", used: 7,  tag: "product" },
-  { id: 5, name: "Logo White Variant",      type: "image", size: "390 KB", used: 21, tag: "logo" },
-  { id: 6, name: "Lifestyle — Outdoor",     type: "image", size: "4.2 MB", used: 3,  tag: "product" },
+  { id:1, name:"Logo Primary",  type:"SVG", size:"12 KB",  tag:"Logo"       },
+  { id:2, name:"Logo White",    type:"PNG", size:"48 KB",  tag:"Logo"       },
+  { id:3, name:"Brand Colors",  type:"JSON", size:"2 KB",  tag:"Colors"     },
+  { id:4, name:"Product Shot A",type:"PNG", size:"2.1 MB", tag:"Product"    },
+  { id:5, name:"Product Shot B",type:"PNG", size:"1.8 MB", tag:"Product"    },
+  { id:6, name:"Brand Font",    type:"TTF", size:"180 KB", tag:"Typography" },
 ];
-const colors = ["#1A1A1A","#D7FF00","#FFFFFF","#FF4D4D","#4D79FF"];
-const fonts = [{ name:"Geist Sans", use:"Headlines & UI" },{ name:"Geist Mono", use:"Code & Labels" }];
 
-export default function BrandkitPage() {
-  const [tab, setTab] = useState("assets");
-  const [filter, setFilter] = useState("all");
-  const filtered = filter === "all" ? assets : assets.filter(a => a.tag === filter);
+const colors = [
+  { name:"Primary Yellow", hex:"#D7FF00" },
+  { name:"Background",     hex:"#050505" },
+  { name:"Surface",        hex:"#0D0D0D" },
+  { name:"White",          hex:"#FFFFFF" },
+];
+
+const tags = ["All","Logo","Product","Colors","Typography"];
+
+export default function BrandKitPage() {
+  const [activeTag, setActiveTag] = useState("All");
+  const filtered = activeTag === "All" ? assets : assets.filter(a => a.tag === activeTag);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white p-8">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-black uppercase tracking-tight">Brand Kit</h1>
-            <p className="text-white/40 text-sm mt-1">Seus assets de marca em um so lugar</p>
-          </div>
-          <Link href="/dashboard/brandkit/upload" className="bg-[#D7FF00] text-black text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl hover:bg-[#c8f000] transition no-underline">+ Upload Asset</Link>
-        </div>
+    <div className="p-8 text-white">
 
-        <div className="flex gap-1 bg-white/5 rounded-xl p-1 mb-8 w-fit">
-          {[["assets","Assets"],["colors","Colors"],["fonts","Fonts"],["guidelines","Guidelines"]].map(([id,label]) => (
-            <button key={id} onClick={() => setTab(id)} className={"px-5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition " + (tab === id ? "bg-[#D7FF00] text-black" : "text-white/40 hover:text-white")}>{label}</button>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.25em] text-[#D7FF00] mb-1">Workspace</p>
+          <h1 className="text-4xl font-black uppercase tracking-[-0.05em]">Brand Kit</h1>
+          <p className="text-white/40 text-sm mt-1">Your brand assets, colors, and fonts in one place.</p>
+        </div>
+        <Link href="/dashboard/brandkit/upload"
+          className="bg-[#D7FF00] text-black text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl hover:bg-[#c8f000] transition no-underline">
+          + Upload Asset
+        </Link>
+      </div>
+
+      {/* Brand Colors */}
+      <section className="mb-10">
+        <p className="text-xs font-black uppercase tracking-wider text-white/30 mb-4">Brand Colors</p>
+        <div className="grid grid-cols-4 gap-3">
+          {colors.map(c => (
+            <div key={c.hex} className="bg-[#0D0D0D] border border-white/8 rounded-2xl p-4">
+              <div className="w-full h-14 rounded-xl mb-3 border border-white/10" style={{background:c.hex}} />
+              <p className="text-white text-xs font-black">{c.name}</p>
+              <p className="text-white/30 text-xs font-mono mt-0.5">{c.hex}</p>
+            </div>
           ))}
         </div>
+      </section>
 
-        {tab === "assets" && (
-          <div>
-            <div className="grid grid-cols-3 gap-4 mb-8">
-              {[["6","Assets uploaded"],["44.6 MB","Total storage"],["82","Total uses"]].map(([v,l]) => (
-                <div key={l} className="bg-[#0D0D0D] border border-white/8 rounded-2xl p-5">
-                  <p className="text-[#D7FF00] text-3xl font-black">{v}</p>
-                  <p className="text-white/40 text-xs mt-1">{l}</p>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2 mb-6">
-              {["all","logo","product","video"].map(f => (
-                <button key={f} onClick={() => setFilter(f)} className={"px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border transition " + (filter === f ? "bg-white text-black border-white" : "border-white/15 text-white/40 hover:text-white")}>{f}</button>
-              ))}
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              {filtered.map(asset => (
-                <div key={asset.id} className="group bg-[#0D0D0D] border border-white/8 rounded-2xl overflow-hidden hover:border-[#D7FF00]/40 transition">
-                  <div className="aspect-video bg-[#151515] flex items-center justify-center relative">
-                    <span className="text-4xl">{asset.type === "video" ? "🎬" : "🖼️"}</span>
-                    <div className="absolute top-3 right-3"><span className="text-[9px] font-black uppercase px-2 py-1 rounded-full bg-white/10 text-white/50">{asset.tag}</span></div>
-                  </div>
-                  <div className="p-4">
-                    <p className="text-sm font-bold text-white truncate">{asset.name}</p>
-                    <div className="flex items-center justify-between mt-2">
-                      <p className="text-xs text-white/30">{asset.size}</p>
-                      <p className="text-xs text-[#D7FF00] font-bold">{asset.used}x used</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              <Link href="/dashboard/brandkit/upload" className="bg-[#0D0D0D] border border-dashed border-white/15 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-[#D7FF00]/50 hover:bg-[#D7FF00]/5 transition no-underline group" style={{minHeight:"180px"}}>
-                <span className="text-3xl text-white/30">+</span>
-                <p className="text-white/30 text-xs font-bold uppercase tracking-wider group-hover:text-[#D7FF00] transition">Upload</p>
-              </Link>
-            </div>
+      {/* Assets */}
+      <section className="mb-10">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-xs font-black uppercase tracking-wider text-white/30">Assets</p>
+          <div className="flex gap-2">
+            {tags.map(t => (
+              <button key={t} onClick={() => setActiveTag(t)}
+                className={"text-xs font-bold px-3 py-1.5 rounded-lg transition border-none cursor-pointer " +
+                  (activeTag === t ? "bg-[#D7FF00] text-black" : "text-white/40 hover:text-white bg-white/5")}>
+                {t}
+              </button>
+            ))}
           </div>
-        )}
-
-        {tab === "colors" && (
-          <div>
-            <div className="grid grid-cols-5 gap-4 mb-8">
-              {colors.map(c => (
-                <div key={c} className="rounded-2xl overflow-hidden border border-white/8">
-                  <div className="h-24 w-full" style={{backgroundColor: c}} />
-                  <div className="bg-[#0D0D0D] p-3">
-                    <p className="text-xs font-black text-white">{c}</p>
-                    <p className="text-[10px] text-white/30 mt-0.5">Brand color</p>
-                  </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {filtered.map(asset => (
+            <div key={asset.id}
+              className="bg-[#0D0D0D] border border-white/8 rounded-2xl p-5 flex items-center justify-between group hover:border-white/20 transition cursor-pointer">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-white/40 text-xs font-black flex-shrink-0">
+                  {asset.type}
                 </div>
-              ))}
-            </div>
-            <button className="text-xs font-black uppercase tracking-wider border border-white/15 px-5 py-2.5 rounded-xl text-white/50 hover:text-white hover:border-white/40 transition">+ Add Color</button>
-          </div>
-        )}
-
-        {tab === "fonts" && (
-          <div className="space-y-4">
-            {fonts.map(f => (
-              <div key={f.name} className="bg-[#0D0D0D] border border-white/8 rounded-2xl p-6 flex items-center justify-between">
                 <div>
-                  <p className="text-2xl font-black text-white">{f.name}</p>
-                  <p className="text-white/40 text-xs mt-1">{f.use}</p>
+                  <p className="text-white text-sm font-bold">{asset.name}</p>
+                  <p className="text-white/30 text-xs">{asset.size}</p>
                 </div>
-                <div className="text-[#D7FF00] text-xs font-black uppercase tracking-wider">Active</div>
               </div>
-            ))}
-          </div>
-        )}
+              <button className="text-white/20 hover:text-[#D7FF00] transition text-sm font-bold opacity-0 group-hover:opacity-100 bg-transparent border-none cursor-pointer">↓</button>
+            </div>
+          ))}
+          <Link href="/dashboard/brandkit/upload"
+            className="bg-[#0D0D0D] border border-dashed border-white/15 rounded-2xl p-5 flex flex-col items-center justify-center gap-2 hover:border-[#D7FF00]/40 transition no-underline">
+            <span className="text-2xl text-white/20">+</span>
+            <span className="text-white/30 text-xs font-bold">Upload asset</span>
+          </Link>
+        </div>
+      </section>
 
-        {tab === "guidelines" && (
-          <div className="space-y-4">
-            {[
-              { title: "Logo Usage", desc: "Use a logo sempre em fundo escuro (#050505) ou branco. Nunca distorca ou recolora." },
-              { title: "Color Palette", desc: "Amarelo #D7FF00 e a cor de destaque. Use com moderacao — somente em CTAs e destaques." },
-              { title: "Typography", desc: "Geist Sans para titulos e UI. Geist Mono para dados e labels tecnicos. Maximo 2 fontes." },
-              { title: "Video Style", desc: "Videos com fundo neutro (preto ou branco). Prefira cortes limpos e movimentos suaves." },
-            ].map(g => (
-              <div key={g.title} className="bg-[#0D0D0D] border border-white/8 rounded-2xl p-6">
-                <h3 className="text-sm font-black uppercase tracking-wider text-[#D7FF00] mb-2">{g.title}</h3>
-                <p className="text-white/50 text-sm leading-relaxed">{g.desc}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Sub-pages nav */}
+      <section className="mb-10">
+        <p className="text-xs font-black uppercase tracking-wider text-white/30 mb-4">Quick Access</p>
+        <div className="grid grid-cols-2 gap-3">
+          <Link href="/dashboard/brandkit/upload"
+            className="bg-[#0D0D0D] border border-white/8 rounded-2xl p-5 hover:border-[#D7FF00]/40 transition no-underline group">
+            <p className="text-[#D7FF00] text-lg font-black mb-1 group-hover:scale-105 transition-transform inline-block">↑</p>
+            <p className="text-white font-black text-sm">Upload Assets</p>
+            <p className="text-white/30 text-xs mt-1">Add logos, fonts, product photos</p>
+          </Link>
+          <Link href="/dashboard/brandkit/assets"
+            className="bg-[#0D0D0D] border border-white/8 rounded-2xl p-5 hover:border-[#D7FF00]/40 transition no-underline group">
+            <p className="text-[#D7FF00] text-lg font-black mb-1 group-hover:scale-105 transition-transform inline-block">◫</p>
+            <p className="text-white font-black text-sm">All Assets</p>
+            <p className="text-white/30 text-xs mt-1">Browse and manage your library</p>
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="mt-8 pt-8 border-t border-white/8 flex items-center justify-between">
+        <p className="text-white/20 text-xs">© 2026 Nova AI · All rights reserved</p>
+        <div className="flex gap-6">
+          <a href="/pricing" className="text-white/20 text-xs hover:text-white transition">Pricing</a>
+          <a href="/terms" className="text-white/20 text-xs hover:text-white transition">Terms</a>
+          <a href="/privacy" className="text-white/20 text-xs hover:text-white transition">Privacy</a>
+          <a href="/contact" className="text-white/20 text-xs hover:text-white transition">Contact</a>
+        </div>
+      </footer>
     </div>
   );
 }

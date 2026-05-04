@@ -28,6 +28,16 @@ export default function SettingsPage() {
           ))}
         </div>
       </div>
+
+      <footer className="mt-16 pt-8 border-t border-white/8 flex items-center justify-between">
+        <p className="text-white/20 text-xs">© 2026 Nova AI · All rights reserved</p>
+        <div className="flex gap-6">
+          <a href="/pricing" className="text-white/20 text-xs hover:text-white transition">Pricing</a>
+          <a href="/terms" className="text-white/20 text-xs hover:text-white transition">Terms</a>
+          <a href="/privacy" className="text-white/20 text-xs hover:text-white transition">Privacy</a>
+          <a href="/contact" className="text-white/20 text-xs hover:text-white transition">Contact</a>
+        </div>
+      </footer>
     </div>
   );
 }
