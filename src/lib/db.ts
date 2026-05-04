@@ -1,3 +1,10 @@
+type D1Response = {
+  success?: boolean
+  errors?: unknown[]
+  result?: unknown
+  raw?: string
+}
+
 export async function saveProjectRow(data: {
   user_id: string
   title: string
@@ -23,9 +30,10 @@ export async function saveProjectRow(data: {
   )
 
   const text = await res.text()
-  let json = {}
+  let json: D1Response = {}
+
   try {
-    json = text ? JSON.parse(text) : {}
+    json = text ? (JSON.parse(text) as D1Response) : {}
   } catch {
     json = { raw: text }
   }
@@ -34,8 +42,8 @@ export async function saveProjectRow(data: {
     throw new Error(`D1 HTTP ${res.status}: ${text}`)
   }
 
-  const success = json?.success ?? true
-  const errors = json?.errors ?? []
+  const success = json.success ?? true
+  const errors = json.errors ?? []
 
   if (!success || (Array.isArray(errors) && errors.length > 0)) {
     throw new Error(`D1 query failed: ${JSON.stringify(json)}`)
