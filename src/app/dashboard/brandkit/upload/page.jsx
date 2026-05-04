@@ -30,10 +30,16 @@ export default function BrandKitUpload() {
         body: formData,
       })
 
-      const data = await res.json()
+      const text = await res.text()
+      let data = {}
+      try {
+        data = text ? JSON.parse(text) : {}
+      } catch {
+        data = {}
+      }
 
       if (!res.ok) {
-        throw new Error(data?.error || "Erro no upload")
+        throw new Error(data?.error || text || "Erro no upload")
       }
 
       setMessage("Upload feito com sucesso.")
