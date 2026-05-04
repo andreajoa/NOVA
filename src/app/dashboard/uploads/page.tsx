@@ -1,6 +1,8 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+export const dynamic = 'force-dynamic'
+
+import { useRef, useState } from "react"
 
 type Project = {
   id: number
@@ -19,12 +21,18 @@ function MediaPreview({ url, mimeType, title }: { url?: string; mimeType?: strin
 
 export default function UploadsPage() {
   const [projects, setProjects] = useState<Project[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [statusMsg, setStatusMsg] = useState("")
   const fileRef = useRef<HTMLInputElement>(null)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
+
+  if (!hasLoadedOnce) {
+    setHasLoadedOnce(true)
+    void loadProjects()
+  }
 
   async function loadProjects() {
     setLoading(true)
@@ -33,8 +41,6 @@ export default function UploadsPage() {
     setProjects(data.projects || [])
     setLoading(false)
   }
-
-  useEffect(() => { loadProjects() }, [])
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

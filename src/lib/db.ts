@@ -9,7 +9,7 @@ const CLOUDFLARE_BASE = `https://api.cloudflare.com/client/v4/accounts/${process
 
 async function queryD1(sql: string, params: unknown[] = []): Promise<D1Response> {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 8000) // timeout de 8s
+  const timeout = setTimeout(() => controller.abort(), 8000)
 
   try {
     const res = await fetch(`${CLOUDFLARE_BASE}/query`, {
@@ -28,13 +28,21 @@ async function queryD1(sql: string, params: unknown[] = []): Promise<D1Response>
 
     if (!res.ok) throw new Error(`D1 HTTP ${res.status}: ${text}`)
 
-    const errors = (json as any)?.errors ?? []
+    const errors = json.errors ?? []
     if (Array.isArray(errors) && errors.length > 0) throw new Error(`D1 query failed: ${JSON.stringify(errors)}`)
 
     return json
   } finally {
     clearTimeout(timeout)
   }
+}
+
+export async function createUser(clerkId: string, email: string) {
+  return queryD1(
+    `INSERT OR IGNORE INTO users (id, email, clerk_id, plan, credits, created_at)
+     VALUES (?, ?, ?, 'free', 10, datetime('now'))`,
+    [clerkId, email, clerkId]
+  )
 }
 
 export async function saveProjectRow(data: {

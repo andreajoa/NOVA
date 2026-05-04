@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   clerk_id TEXT NOT NULL UNIQUE,
   plan TEXT DEFAULT 'free',
+  credits INTEGER NOT NULL DEFAULT 10,
   created_at TEXT DEFAULT (datetime('now'))
 );
 

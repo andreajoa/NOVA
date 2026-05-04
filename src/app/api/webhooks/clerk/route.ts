@@ -2,6 +2,7 @@ import { headers } from 'next/headers'
 import { Webhook } from 'svix'
 import { Resend } from 'resend'
 import { NextResponse } from 'next/server'
+import { createUser } from '@/lib/db'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -45,25 +46,33 @@ export async function POST(req: Request) {
   const payload = await req.text()
   const wh = new Webhook(secret)
 
-  let evt: any
+  let evt: { type?: string; data?: Record<string, unknown> }
   try {
     evt = wh.verify(payload, {
       'svix-id': svix_id,
       'svix-timestamp': svix_timestamp,
       'svix-signature': svix_signature,
-    })
-  } catch (err) {
+    }) as { type?: string; data?: Record<string, unknown> }
+  } catch {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
   if (evt.type === 'user.created') {
-    const data = evt.data
-    const email = data.email_addresses?.[0]?.email_address || ''
-    const firstName = data.first_name || ''
-    const lastName = data.last_name || ''
+    const data = evt.data ?? {}
+    const clerkId = data.id as string
+    const emails = data.email_addresses as { email_address: string }[] | undefined
+    const email = emails?.[0]?.email_address ?? ''
+    const firstName = (data.first_name as string) ?? ''
+    const lastName = (data.last_name as string) ?? ''
     const name = [firstName, lastName].filter(Boolean).join(' ') || 'there'
 
-    if (email) {
+    if (email && clerkId) {
+      try {
+        await createUser(clerkId, email)
+      } catch (error) {
+        console.error('Failed to create user in D1:', error)
+      }
+
       await resend.emails.send({
         from: 'NOVA <info@novvideos.online>',
         to: email,

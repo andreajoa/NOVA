@@ -47,7 +47,8 @@ export async function POST(req: Request) {
     })
 
     return NextResponse.json({ ok: true, url })
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || 'Upload failed' }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Upload failed'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

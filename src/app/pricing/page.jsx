@@ -6,25 +6,6 @@ import Link from "next/link";
 
 const PLANS = [
   {
-    id: "free", name: "FREE", badge: null,
-    desc: "Try Nova with no commitment",
-    monthly: 0, annual: 0, credits: 50,
-    highlight: false, cta: "Get Started",
-    border: "border-white/10", bg: "bg-[#0D0D0D]",
-    features: [
-      "50 credits total (one-time)",
-      "com 50 cr: 3 vídeos Seedance Fast, ou 10 vídeos Kling",
-      "Access to selected models",
-      "1 concurrent generation",
-      "MP4 download",
-      "No credit card required",
-    ],
-    models: [
-      { name: "Seedance 2.0 Fast", tag: null },
-      { name: "Kling 3.0", tag: null },
-    ],
-  },
-  {
     id: "starter", name: "STARTER", badge: null,
     desc: "For creators getting started",
     monthly: 5, annual: 4, credits: 70,
