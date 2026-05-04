@@ -3,6 +3,12 @@ import { auth } from '@clerk/nextjs/server'
 import { uploadToR2 } from '@/lib/r2'
 import { saveProjectRow } from '@/lib/db'
 
+export const config = {
+  api: { bodyParser: false },
+}
+
+export const maxDuration = 60
+
 export async function POST(req: Request) {
   try {
     const { userId } = await auth()
