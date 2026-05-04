@@ -4,7 +4,7 @@ import { uploadToR2 } from '@/lib/r2'
 import { saveProjectRow } from '@/lib/db'
 
 export async function POST(req: Request) {
-  const { userId } = auth()
+  const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const form = await req.formData()
