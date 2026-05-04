@@ -11,6 +11,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1041.0",
     "@aws-sdk/s3-request-presigner": "^3.1041.0",
+    "@clerk/nextjs": "^7.3.0",
+    "@cloudflare/workers-types": "^4.20260504.1",
     "@fal-ai/client": "^1.10.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.1",
