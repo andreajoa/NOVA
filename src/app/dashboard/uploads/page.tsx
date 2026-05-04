@@ -11,6 +11,34 @@ type Project = {
   created_at?: number
 }
 
+function MediaPreview({ url, mimeType, title }: { url?: string; mimeType?: string; title: string }) {
+  if (!url) {
+    return (
+      <div className="flex h-56 items-center justify-center bg-white/5 text-white/40">
+        Sem preview
+      </div>
+    )
+  }
+
+  if (mimeType?.startsWith("video/")) {
+    return (
+      <video
+        src={url}
+        controls
+        className="h-56 w-full object-cover"
+      />
+    )
+  }
+
+  return (
+    <img
+      src={url}
+      alt={title}
+      className="h-56 w-full object-cover"
+    />
+  )
+}
+
 export default function UploadsPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -36,9 +64,7 @@ export default function UploadsPage() {
 
     const res = await fetch("/api/projects/delete", {
       method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     })
 
@@ -69,17 +95,11 @@ export default function UploadsPage() {
                 key={item.id}
                 className="overflow-hidden rounded-2xl border border-white/10 bg-white/5"
               >
-                {item.r2_url ? (
-                  <img
-                    src={item.r2_url}
-                    alt={item.title}
-                    className="h-56 w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-56 items-center justify-center bg-white/5 text-white/40">
-                    Sem preview
-                  </div>
-                )}
+                <MediaPreview
+                  url={item.r2_url}
+                  mimeType={item.mime_type}
+                  title={item.title}
+                />
 
                 <div className="space-y-3 p-4">
                   <div>
