@@ -1,8 +1,6 @@
 "use client"
 
-export const dynamic = 'force-dynamic'
-
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 type Project = {
   id: number
@@ -21,26 +19,47 @@ function MediaPreview({ url, mimeType, title }: { url?: string; mimeType?: strin
 
 export default function UploadsPage() {
   const [projects, setProjects] = useState<Project[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [statusMsg, setStatusMsg] = useState("")
   const fileRef = useRef<HTMLInputElement>(null)
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
-
-  if (!hasLoadedOnce) {
-    setHasLoadedOnce(true)
-    void loadProjects()
-  }
 
   async function loadProjects() {
     setLoading(true)
-    const res = await fetch("/api/projects")
-    const data = await res.json()
-    setProjects(data.projects || [])
-    setLoading(false)
+    try {
+      const res = await fetch("/api/projects", { cache: "no-store" })
+      const data = await res.json()
+      setProjects(data.projects || [])
+    } catch (error) {
+      console.error("Erro ao carregar projetos:", error)
+      setProjects([])
+    } finally {
+      setLoading(false)
+    }
   }
+
+  useEffect(() => {
+    let mounted = true
+
+    ;(async () => {
+      try {
+        const res = await fetch("/api/projects", { cache: "no-store" })
+        const data = await res.json()
+        if (mounted) setProjects(data.projects || [])
+      } catch (error) {
+        console.error("Erro ao carregar projetos:", error)
+        if (mounted) setProjects([])
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    })()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -51,7 +70,6 @@ export default function UploadsPage() {
     setStatusMsg("Obtendo URL de upload...")
 
     try {
-      // Passo 1 — pede presigned URL
       const res = await fetch("/api/upload-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64,21 +82,18 @@ export default function UploadsPage() {
       }
 
       const json = await res.json()
-      console.log("upload-url response:", json)
       const { uploadUrl, publicUrl, key, title } = json
 
       if (!uploadUrl) throw new Error("uploadUrl não veio na resposta")
 
       setStatusMsg("Enviando para R2...")
 
-      // Passo 2 — PUT direto para R2
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
         xhr.upload.onprogress = (ev) => {
           if (ev.lengthComputable) setProgress(Math.round((ev.loaded / ev.total) * 100))
         }
         xhr.onload = () => {
-          console.log("XHR status:", xhr.status, xhr.responseText)
           if (xhr.status < 300) resolve()
           else reject(new Error(`R2 PUT falhou: ${xhr.status} ${xhr.responseText}`))
         }
@@ -90,7 +105,6 @@ export default function UploadsPage() {
 
       setStatusMsg("Salvando no banco...")
 
-      // Passo 3 — salva metadados no D1
       const saveRes = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -162,8 +176,11 @@ export default function UploadsPage() {
                     <h2 className="text-lg font-semibold">{item.title || "Sem título"}</h2>
                     <p className="text-sm text-white/50">{item.status}</p>
                   </div>
-                  <button onClick={() => handleDelete(item.id)} disabled={deletingId === item.id}
-                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-500 disabled:opacity-50">
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    disabled={deletingId === item.id}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-500 disabled:opacity-50"
+                  >
                     {deletingId === item.id ? "Excluindo..." : "Excluir"}
                   </button>
                 </div>
