@@ -10,11 +10,15 @@ export const r2 = new S3Client({
 })
 
 export async function uploadToR2(key: string, body: Buffer | Uint8Array, contentType: string) {
-  await r2.send(new PutObjectCommand({
-    Bucket: process.env.R2_BUCKET,
-    Key: key,
-    Body: body,
-    ContentType: contentType,
-  }))
-  return `${process.env.R2_ENDPOINT}/${process.env.R2_BUCKET}/${key}`
+  await r2.send(
+    new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    })
+  )
+
+  const baseUrl = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '')
+  return `${baseUrl}/${key}`
 }
