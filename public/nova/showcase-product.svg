@@ -1,0 +1,21 @@
+<svg width="900" height="1200" viewBox="0 0 900 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="900" height="1200" fill="#070707"/>
+<defs>
+<radialGradient id="g" cx="50%" cy="38%" r="58%">
+<stop stop-color="#D7FF00" stop-opacity="0.24"/>
+<stop offset="0.55" stop-color="#D7FF00" stop-opacity="0.05"/>
+<stop offset="1" stop-color="#070707" stop-opacity="0"/>
+</radialGradient>
+</defs>
+<rect width="900" height="1200" fill="url(#g)"/>
+<rect x="80" y="90" width="740" height="1020" rx="46" fill="#101010" stroke="white" stroke-opacity="0.12"/>
+<text x="120" y="175" fill="#D7FF00" font-family="Arial" font-size="32" font-weight="900">PRODUCT AD</text>
+<text x="120" y="220" fill="white" fill-opacity="0.55" font-family="Arial" font-size="22">Luxury e-commerce creative</text>
+<circle cx="450" cy="530" r="210" fill="#050505" stroke="#D7FF00" stroke-opacity="0.35" stroke-width="4"/>
+<circle cx="450" cy="530" r="130" fill="#1A1A1A" stroke="white" stroke-opacity="0.15"/>
+<circle cx="450" cy="530" r="96" fill="#070707" stroke="#D7FF00" stroke-opacity="0.6" stroke-width="8"/>
+<rect x="417" y="320" width="66" height="420" rx="33" fill="#191919" stroke="#D7FF00" stroke-opacity="0.45"/>
+<rect x="300" y="790" width="300" height="72" rx="36" fill="#D7FF00"/>
+<text x="352" y="836" fill="#050505" font-family="Arial" font-size="24" font-weight="900">GENERATED</text>
+<text x="120" y="1010" fill="white" font-family="Arial" font-size="58" font-weight="900" letter-spacing="-3">READY TO SELL</text>
+</svg>

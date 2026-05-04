@@ -1,0 +1,54 @@
+<svg width="1400" height="900" viewBox="0 0 1400 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="1400" height="900" fill="#050505"/>
+<defs>
+<radialGradient id="g" cx="50%" cy="50%" r="65%">
+<stop stop-color="#D7FF00" stop-opacity="0.22"/>
+<stop offset="0.55" stop-color="#D7FF00" stop-opacity="0.06"/>
+<stop offset="1" stop-color="#050505" stop-opacity="0"/>
+</radialGradient>
+<linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+<stop stop-color="#151515"/>
+<stop offset="1" stop-color="#090909"/>
+</linearGradient>
+</defs>
+
+<rect width="1400" height="900" fill="url(#g)"/>
+
+<g opacity="0.18">
+<path d="M0 120H1400M0 240H1400M0 360H1400M0 480H1400M0 600H1400M0 720H1400M0 840H1400" stroke="white"/>
+<path d="M120 0V900M240 0V900M360 0V900M480 0V900M600 0V900M720 0V900M840 0V900M960 0V900M1080 0V900M1200 0V900M1320 0V900" stroke="white"/>
+</g>
+
+<text x="105" y="145" fill="#D7FF00" font-family="Arial" font-size="48" font-weight="900">AI MODEL ENGINE</text>
+<text x="105" y="205" fill="white" fill-opacity="0.55" font-family="Arial" font-size="24">Choose the best model for each creative job.</text>
+
+<g transform="translate(110 300)">
+<rect width="1180" height="420" rx="42" fill="#0D0D0D" stroke="white" stroke-opacity="0.12"/>
+
+<circle cx="180" cy="210" r="92" fill="#D7FF00"/>
+<text x="126" y="225" fill="#050505" font-family="Arial" font-size="35" font-weight="900">NOVA</text>
+<text x="104" y="258" fill="#050505" fill-opacity="0.68" font-family="Arial" font-size="15" font-weight="900">SMART ROUTER</text>
+
+<path d="M300 210H410" stroke="#D7FF00" stroke-width="5" stroke-dasharray="12 12"/>
+<path d="M395 180L440 210L395 240" stroke="#D7FF00" stroke-width="5" fill="none"/>
+
+<rect x="470" y="55" width="250" height="92" rx="24" fill="#D7FF00"/>
+<text x="515" y="98" fill="#050505" font-family="Arial" font-size="24" font-weight="900">Seedance 2.0</text>
+<text x="520" y="125" fill="#050505" fill-opacity="0.65" font-family="Arial" font-size="15" font-weight="800">Recommended</text>
+
+<rect x="780" y="55" width="250" height="92" rx="24" fill="url(#card)" stroke="white" stroke-opacity="0.12"/>
+<text x="825" y="98" fill="white" font-family="Arial" font-size="24" font-weight="900">Kling 3.0</text>
+<text x="826" y="125" fill="white" fill-opacity="0.45" font-family="Arial" font-size="15" font-weight="800">Cinematic motion</text>
+
+<rect x="470" y="195" width="250" height="92" rx="24" fill="url(#card)" stroke="white" stroke-opacity="0.12"/>
+<text x="520" y="238" fill="white" font-family="Arial" font-size="24" font-weight="900">Veo 3.1</text>
+<text x="520" y="265" fill="white" fill-opacity="0.45" font-family="Arial" font-size="15" font-weight="800">Premium realism</text>
+
+<rect x="780" y="195" width="250" height="92" rx="24" fill="url(#card)" stroke="white" stroke-opacity="0.12"/>
+<text x="835" y="238" fill="white" font-family="Arial" font-size="24" font-weight="900">Wan 2.6</text>
+<text x="834" y="265" fill="white" fill-opacity="0.45" font-family="Arial" font-size="15" font-weight="800">Reference video</text>
+
+<rect x="625" y="320" width="250" height="72" rx="22" fill="url(#card)" stroke="white" stroke-opacity="0.12"/>
+<text x="668" y="364" fill="white" font-family="Arial" font-size="22" font-weight="900">Seedance 1.0</text>
+</g>
+</svg>

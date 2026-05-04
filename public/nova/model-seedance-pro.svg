@@ -1,0 +1,28 @@
+<svg width="900" height="640" viewBox="0 0 900 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="900" height="640" fill="#050505"/>
+<defs>
+<radialGradient id="g" cx="50%" cy="42%" r="68%">
+<stop stop-color="#D7FF00" stop-opacity="0.34"/>
+<stop offset="0.48" stop-color="#D7FF00" stop-opacity="0.08"/>
+<stop offset="1" stop-color="#050505" stop-opacity="0"/>
+</radialGradient>
+<linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+<stop stop-color="#181818"/>
+<stop offset="1" stop-color="#090909"/>
+</linearGradient>
+</defs>
+<rect width="900" height="640" fill="url(#g)"/>
+<g opacity="0.15">
+<path d="M0 80H900M0 160H900M0 240H900M0 320H900M0 400H900M0 480H900M0 560H900" stroke="white"/>
+<path d="M80 0V640M160 0V640M240 0V640M320 0V640M400 0V640M480 0V640M560 0V640M640 0V640M720 0V640M800 0V640" stroke="white"/>
+</g>
+<rect x="70" y="70" width="760" height="500" rx="42" fill="url(#card)" stroke="white" stroke-opacity="0.12"/>
+<circle cx="450" cy="265" r="130" fill="#D7FF00" fill-opacity="0.12" stroke="#D7FF00" stroke-opacity="0.45" stroke-width="3"/>
+<circle cx="450" cy="265" r="72" fill="#D7FF00"/>
+<path d="M430 220L500 265L430 310V220Z" fill="#050505"/>
+<text x="110" y="145" fill="#D7FF00" font-family="Arial" font-size="28" font-weight="900" letter-spacing="3">PREMIUM CONTROL</text>
+<text x="110" y="470" fill="white" font-family="Arial" font-size="92" font-weight="900" letter-spacing="-6">SEEDANCE</text>
+<text x="112" y="535" fill="#D7FF00" font-family="Arial" font-size="54" font-weight="900" letter-spacing="-3">2.0 PRO</text>
+<rect x="620" y="110" width="160" height="40" rx="20" fill="#D7FF00"/>
+<text x="650" y="136" fill="#050505" font-family="Arial" font-size="15" font-weight="900">NOVA MODEL</text>
+</svg>

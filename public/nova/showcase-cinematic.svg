@@ -1,0 +1,23 @@
+<svg width="900" height="1200" viewBox="0 0 900 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="900" height="1200" fill="#050505"/>
+<defs>
+<linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+<stop stop-color="#101923"/>
+<stop offset="0.5" stop-color="#0B0B0B"/>
+<stop offset="1" stop-color="#1A2200"/>
+</linearGradient>
+<radialGradient id="sun" cx="45%" cy="40%" r="45%">
+<stop stop-color="#D7FF00" stop-opacity="0.35"/>
+<stop offset="1" stop-color="#D7FF00" stop-opacity="0"/>
+</radialGradient>
+</defs>
+<rect x="70" y="70" width="760" height="1060" rx="48" fill="url(#sky)" stroke="white" stroke-opacity="0.12"/>
+<rect x="70" y="70" width="760" height="1060" rx="48" fill="url(#sun)"/>
+<path d="M70 780C210 660 305 700 450 610C590 522 680 520 830 430V1130H70V780Z" fill="#0B0B0B"/>
+<path d="M110 850C235 760 330 805 455 725C590 638 700 645 830 565" stroke="#D7FF00" stroke-opacity="0.25" stroke-width="5"/>
+<circle cx="450" cy="430" r="88" fill="#D7FF00"/>
+<path d="M420 380L505 430L420 480V380Z" fill="#050505"/>
+<text x="115" y="180" fill="#D7FF00" font-family="Arial" font-size="32" font-weight="900">CINEMATIC</text>
+<text x="115" y="230" fill="white" fill-opacity="0.55" font-family="Arial" font-size="22">Camera motion + lighting</text>
+<text x="115" y="1025" fill="white" font-family="Arial" font-size="58" font-weight="900" letter-spacing="-3">STUDIO GRADE</text>
+</svg>

@@ -1,0 +1,43 @@
+<svg width="1400" height="980" viewBox="0 0 1400 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="1400" height="980" fill="#050505"/>
+<defs>
+<radialGradient id="g1" cx="50%" cy="45%" r="70%">
+<stop offset="0%" stop-color="#D7FF00" stop-opacity="0.28"/>
+<stop offset="45%" stop-color="#D7FF00" stop-opacity="0.07"/>
+<stop offset="100%" stop-color="#050505" stop-opacity="0"/>
+</radialGradient>
+<linearGradient id="screen" x1="0" y1="0" x2="1" y2="1">
+<stop stop-color="#1E1E1E"/>
+<stop offset="0.45" stop-color="#0B0B0B"/>
+<stop offset="1" stop-color="#141900"/>
+</linearGradient>
+</defs>
+<rect width="1400" height="980" fill="url(#g1)"/>
+<g opacity="0.2">
+<path d="M0 120H1400M0 240H1400M0 360H1400M0 480H1400M0 600H1400M0 720H1400M0 840H1400" stroke="white"/>
+<path d="M120 0V980M240 0V980M360 0V980M480 0V980M600 0V980M720 0V980M840 0V980M960 0V980M1080 0V980M1200 0V980M1320 0V980" stroke="white"/>
+</g>
+<rect x="190" y="120" width="1020" height="700" rx="42" fill="#0B0B0B" stroke="white" stroke-opacity="0.12" stroke-width="2"/>
+<rect x="230" y="175" width="940" height="575" rx="30" fill="url(#screen)" stroke="white" stroke-opacity="0.1"/>
+<circle cx="270" cy="150" r="10" fill="#333"/>
+<circle cx="305" cy="150" r="10" fill="#333"/>
+<circle cx="340" cy="150" r="10" fill="#D7FF00"/>
+<rect x="265" y="215" width="350" height="42" rx="21" fill="#D7FF00"/>
+<text x="290" y="243" fill="#050505" font-family="Arial" font-size="20" font-weight="900">AI VIDEO GENERATION</text>
+<rect x="265" y="292" width="530" height="28" rx="14" fill="white" fill-opacity="0.12"/>
+<rect x="265" y="342" width="420" height="22" rx="11" fill="white" fill-opacity="0.08"/>
+<rect x="265" y="395" width="820" height="255" rx="28" fill="#050505" stroke="#D7FF00" stroke-opacity="0.25"/>
+<circle cx="675" cy="522" r="82" fill="#D7FF00" fill-opacity="0.15"/>
+<circle cx="675" cy="522" r="55" fill="#D7FF00"/>
+<path d="M660 492L710 522L660 552V492Z" fill="#050505"/>
+<rect x="830" y="215" width="255" height="54" rx="16" fill="white" fill-opacity="0.07" stroke="white" stroke-opacity="0.1"/>
+<text x="855" y="249" fill="#D7FF00" font-family="Arial" font-size="17" font-weight="800">9:16 PRODUCT AD</text>
+<rect x="830" y="292" width="255" height="54" rx="16" fill="white" fill-opacity="0.05"/>
+<text x="855" y="326" fill="white" fill-opacity="0.6" font-family="Arial" font-size="16">Cinematic lighting</text>
+<rect x="830" y="369" width="255" height="54" rx="16" fill="white" fill-opacity="0.05"/>
+<text x="855" y="403" fill="white" fill-opacity="0.6" font-family="Arial" font-size="16">E-commerce angle</text>
+<rect x="830" y="446" width="255" height="54" rx="16" fill="white" fill-opacity="0.05"/>
+<text x="855" y="480" fill="white" fill-opacity="0.6" font-family="Arial" font-size="16">Ready to export</text>
+<text x="250" y="890" fill="#D7FF00" font-family="Arial" font-size="74" font-weight="900" letter-spacing="-4">NOVA</text>
+<text x="500" y="890" fill="white" fill-opacity="0.9" font-family="Arial" font-size="46" font-weight="900" letter-spacing="-2">AI VIDEO STUDIO</text>
+</svg>

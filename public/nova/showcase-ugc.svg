@@ -1,0 +1,13 @@
+<svg width="900" height="1200" viewBox="0 0 900 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="900" height="1200" fill="#050505"/>
+<rect x="85" y="75" width="730" height="1050" rx="54" fill="#111" stroke="white" stroke-opacity="0.12"/>
+<rect x="130" y="140" width="640" height="850" rx="38" fill="#070707"/>
+<circle cx="450" cy="430" r="145" fill="#D7FF00" fill-opacity="0.12"/>
+<circle cx="450" cy="370" r="75" fill="#D7FF00"/>
+<rect x="340" y="460" width="220" height="260" rx="110" fill="#D7FF00" fill-opacity="0.9"/>
+<rect x="188" y="800" width="524" height="95" rx="24" fill="#D7FF00"/>
+<text x="230" y="859" fill="#050505" font-family="Arial" font-size="34" font-weight="900">UGC CREATIVE</text>
+<rect x="185" y="925" width="270" height="18" rx="9" fill="white" fill-opacity="0.18"/>
+<rect x="185" y="960" width="410" height="18" rx="9" fill="white" fill-opacity="0.12"/>
+<text x="130" y="1070" fill="white" font-family="Arial" font-size="54" font-weight="900" letter-spacing="-3">HOOK. PROOF. CTA.</text>
+</svg>

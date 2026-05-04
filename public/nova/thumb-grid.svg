@@ -1,0 +1,28 @@
+<svg width="1400" height="700" viewBox="0 0 1400 700" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="1400" height="700" fill="#050505"/>
+<defs>
+<linearGradient id="a" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#182000"/><stop offset="1" stop-color="#050505"/></linearGradient>
+</defs>
+<g opacity="0.95">
+<rect x="60" y="70" width="150" height="260" rx="22" fill="url(#a)" stroke="#D7FF00" stroke-opacity="0.18"/>
+<rect x="230" y="110" width="150" height="260" rx="22" fill="#111" stroke="white" stroke-opacity="0.1"/>
+<rect x="400" y="70" width="150" height="260" rx="22" fill="#151515" stroke="white" stroke-opacity="0.1"/>
+<rect x="570" y="110" width="150" height="260" rx="22" fill="url(#a)" stroke="#D7FF00" stroke-opacity="0.18"/>
+<rect x="740" y="70" width="150" height="260" rx="22" fill="#111" stroke="white" stroke-opacity="0.1"/>
+<rect x="910" y="110" width="150" height="260" rx="22" fill="#151515" stroke="white" stroke-opacity="0.1"/>
+<rect x="1080" y="70" width="150" height="260" rx="22" fill="url(#a)" stroke="#D7FF00" stroke-opacity="0.18"/>
+<rect x="1250" y="110" width="90" height="260" rx="22" fill="#111" stroke="white" stroke-opacity="0.1"/>
+<rect x="140" y="390" width="150" height="240" rx="22" fill="#111" stroke="white" stroke-opacity="0.1"/>
+<rect x="310" y="430" width="150" height="200" rx="22" fill="url(#a)" stroke="#D7FF00" stroke-opacity="0.18"/>
+<rect x="480" y="390" width="150" height="240" rx="22" fill="#151515" stroke="white" stroke-opacity="0.1"/>
+<rect x="650" y="430" width="150" height="200" rx="22" fill="#111" stroke="white" stroke-opacity="0.1"/>
+<rect x="820" y="390" width="150" height="240" rx="22" fill="url(#a)" stroke="#D7FF00" stroke-opacity="0.18"/>
+<rect x="990" y="430" width="150" height="200" rx="22" fill="#111" stroke="white" stroke-opacity="0.1"/>
+<rect x="1160" y="390" width="150" height="240" rx="22" fill="#151515" stroke="white" stroke-opacity="0.1"/>
+</g>
+<text x="125" y="210" fill="#D7FF00" font-family="Arial" font-size="38" font-weight="900">01</text>
+<text x="295" y="250" fill="white" fill-opacity="0.35" font-family="Arial" font-size="38" font-weight="900">02</text>
+<text x="465" y="210" fill="white" fill-opacity="0.35" font-family="Arial" font-size="38" font-weight="900">03</text>
+<text x="635" y="250" fill="#D7FF00" font-family="Arial" font-size="38" font-weight="900">04</text>
+<text x="805" y="210" fill="white" fill-opacity="0.35" font-family="Arial" font-size="38" font-weight="900">05</text>
+</svg>
