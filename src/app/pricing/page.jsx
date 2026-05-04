@@ -13,7 +13,7 @@ const PLANS = [
     border: "border-white/10", bg: "bg-[#0D0D0D]",
     features: [
       "50 credits total (one-time)",
-      "~5 Seedance Fast OR ~1 Kling video",
+      "com 50 cr: 3 vídeos Seedance Fast, ou 10 vídeos Kling",
       "Access to selected models",
       "1 concurrent generation",
       "MP4 download",
@@ -32,7 +32,7 @@ const PLANS = [
     border: "border-white/10", bg: "bg-[#0D0D0D]",
     features: [
       "70 credits / month",
-      "~7 Seedance Fast OR ~1 Kling Pro video",
+      "com 70 cr: 5 vídeos Seedance Fast, ou 14 vídeos Kling, ou 14 imagens",
       "Access to selected models",
       "1 concurrent generation",
       "MP4 download",
@@ -52,7 +52,7 @@ const PLANS = [
     border: "border-[#D7FF00]", bg: "bg-[#D7FF00]/5",
     features: [
       "500 credits / month",
-      "~50 Seedance Fast OR ~12 Kling videos",
+      "com 500 cr: 38 vídeos Seedance Fast, ou 16 vídeos Kling, ou 100 imagens",
       "Access to ALL models",
       "Up to 4 concurrent generations",
       "Priority support",
@@ -75,7 +75,7 @@ const PLANS = [
     border: "border-indigo-500/40", bg: "bg-[#0D0D0D]",
     features: [
       "3,000 credits / month",
-      "~300 Seedance Fast OR ~75 Kling videos",
+      "com 3.000 cr: 230 vídeos Seedance Fast, ou 100 vídeos Kling, ou 600 imagens",
       "Access to ALL models",
       "Up to 8 concurrent generations",
       "⚡ 7-Day Unlimited (ALL models)",
