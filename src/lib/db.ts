@@ -234,3 +234,183 @@ export async function debitGenerationCredits(userId: string, amount: number) {
   }
 }
 
+export async function ensureApiCreditWallet(userId: string) {
+  const existing = await queryD1(
+    `SELECT id, user_id, balance, created_at, updated_at
+     FROM api_credit_wallets
+     WHERE user_id = ?
+     LIMIT 1`,
+    [userId]
+  )
+
+  const row = d1Rows(existing)[0]
+
+  if (row) {
+    return {
+      id: String(row.id),
+      userId: String(row.user_id),
+      balance: Number(row.balance ?? 0),
+      createdAt: Number(row.created_at ?? 0),
+      updatedAt: Number(row.updated_at ?? 0),
+    }
+  }
+
+  const id = globalThis.crypto.randomUUID()
+  const now = Math.floor(Date.now() / 1000)
+
+  await queryD1(
+    `INSERT OR IGNORE INTO api_credit_wallets (id, user_id, balance, created_at, updated_at)
+     VALUES (?, ?, 0, ?, ?)`,
+    [id, userId, now, now]
+  )
+
+  const created = await queryD1(
+    `SELECT id, user_id, balance, created_at, updated_at
+     FROM api_credit_wallets
+     WHERE user_id = ?
+     LIMIT 1`,
+    [userId]
+  )
+
+  const createdRow = d1Rows(created)[0]
+
+  return {
+    id: String(createdRow.id),
+    userId: String(createdRow.user_id),
+    balance: Number(createdRow.balance ?? 0),
+    createdAt: Number(createdRow.created_at ?? 0),
+    updatedAt: Number(createdRow.updated_at ?? 0),
+  }
+}
+
+export async function getApiCreditBalance(userId: string) {
+  const wallet = await ensureApiCreditWallet(userId)
+
+  return {
+    userId,
+    balance: wallet.balance,
+  }
+}
+
+export async function addApiCredits(data: {
+  userId: string
+  amount: number
+  pack: string
+  stripeSessionId?: string
+}) {
+  await ensureApiCreditWallet(data.userId)
+
+  if (data.stripeSessionId) {
+    const existing = await queryD1(
+      `SELECT id FROM api_credit_transactions WHERE stripe_session_id = ? LIMIT 1`,
+      [data.stripeSessionId]
+    )
+
+    if (d1Rows(existing)[0]) {
+      return getApiCreditBalance(data.userId)
+    }
+  }
+
+  const now = Math.floor(Date.now() / 1000)
+
+  await queryD1(
+    `UPDATE api_credit_wallets
+     SET balance = balance + ?, updated_at = ?
+     WHERE user_id = ?`,
+    [data.amount, now, data.userId]
+  )
+
+  await queryD1(
+    `INSERT OR IGNORE INTO api_credit_transactions
+      (id, user_id, amount, type, reason, pack, stripe_session_id, created_at)
+     VALUES (?, ?, ?, 'purchase', 'stripe_checkout', ?, ?, ?)`,
+    [
+      globalThis.crypto.randomUUID(),
+      data.userId,
+      data.amount,
+      data.pack,
+      data.stripeSessionId ?? null,
+      now,
+    ]
+  )
+
+  return getApiCreditBalance(data.userId)
+}
+
+export async function debitApiCredits(data: {
+  userId: string
+  amount: number
+  apiKeyId?: string
+  reason?: string
+}) {
+  const wallet = await ensureApiCreditWallet(data.userId)
+
+  if (wallet.balance < data.amount) {
+    return {
+      ok: false,
+      currentBalance: wallet.balance,
+      requiredCredits: data.amount,
+      remainingBalance: wallet.balance,
+    }
+  }
+
+  const now = Math.floor(Date.now() / 1000)
+
+  await queryD1(
+    `UPDATE api_credit_wallets
+     SET balance = balance - ?, updated_at = ?
+     WHERE user_id = ? AND balance >= ?`,
+    [data.amount, now, data.userId, data.amount]
+  )
+
+  await queryD1(
+    `INSERT INTO api_credit_transactions
+      (id, user_id, amount, type, reason, api_key_id, created_at)
+     VALUES (?, ?, ?, 'debit', ?, ?, ?)`,
+    [
+      globalThis.crypto.randomUUID(),
+      data.userId,
+      -Math.abs(data.amount),
+      data.reason ?? 'api_generation',
+      data.apiKeyId ?? null,
+      now,
+    ]
+  )
+
+  const updated = await getApiCreditBalance(data.userId)
+
+  return {
+    ok: true,
+    currentBalance: wallet.balance,
+    requiredCredits: data.amount,
+    remainingBalance: updated.balance,
+  }
+}
+
+export async function activateBasicSubscription(data: {
+  userId: string
+  stripeCustomerId: string
+  stripeSubscriptionId: string
+  billingInterval: string
+}) {
+  await ensureUserGenerationAccount(data.userId)
+
+  return queryD1(
+    `UPDATE users
+     SET plan = 'basic',
+         credits = CASE WHEN credits < 140 THEN 140 ELSE credits END,
+         stripe_customer_id = ?,
+         stripe_subscription_id = ?,
+         billing_interval = ?,
+         subscription_status = 'active'
+     WHERE id = ? OR clerk_id = ?`,
+    [
+      data.stripeCustomerId,
+      data.stripeSubscriptionId,
+      data.billingInterval,
+      data.userId,
+      data.userId,
+    ]
+  )
+}
+

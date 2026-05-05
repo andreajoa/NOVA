@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { createUserApiKey, listUserApiKeys } from "@/lib/apiKeys"
+import { getApiCreditBalance } from "@/lib/db"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 export async function GET() {
   const { userId } = await auth()
@@ -21,6 +23,26 @@ export async function POST(request: Request) {
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const wallet = await getApiCreditBalance(userId)
+
+  if (wallet.balance <= 0) {
+    return NextResponse.json(
+      {
+        error: "API_CREDITS_REQUIRED",
+        code: "API_CREDITS_REQUIRED",
+        message: "Add API credits before creating an API key.",
+        balance: wallet.balance,
+        packs: {
+          starter: { label: "Starter", price: "$10", credits: 140, href: "/api/checkout/api-credits?pack=starter" },
+          growth: { label: "Growth", price: "$25", credits: 375, href: "/api/checkout/api-credits?pack=growth" },
+          pro: { label: "Pro", price: "$50", credits: 800, href: "/api/checkout/api-credits?pack=pro" },
+          scale: { label: "Scale", price: "$100", credits: 1750, href: "/api/checkout/api-credits?pack=scale" },
+        },
+      },
+      { status: 402 }
+    )
   }
 
   const body = await request.json().catch(() => ({}))

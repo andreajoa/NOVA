@@ -20,17 +20,27 @@ function maskKey(key) {
   return `${key.keyPrefix}••••••••••••••••••••••••${key.keySuffix}`;
 }
 
+const fallbackPacks = {
+  starter: { label: "Starter", price: "$10", credits: 140, href: "/api/checkout/api-credits?pack=starter" },
+  growth: { label: "Growth", price: "$25", credits: 375, href: "/api/checkout/api-credits?pack=growth" },
+  pro: { label: "Pro", price: "$50", credits: 800, href: "/api/checkout/api-credits?pack=pro" },
+  scale: { label: "Scale", price: "$100", credits: 1750, href: "/api/checkout/api-credits?pack=scale" },
+};
+
 export default function ApiKeysPage() {
   const [keys, setKeys] = useState([]);
+  const [apiWallet, setApiWallet] = useState({ balance: 0, packs: fallbackPacks });
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [newSecret, setNewSecret] = useState(null);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [walletLoading, setWalletLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const activeCount = useMemo(() => keys.length, [keys]);
+  const packs = apiWallet?.packs || fallbackPacks;
 
   async function loadKeys() {
     setLoading(true);
@@ -50,8 +60,28 @@ export default function ApiKeysPage() {
     }
   }
 
+  async function loadApiWallet() {
+    setWalletLoading(true);
+
+    try {
+      const res = await fetch("/api/me/api-credits", { cache: "no-store" });
+      const data = await res.json();
+
+      if (res.ok) {
+        setApiWallet({
+          balance: Number(data.balance || 0),
+          packs: data.packs || fallbackPacks,
+        });
+      }
+    } catch {
+    } finally {
+      setWalletLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadKeys();
+    loadApiWallet();
   }, []);
 
   async function createKey(e) {
@@ -59,6 +89,11 @@ export default function ApiKeysPage() {
 
     const name = newName.trim();
     if (!name || busy) return;
+
+    if (apiWallet.balance <= 0) {
+      setError("Add API credits before creating an API key.");
+      return;
+    }
 
     setBusy(true);
     setError("");
@@ -75,7 +110,7 @@ export default function ApiKeysPage() {
 
       const data = await res.json();
 
-      if (!res.ok) throw new Error(data.error || "Failed to create API key");
+      if (!res.ok) throw new Error(data.message || data.error || "Failed to create API key");
 
       setKeys((current) => [data.key, ...current]);
       setNewSecret({ name, secret: data.secret });
@@ -135,7 +170,7 @@ export default function ApiKeysPage() {
             API Keys
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/45">
-            Create and manage keys for the NOVA API. Full secrets are shown only once when created.
+            Create API keys for external NOVA usage. API credits are prepaid and separate from dashboard plan credits.
           </p>
         </div>
 
@@ -153,7 +188,15 @@ export default function ApiKeysPage() {
         </div>
       )}
 
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
+        <div className="rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-5">
+          <p className="text-xs font-black uppercase tracking-[.16em] text-[#D7FF00]/70">API balance</p>
+          <p className="mt-3 text-3xl font-black text-[#D7FF00]">
+            {walletLoading ? "..." : apiWallet.balance}
+          </p>
+          <p className="mt-1 text-xs font-bold text-white/35">API credits</p>
+        </div>
+
         <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
           <p className="text-xs font-black uppercase tracking-[.16em] text-white/30">Active keys</p>
           <p className="mt-3 text-3xl font-black text-white">{activeCount}</p>
@@ -165,8 +208,39 @@ export default function ApiKeysPage() {
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-          <p className="text-xs font-black uppercase tracking-[.16em] text-white/30">Security</p>
-          <p className="mt-3 text-lg font-black text-white">Hashed keys</p>
+          <p className="text-xs font-black uppercase tracking-[.16em] text-white/30">API cost</p>
+          <p className="mt-3 text-lg font-black text-white">24 credits/sec</p>
+        </div>
+      </div>
+
+      <div className="mb-6 rounded-3xl border border-white/10 bg-[#0D0D0D] p-5">
+        <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-sm font-black text-white">Add API Credits</p>
+            <p className="mt-1 text-xs leading-5 text-white/40">
+              Use API credits with your NOVA API Key for external video, image, and AI generation.
+            </p>
+          </div>
+          <p className="text-xs font-bold text-white/30">Minimum top-up: $10</p>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-4">
+          {Object.entries(packs).map(([key, pack]) => (
+            <a
+              key={key}
+              href={pack.href}
+              className="rounded-2xl border border-white/10 bg-white/[.035] p-4 text-white no-underline transition hover:border-[#D7FF00]/50 hover:bg-[#D7FF00]/10"
+            >
+              <p className="text-xs font-black uppercase tracking-[.16em] text-white/35">
+                {pack.label}
+              </p>
+              <p className="mt-3 text-2xl font-black text-white">{pack.price}</p>
+              <p className="mt-1 text-sm font-black text-[#D7FF00]">
+                {pack.credits} credits
+              </p>
+              <p className="mt-3 text-[11px] font-bold text-white/30">One-time payment</p>
+            </a>
+          ))}
         </div>
       </div>
 
@@ -175,7 +249,10 @@ export default function ApiKeysPage() {
           onSubmit={createKey}
           className="mb-6 rounded-2xl border border-[#D7FF00]/30 bg-[#0D0D0D] p-5"
         >
-          <p className="mb-4 text-sm font-black text-white">Create a new API key</p>
+          <p className="mb-2 text-sm font-black text-white">Create a new API key</p>
+          <p className="mb-4 text-xs text-white/35">
+            You need API credits before creating a key. Full key secrets are shown once.
+          </p>
 
           <div className="flex flex-col gap-3 md:flex-row">
             <input
@@ -188,7 +265,7 @@ export default function ApiKeysPage() {
 
             <button
               type="submit"
-              disabled={busy}
+              disabled={busy || apiWallet.balance <= 0}
               className="h-11 rounded-xl bg-[#D7FF00] px-5 text-xs font-black uppercase tracking-[.14em] text-black transition hover:bg-[#c8f000] disabled:opacity-50"
             >
               {busy ? "Creating..." : "Create"}
@@ -240,7 +317,7 @@ export default function ApiKeysPage() {
           <div className="rounded-2xl border border-white/8 bg-[#0D0D0D] p-8 text-center">
             <p className="text-lg font-black text-white">No API keys yet</p>
             <p className="mt-2 text-sm text-white/40">
-              Create your first key to access NOVA from external apps and automations.
+              Add API credits, then create your first key to access NOVA from external apps and automations.
             </p>
           </div>
         ) : (
