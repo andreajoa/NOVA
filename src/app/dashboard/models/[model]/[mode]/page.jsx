@@ -1,126 +1,236 @@
 "use client";
-import { useState, useEffect, Suspense } from "react";
-import { useRouter, useParams, useSearchParams } from "next/navigation";
+
+import { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { falModels } from "@/lib/falModels";
 
-function GenerateContent() {
+function UpgradeOffer({ data }) {
+  const current = data?.currentCredits ?? 10;
+  const required = data?.creditsRequired ?? 120;
+  const missing = data?.creditsMissing ?? Math.max(0, required - current);
+  const annualHref = data?.plans?.annual?.href || "/pricing?plan=basic&billing=annual";
+  const monthlyHref = data?.plans?.monthly?.href || "/pricing?plan=basic&billing=monthly";
+
+  return (
+    <div className="mt-6 overflow-hidden rounded-3xl border border-[#D7FF00]/35 bg-[#D7FF00]/[.07] p-5 shadow-[0_0_45px_rgba(215,255,0,.10)]">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="max-w-2xl">
+          <div className="mb-3 inline-flex rounded-full bg-[#D7FF00] px-3 py-1 text-[10px] font-black uppercase tracking-[.18em] text-black">
+            Ready to render
+          </div>
+
+          <h3 className="text-2xl font-black uppercase tracking-tight text-white md:text-3xl">
+            Your video is ready — unlock generation.
+          </h3>
+
+          <p className="mt-2 text-sm leading-6 text-white/50">
+            You have <span className="font-black text-white">{current} credits</span>, but this render needs{" "}
+            <span className="font-black text-[#D7FF00]">{required} credits</span>. Upgrade now and continue from the same prompt.
+          </p>
+
+          <p className="mt-2 text-xs text-white/30">
+            Missing {missing} credits. A 5-second video needs 120 credits.
+          </p>
+        </div>
+
+        <div className="grid min-w-full gap-3 sm:grid-cols-2 lg:min-w-[360px]">
+          <a
+            href={annualHref}
+            className="rounded-2xl bg-[#D7FF00] px-5 py-4 text-black no-underline transition hover:bg-[#c8f000]"
+          >
+            <p className="text-[10px] font-black uppercase tracking-[.16em]">Best value</p>
+            <p className="mt-1 text-2xl font-black">$5/mo</p>
+            <p className="mt-1 text-[11px] font-bold text-black/60">Billed annually</p>
+          </a>
+
+          <a
+            href={monthlyHref}
+            className="rounded-2xl border border-white/10 bg-white/[.04] px-5 py-4 text-white no-underline transition hover:bg-white/[.08]"
+          >
+            <p className="text-[10px] font-black uppercase tracking-[.16em] text-white/40">Flexible</p>
+            <p className="mt-1 text-2xl font-black">$7/mo</p>
+            <p className="mt-1 text-[11px] font-bold text-white/40">Cancel anytime</p>
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ModelModePage() {
   const router = useRouter();
   const { model: modelKey, mode: modeKey } = useParams();
-  const searchParams = useSearchParams();
+
   const model = falModels.video[modelKey];
   const modeData = model?.modes[modeKey];
 
-  const [prompt, setPrompt] = useState(searchParams.get("prompt") || "");
-  const [previews, setPreviews] = useState([]);
+  const [prompt, setPrompt] = useState("");
+  const [asset, setAsset] = useState(null);
+  const [assetPreview, setAssetPreview] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
+  const [upgradeOffer, setUpgradeOffer] = useState(null);
+  const [error, setError] = useState("");
 
-  const fromTemplate = searchParams.get("from");
+  if (!model || !modeData) {
+    return <div className="p-8 text-white">Mode not found.</div>;
+  }
 
-  if (!model || !modeData) return <div className="p-8 text-white">Mode not found.</div>;
+  function handleAssetChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const handleFiles = (e) => {
-    const selected = [...e.target.files];
-    setPreviews(selected.map(f => URL.createObjectURL(f)));
-  };
+    setAsset(file);
+    setAssetPreview(URL.createObjectURL(file));
+  }
 
-  const handleGenerate = async () => {
-    setLoading(true); setResult(null); setError(null);
+  async function handleGenerate() {
+    setLoading(true);
+    setError("");
+    setResult(null);
+    setUpgradeOffer(null);
+
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ endpoint: modeData.endpoint, prompt, model: modelKey, mode: modeKey }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          endpoint: modeData.endpoint,
+          prompt,
+          model: modelKey,
+          mode: modeKey,
+          seconds: 5,
+          hasAsset: Boolean(asset),
+        }),
       });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 402 || data?.code === "INSUFFICIENT_CREDITS") {
+        setUpgradeOffer(data);
+        return;
+      }
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || data?.error || "Generation failed");
+      }
+
       setResult(data);
-    } catch (err) { setError(err.message); }
-    finally { setLoading(false); }
-  };
+      window.dispatchEvent(new Event("nova:credits-refresh"));
+    } catch (err) {
+      setError(err?.message || "Generation failed");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <div className="p-8 text-white max-w-3xl">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs text-white/30 mb-8">
-        {fromTemplate && (
-          <>
-            <span className="cursor-pointer hover:text-white" onClick={() => router.push("/dashboard/templates")}>Templates</span>
-            <span>›</span>
-          </>
-        )}
-        <span className="cursor-pointer hover:text-white" onClick={() => router.push("/dashboard/models")}>Models</span>
-        <span>›</span>
-        <span className="cursor-pointer hover:text-white" onClick={() => router.push("/dashboard/models/" + modelKey)}>{model.label}</span>
-        <span>›</span>
+    <div className="mx-auto max-w-5xl px-6 py-8 md:px-8">
+      <div className="mb-8 text-sm text-white/25">
+        <span className="cursor-pointer hover:text-white" onClick={() => router.push("/dashboard/models")}>
+          Models
+        </span>
+        <span className="mx-2">›</span>
+        <span className="cursor-pointer hover:text-white" onClick={() => router.push("/dashboard/models/" + modelKey)}>
+          {model.label}
+        </span>
+        <span className="mx-2">›</span>
         <span className="text-white/60">{modeData.label}</span>
       </div>
 
-      {fromTemplate && (
-        <div className="mb-6 flex items-center gap-3 bg-[#D7FF00]/8 border border-[#D7FF00]/20 rounded-xl px-4 py-3">
-          <span className="text-[#D7FF00] text-xs">✦</span>
-          <p className="text-[#D7FF00] text-xs font-bold uppercase tracking-wider">Template loaded — prompt is pre-filled, just upload your asset and generate</p>
-        </div>
-      )}
+      <p className="mb-3 text-xs font-black uppercase tracking-[0.25em] text-[#D7FF00]">
+        {model.label}
+      </p>
 
-      <p className="text-xs font-black uppercase tracking-[0.25em] text-[#D7FF00] mb-2">{model.label}</p>
-      <h1 className="text-4xl font-black uppercase tracking-[-0.05em] mb-8">{modeData.label}</h1>
+      <h1 className="mb-9 text-4xl font-black uppercase tracking-tight text-white md:text-5xl">
+        {modeData.label}
+      </h1>
 
       {modeData.needsImage && (
         <div className="mb-6">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-white/30 mb-3">Input Image / Video</p>
-          <label className="flex flex-col items-center justify-center border border-dashed border-white/15 rounded-2xl p-10 cursor-pointer hover:border-[#D7FF00]/40 transition group">
-            <input type="file" multiple accept="image/*,video/*" onChange={handleFiles} className="hidden" />
-            {previews.length > 0
-              ? <div className="flex gap-3 flex-wrap">{previews.map((url, i) => <img key={i} src={url} alt="" className="h-20 rounded-lg object-cover" />)}</div>
-              : <div className="text-center"><p className="text-2xl text-white/20 mb-2">↑</p><p className="text-white/30 text-sm">Click to upload</p><p className="text-white/15 text-xs mt-1">Image or video</p></div>
-            }
+          <p className="mb-3 text-xs font-black uppercase tracking-[0.25em] text-white/35">
+            Asset
+          </p>
+
+          <label className="grid min-h-[220px] cursor-pointer place-items-center overflow-hidden rounded-3xl border border-dashed border-white/15 bg-white/[.025] transition hover:border-[#D7FF00]/50">
+            {assetPreview ? (
+              asset?.type?.startsWith("video/") ? (
+                <video src={assetPreview} controls className="h-full max-h-[320px] w-full object-contain" />
+              ) : (
+                <img src={assetPreview} alt="Uploaded asset" className="h-full max-h-[320px] w-full object-contain" />
+              )
+            ) : (
+              <div className="text-center">
+                <p className="mb-2 text-3xl text-white/25">↑</p>
+                <p className="text-sm text-white/35">Click to upload image or video</p>
+              </div>
+            )}
+
+            <input className="hidden" type="file" accept="image/*,video/*" onChange={handleAssetChange} />
           </label>
         </div>
       )}
 
       <div className="mb-6">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-white/30 mb-3">Prompt</p>
+        <p className="mb-3 text-xs font-black uppercase tracking-[0.25em] text-white/35">
+          Prompt
+        </p>
+
         <textarea
           value={prompt}
-          onChange={e => setPrompt(e.target.value)}
+          onChange={(e) => setPrompt(e.target.value)}
           placeholder="Describe what you want to generate..."
-          rows={5}
-          className="w-full bg-[#0D0D0D] border border-white/10 rounded-2xl text-white text-sm p-5 resize-none outline-none placeholder:text-white/20 focus:border-[#D7FF00]/40 transition font-sans"
+          className="min-h-[180px] w-full resize-none rounded-3xl border border-white/12 bg-white/[.025] px-6 py-5 text-sm leading-7 text-white outline-none transition placeholder:text-white/20 focus:border-[#D7FF00]/45"
         />
       </div>
 
       <button
         onClick={handleGenerate}
-        disabled={loading}
-        className={["px-8 py-4 rounded-xl text-sm font-black uppercase tracking-[0.08em] transition",
-          loading ? "bg-white/10 text-white/30 cursor-not-allowed" : "bg-[#D7FF00] text-black hover:bg-[#c8f000]"
-        ].join(" ")}
+        disabled={loading || !prompt.trim()}
+        className="h-14 rounded-2xl bg-[#D7FF00] px-9 text-sm font-black uppercase tracking-[.16em] text-black transition hover:bg-[#c8f000] disabled:cursor-not-allowed disabled:opacity-45"
       >
         {loading ? "Generating..." : "Generate →"}
       </button>
 
-      {error && <div className="mt-6 text-red-400 text-sm bg-red-950/30 border border-red-900/40 rounded-xl p-4">{error}</div>}
+      {upgradeOffer && <UpgradeOffer data={upgradeOffer} />}
 
-      {result && (
-        <div className="mt-8">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-white/30 mb-4">Result</p>
-          <div className="rounded-2xl overflow-hidden border border-white/10">
-            {(result.data?.url || result.url || "").includes(".mp4")
-              ? <video src={result.data?.url || result.url} controls className="w-full" />
-              : <img src={result.data?.url || result.url} alt="result" className="w-full" />}
+      {error && !upgradeOffer && (
+        <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+
+      {result?.data?.url && (
+        <div className="mt-8 rounded-3xl border border-white/10 bg-white/[.025] p-5">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[.18em] text-[#D7FF00]">
+                Generated
+              </p>
+              <p className="mt-1 text-sm text-white/40">
+                {result.billing?.creditsCharged ? `${result.billing.creditsCharged} credits used` : "Mock result"}
+              </p>
+            </div>
+
+            <a
+              href={result.data.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-xl border border-white/10 px-4 py-2 text-xs font-black uppercase tracking-[.12em] text-white/60 no-underline transition hover:text-white"
+            >
+              Open
+            </a>
           </div>
+
+          {result.data.type === "video" ? (
+            <video src={result.data.url} controls className="w-full rounded-2xl" />
+          ) : (
+            <img src={result.data.url} alt="Generated result" className="w-full rounded-2xl" />
+          )}
         </div>
       )}
     </div>
-  );
-}
-
-export default function GeneratePage() {
-  return (
-    <Suspense fallback={<div className="p-8 text-white/30">Loading...</div>}>
-      <GenerateContent />
-    </Suspense>
   );
 }
