@@ -1,20 +1,18 @@
 "use client";
+
 import Sidebar from "@/components/Sidebar";
-import DashboardTopBar from "@/components/DashboardTopBar";
 import DashboardFooter from "@/components/DashboardFooter";
 
 export default function DashboardLayout({ children }) {
   return (
-    <div style={{display:"flex", height:"100vh", background:"#050505", overflow:"hidden"}}>
-      {/* Sidebar lateral */}
+    <div className="flex h-[calc(100vh-76px)] overflow-hidden bg-[#050505]">
       <Sidebar />
 
-      {/* Coluna principal: TopBar + conteúdo + Footer */}
-      <div style={{flex:1, display:"flex", flexDirection:"column", overflow:"hidden"}}>
-        <DashboardTopBar />
-        <main style={{flex:1, overflowY:"auto"}}>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <main className="min-h-0 flex-1 overflow-y-auto">
           {children}
         </main>
+
         <DashboardFooter />
       </div>
     </div>
