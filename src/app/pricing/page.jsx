@@ -394,7 +394,7 @@ export default function PricingPage() {
                 {["Free", "Basic", "Plus", "Ultra", "Business"].map((head) => (
                   <div key={head} className="p-4 text-center">
                     <div className={head === "Plus" ? "text-[#D7FF00]" : head === "Business" ? "text-blue-400" : "text-white/65"}>{head}</div>
-                    <Link href={`/checkout/plan?plan=${plan.name.toLowerCase()}&billing=${annual ? "annual" : "monthly"}`} className="mt-3 inline-block rounded-lg bg-white/10 px-4 py-2 text-[10px] text-white no-underline hover:bg-white/15">
+                    <Link href="/pricing" className="mt-3 inline-block rounded-lg bg-white/10 px-4 py-2 text-[10px] text-white no-underline hover:bg-white/15">
                       Get Plan
                     </Link>
                   </div>
@@ -457,7 +457,7 @@ export default function PricingPage() {
         <div className="mt-10 rounded-3xl border border-[#D7FF00]/20 bg-[linear-gradient(100deg,rgba(215,255,0,.10),rgba(255,255,255,.035))] p-7 text-center">
           <p className="text-sm text-white/40">Are you ready?</p>
           <h3 className="mt-2 text-2xl font-black">Ready to create without limits?</h3>
-          <Link href={`/checkout/plan?plan=${plan.name.toLowerCase()}&billing=${annual ? "annual" : "monthly"}`} className="mt-5 inline-block rounded-xl bg-[#D7FF00] px-8 py-4 text-xs font-black uppercase tracking-[.16em] text-black no-underline hover:bg-[#c7ef00]">
+          <Link href="/pricing" className="mt-5 inline-block rounded-xl bg-[#D7FF00] px-8 py-4 text-xs font-black uppercase tracking-[.16em] text-black no-underline hover:bg-[#c7ef00]">
             Choose your plan
           </Link>
         </div>
@@ -479,7 +479,7 @@ export default function PricingPage() {
 
             <div>
               <p className="mb-4 text-xs font-black uppercase tracking-widest text-white/30">Product</p>
-              <a href={`/checkout/plan?plan=${plan.name.toLowerCase()}&billing=${annual ? "annual" : "monthly"}`} className="mb-3 block text-sm text-white/35 transition hover:text-white">Studio</a>
+              <a href="/dashboard" className="mb-3 block text-sm text-white/35 transition hover:text-white">Studio</a>
               <a href="/dashboard/models" className="mb-3 block text-sm text-white/35 transition hover:text-white">Models</a>
               <a href="/pricing" className="mb-3 block text-sm text-white/35 transition hover:text-white">Pricing</a>
             </div>
