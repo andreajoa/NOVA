@@ -91,7 +91,7 @@ export default function GeneratePaywallProvider() {
         </div>
 
         <p className="mt-5 text-xs leading-5 text-white/30">
-          Your account includes 10 starter credits, but video generation requires more credits because it is charged by duration.
+          Trial accounts include 10 starter credits. A 5-second video needs 120 credits.
         </p>
       </div>
     </div>

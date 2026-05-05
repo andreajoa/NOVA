@@ -6,6 +6,7 @@ import {
 } from "@/lib/db";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const VIDEO_CREDITS_PER_SECOND = 24;
 const DEFAULT_SECONDS = 5;
@@ -22,7 +23,7 @@ function paywallPayload({ currentCredits, creditsRequired, seconds }) {
     success: false,
     code: "INSUFFICIENT_CREDITS",
     error: "INSUFFICIENT_CREDITS",
-    message: "You need an active NOVA plan to generate this video.",
+    message: "You need more credits to generate this video.",
     currentCredits,
     creditsRequired,
     creditsMissing: Math.max(0, creditsRequired - currentCredits),
@@ -87,7 +88,7 @@ export async function POST(req) {
     );
   }
 
-  console.log("NOVA GENERATE REQUEST:", {
+  console.log("NOVA GENERATE MOCK:", {
     userId,
     endpoint,
     prompt,
@@ -97,9 +98,9 @@ export async function POST(req) {
     creditsRequired,
   });
 
-  // Ainda mock por enquanto. Próximo passo: conectar fal.ai aqui.
   return NextResponse.json({
     success: true,
+    provider: "mock",
     data: {
       type: String(endpoint).includes("video") ? "video" : "image",
       url: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
