@@ -60,10 +60,10 @@ function apiCreditsPayload({ currentBalance, creditsRequired, seconds }) {
     seconds,
     creditsPerSecond: VIDEO_CREDITS_PER_SECOND,
     packs: {
-      starter: { label: "Starter", price: "$10", credits: 140, href: "/api/checkout/api-credits?pack=starter" },
-      growth: { label: "Growth", price: "$25", credits: 375, href: "/api/checkout/api-credits?pack=growth" },
-      pro: { label: "Pro", price: "$50", credits: 800, href: "/api/checkout/api-credits?pack=pro" },
-      scale: { label: "Scale", price: "$100", credits: 1750, href: "/api/checkout/api-credits?pack=scale" },
+      starter: { label: "Starter", price: "$10", credits: 140, href: "/checkout/api-credits?pack=starter" },
+      growth: { label: "Growth", price: "$25", credits: 375, href: "/checkout/api-credits?pack=growth" },
+      pro: { label: "Pro", price: "$50", credits: 800, href: "/checkout/api-credits?pack=pro" },
+      scale: { label: "Scale", price: "$100", credits: 1750, href: "/checkout/api-credits?pack=scale" },
     },
   };
 }
