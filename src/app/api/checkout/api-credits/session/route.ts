@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     }
 
     const session = await stripe.checkout.sessions.create({
-      ui_mode: "embedded" as const,
+      ui_mode: "embedded_page",
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "payment",
       return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/api-keys?payment=success`,
