@@ -23,7 +23,7 @@ export default function Sidebar() {
       <div className="flex h-24 items-center border-b border-white/10 px-7">
         <Link href="/dashboard" className="no-underline">
           <img
-            src="/nova/nova-logo-full.png"
+            src="/nova/logo-nova.jpeg"
             alt="NOVA"
             className="h-9 w-auto object-contain"
           />

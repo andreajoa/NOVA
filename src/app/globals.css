@@ -31,3 +31,14 @@ body {
     transform: translateX(-50%);
   }
 }
+
+/* NOVA: make Clerk signed-in username readable on dark navbar */
+.cl-userButtonOuterIdentifier,
+.cl-userButtonTrigger .cl-userButtonOuterIdentifier {
+  color: rgba(255, 255, 255, 0.78) !important;
+  font-weight: 700 !important;
+}
+
+.cl-userButtonTrigger:hover .cl-userButtonOuterIdentifier {
+  color: rgba(255, 255, 255, 1) !important;
+}

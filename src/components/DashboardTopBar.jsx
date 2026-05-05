@@ -24,7 +24,7 @@ export default function DashboardTopBar() {
       {/* Logo */}
       <Link href="/" style={{flexShrink:0, textDecoration:"none"}}>
         <img
-          src="/nova/nova-logo-full.png"
+          src="/nova/logo-nova.jpeg"
           alt="NOVA"
           style={{height:"52px", width:"auto", objectFit:"contain", display:"block"}}
         />

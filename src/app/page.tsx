@@ -39,7 +39,7 @@ export default function Home() {
                 width={1600} height={1100} priority className="w-full rounded-[1.6rem] object-cover" />
               <div className="pointer-events-none absolute inset-0 rounded-[2rem] bg-gradient-to-t from-black/35 via-transparent to-transparent" />
               <div className="absolute bottom-8 left-8 hidden items-end gap-5 md:flex">
-                <img src="/nova/nova-logo-full.png" alt="NOVA AI Video Studio"
+                <img src="/nova/logo-nova.jpeg" alt="NOVA AI Video Studio"
                   style={{height:"96px",width:"auto",objectFit:"contain",display:"block"}} />
                 <p className="mb-6 text-4xl font-black uppercase tracking-[-0.08em] text-white">AI Video Studio</p>
               </div>
@@ -161,7 +161,7 @@ export default function Home() {
       <footer className="border-t border-white/10 px-5 py-10 md:px-8">
         <div className="mx-auto grid max-w-[1500px] gap-8 md:grid-cols-[2fr_1fr_1fr_1fr]">
           <div>
-            <img src="/nova/nova-logo-full.png" alt="NOVA logo"
+            <img src="/nova/logo-nova.jpeg" alt="NOVA logo"
               style={{height:"44px",width:"auto",objectFit:"contain",display:"block",marginBottom:"16px"}} />
             <p className="max-w-sm text-sm leading-7 text-white/40">AI video studio for creators, brands, e-commerce teams and agencies.</p>
             <p className="mt-4 text-sm text-white/35">info@nova.online</p>

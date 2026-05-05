@@ -277,7 +277,7 @@ export default function PricingPage() {
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-5">
           <Link href="/" className="flex items-center gap-3 no-underline">
             <Image
-              src="/nova/nova-logo-full.png"
+              src="/nova/logo-nova.jpeg"
               alt="NOVA"
               width={140}
               height={60}
@@ -510,7 +510,7 @@ export default function PricingPage() {
           <div className="grid gap-10 md:grid-cols-[2fr_1fr_1fr_1fr]">
             <div>
               <img
-                src="/nova/nova-logo-full.png"
+                src="/nova/logo-nova.jpeg"
                 alt="NOVA"
                 className="mb-4 h-12 w-auto object-contain"
               />

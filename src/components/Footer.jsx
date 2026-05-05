@@ -30,7 +30,7 @@ export default function Footer() {
         <div className="grid gap-10 md:grid-cols-[2fr_1fr_1fr_1fr]">
           <div>
             <Image
-              src="/nova/nova-logo-full.png"
+              src="/nova/logo-nova.jpeg"
               alt="Nova"
               width={180}
               height={80}

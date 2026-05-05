@@ -229,7 +229,7 @@ export default function TopNav() {
       >
         <Link href="/" className="flex shrink-0 items-center no-underline">
           <img
-            src="/nova/nova-logo-full.png"
+            src="/nova/logo-nova.jpeg"
             alt="NOVA"
             className="h-12 w-auto object-contain md:h-14"
           />

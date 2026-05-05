@@ -8,7 +8,7 @@ export default function CreditBalancePill() {
   useEffect(() => {
     let active = true;
 
-    async function load() {
+    async function loadCredits() {
       try {
         const res = await fetch("/api/me/credits", { cache: "no-store" });
         if (!res.ok) return;
@@ -18,12 +18,13 @@ export default function CreditBalancePill() {
       } catch {}
     }
 
-    load();
+    loadCredits();
 
-    window.addEventListener("focus", load);
+    window.addEventListener("focus", loadCredits);
+
     return () => {
       active = false;
-      window.removeEventListener("focus", load);
+      window.removeEventListener("focus", loadCredits);
     };
   }, []);
 
@@ -32,7 +33,7 @@ export default function CreditBalancePill() {
   return (
     <a
       href="/pricing"
-      className="hidden rounded-xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 px-4 py-2 text-[11px] font-black uppercase tracking-[.12em] text-[#D7FF00] no-underline transition hover:bg-[#D7FF00] hover:text-black md:inline-flex"
+      className="inline-flex items-center rounded-xl border border-[#D7FF00]/40 bg-[#D7FF00]/10 px-4 py-2 text-[11px] font-black uppercase tracking-[.12em] text-[#D7FF00] no-underline transition hover:bg-[#D7FF00] hover:text-black"
       title={`${data.credits} credits available`}
     >
       {data.credits} credits
