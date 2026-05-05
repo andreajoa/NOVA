@@ -272,37 +272,7 @@ export default function PricingPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#050505] text-white">
       <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_50%_0%,rgba(215,255,0,.10),transparent_32%),radial-gradient(circle_at_85%_15%,rgba(37,99,235,.16),transparent_25%),linear-gradient(180deg,#050505,#080808_50%,#050505)]" />
-
-      <header className="relative z-10 border-b border-white/8 bg-black/45 px-5 py-4 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-5">
-          <Link href="/" className="flex items-center gap-3 no-underline">
-            <Image
-              src="/nova/logo-nova.jpeg"
-              alt="NOVA"
-              width={140}
-              height={60}
-              priority
-              className="h-9 w-auto object-contain"
-            />
-          </Link>
-
-          <nav className="hidden items-center gap-8 text-xs font-bold text-white/60 md:flex">
-            <Link href="/dashboard" className="hover:text-white">Studio</Link>
-            <Link href="/dashboard/models" className="hover:text-white">Models</Link>
-            <Link href="/features" className="hover:text-white">Features</Link>
-            <Link href="/pricing" className="text-[#D7FF00]">Pricing</Link>
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="hidden text-xs font-bold text-white/65 hover:text-white sm:block">Log in</Link>
-            <Link href="/dashboard" className="rounded-xl bg-[#D7FF00] px-4 py-2.5 text-xs font-black uppercase tracking-wide text-black no-underline hover:bg-[#c7ef00]">
-              Get Started
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <section className="relative z-10 mx-auto max-w-[1500px] px-5 pt-8">
+<section className="relative z-10 mx-auto max-w-[1500px] px-5 pt-8">
         <div className="relative overflow-hidden rounded-[28px] border border-[#D7FF00]/25 bg-[linear-gradient(100deg,rgba(215,255,0,.12),rgba(255,255,255,.035)_42%,rgba(37,99,235,.10))] p-6 shadow-[0_0_80px_rgba(215,255,0,.08)] md:p-9">
           <div className="absolute right-8 top-1/2 hidden h-44 w-44 -translate-y-1/2 rounded-[36px] border border-[#D7FF00]/20 bg-[#D7FF00]/10 shadow-[0_0_90px_rgba(215,255,0,.35)] rotate-12 md:block" />
           <div className="absolute right-20 top-14 hidden text-5xl text-[#D7FF00] md:block">✦</div>
@@ -492,20 +462,7 @@ export default function PricingPage() {
           </Link>
         </div>
       </section>
-
-      <div className="fixed bottom-5 right-5 z-30 hidden w-[290px] rounded-2xl border border-[#D7FF00]/45 bg-black/95 p-4 shadow-[0_0_50px_rgba(215,255,0,.22)] backdrop-blur-xl md:block">
-        <div className="mb-2 flex items-center justify-between">
-          <Pill>30% Off</Pill>
-          <span className="text-white/35">×</span>
-        </div>
-        <p className="text-lg font-black leading-tight">Save 30% on Annual Plans</p>
-        <p className="mt-2 text-xs leading-5 text-white/45">Unlimited video, more power, better value.</p>
-        <Link href="#plans" className="mt-4 grid h-10 place-items-center rounded-xl bg-[#D7FF00] text-xs font-black uppercase text-black no-underline">
-          Claim 30% Off →
-        </Link>
-      </div>
-
-      <footer className="relative z-10 mt-24 border-t border-white/10 bg-[#050505] px-5 py-16 md:px-8">
+<footer className="relative z-10 mt-24 border-t border-white/10 bg-[#050505] px-5 py-16 md:px-8">
         <div className="mx-auto max-w-[1500px]">
           <div className="grid gap-10 md:grid-cols-[2fr_1fr_1fr_1fr]">
             <div>

@@ -1,70 +1,64 @@
 "use client";
-import { useState, useEffect } from "react";
-import Link from "next/link";
+
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 export default function PromoPopup() {
-  const [open, setOpen] = useState(true);
-  const [mins, setMins] = useState(47);
-  const [secs, setSecs] = useState(23);
+  const pathname = usePathname() || "/";
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const t = setInterval(() => {
-      setSecs(s => {
-        if (s > 0) return s - 1;
-        setMins(m => {
-          if (m === 0) { clearInterval(t); return 0; }
-          return m - 1;
-        });
-        return 59;
-      });
-    }, 1000);
-    return () => clearInterval(t);
+    try {
+      const dismissed = window.localStorage.getItem("nova_promo_popup_dismissed");
+      if (!dismissed) {
+        const timer = setTimeout(() => setVisible(true), 1200);
+        return () => clearTimeout(timer);
+      }
+    } catch {
+      const timer = setTimeout(() => setVisible(true), 1200);
+      return () => clearTimeout(timer);
+    }
   }, []);
 
-  if (!open) return null;
+  // Não mostrar popup em dashboard/logado trabalhando.
+  if (pathname.startsWith("/dashboard")) return null;
+  if (!visible) return null;
+
+  function close() {
+    setVisible(false);
+    try {
+      window.localStorage.setItem("nova_promo_popup_dismissed", "1");
+    } catch {}
+  }
 
   return (
-    <div className="fixed bottom-5 right-5 z-[9999] w-[280px] animate-slide-up">
-      <div className="bg-[#0D0D0D] border border-[#D7FF00]/40 rounded-2xl p-4 shadow-[0_8px_40px_rgba(215,255,0,0.15)]">
-        <button
-          onClick={() => setOpen(false)}
-          className="absolute top-3 right-3 text-white/30 hover:text-white text-lg leading-none bg-transparent border-none cursor-pointer"
-        >×</button>
+    <div className="fixed bottom-5 right-5 z-[90] w-[300px] rounded-2xl border border-[#D7FF00]/45 bg-black/95 p-4 shadow-[0_0_50px_rgba(215,255,0,.28)] backdrop-blur-xl">
+      <button
+        onClick={close}
+        className="absolute right-3 top-2 text-sm text-white/35 transition hover:text-white"
+        aria-label="Close promotion"
+      >
+        ×
+      </button>
 
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[10px] font-black uppercase tracking-wider bg-[#D7FF00] text-black px-2 py-0.5 rounded-full">
-            ⚡ 30% OFF
-          </span>
-          <span className="text-white/40 text-[10px]">Limited offer</span>
-        </div>
-
-        <p className="text-white font-black text-sm leading-tight mb-1">
-          Get Plus for just <span className="text-[#D7FF00]">$23.80/mo</span>
-        </p>
-        <p className="text-white/40 text-xs mb-3">
-          500 credits · All models · 7-Day Unlimited
-        </p>
-
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-white/30 text-[10px]">Expires in</span>
-          <span className="font-black text-[#D7FF00] text-sm tabular-nums">
-            {String(mins).padStart(2,"0")}:{String(secs).padStart(2,"0")}
-          </span>
-        </div>
-
-        <Link href="/checkout/plus-promo"
-          className="block w-full text-center bg-[#D7FF00] text-black text-xs font-black uppercase tracking-wider py-2.5 rounded-xl hover:bg-[#c8f000] transition no-underline">
-          Claim 30% OFF →
-        </Link>
+      <div className="mb-2 inline-flex rounded-full bg-[#D7FF00] px-2.5 py-1 text-[10px] font-black uppercase tracking-[.14em] text-black">
+        30% Off
       </div>
 
-      <style>{`
-        @keyframes slide-up {
-          from { opacity:0; transform:translateY(20px); }
-          to   { opacity:1; transform:translateY(0); }
-        }
-        .animate-slide-up { animation: slide-up 0.4s ease forwards; }
-      `}</style>
+      <p className="text-base font-black leading-tight text-white">
+        Save 30% on Annual Plans
+      </p>
+
+      <p className="mt-2 text-xs leading-5 text-white/45">
+        Unlimited video, more power, better value.
+      </p>
+
+      <a
+        href="/pricing"
+        className="mt-4 grid h-10 place-items-center rounded-xl bg-[#D7FF00] text-xs font-black uppercase tracking-[.12em] text-black no-underline transition hover:bg-[#c8f000]"
+      >
+        Claim 30% Off →
+      </a>
     </div>
   );
 }
