@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { activateBasicSubscription, addApiCredits } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request) {
+  const stripe = getStripe();
   const signature = request.headers.get("stripe-signature");
   const rawBody = await request.text();
 

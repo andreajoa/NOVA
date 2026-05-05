@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +29,7 @@ const PACKS = {
 };
 
 async function createApiCreditsCheckout(request) {
+  const stripe = getStripe();
   const { userId } = await auth();
 
   if (!userId) {
