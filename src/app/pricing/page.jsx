@@ -8,6 +8,7 @@ const plans = [
     name: "Basic",
     subtitle: "For first-time AI content creators",
     price: "$5",
+    monthlyPrice: "$7",
     period: "/mo",
     billing: "per month, billed annually",
     button: "Get Basic",
@@ -33,6 +34,7 @@ const plans = [
     name: "Plus",
     subtitle: "For consistent and easy AI content creation",
     price: "$34",
+    monthlyPrice: "$49",
     oldPrice: "$49",
     period: "/mo",
     billing: "per month, billed annually",
@@ -60,6 +62,7 @@ const plans = [
     name: "Ultra",
     subtitle: "For creators building AI projects at scale",
     price: "$89",
+    monthlyPrice: "$129",
     oldPrice: "$129",
     period: "/mo",
     billing: "per month, billed annually",
@@ -87,6 +90,7 @@ const plans = [
     name: "Business",
     subtitle: "For agencies and small teams",
     price: "$62",
+    monthlyPrice: "$89",
     oldPrice: "$89",
     period: "/seat/mo",
     billing: "per seat/mo, billed annually",
@@ -149,9 +153,13 @@ function Pill({ children, blue = false }) {
   );
 }
 
-function PlanCard({ plan }) {
+function PlanCard({ plan, annual }) {
   const isLime = plan.tone === "lime";
   const isBlue = plan.tone === "blue" || plan.tone === "business";
+  const displayPrice = annual ? plan.price : plan.monthlyPrice;
+  const displayOldPrice = annual ? plan.oldPrice : "";
+  const displayBilling = annual ? plan.billing : "per month, billed monthly";
+  const displayHighlight = annual ? plan.highlight : "No annual commitment";
 
   return (
     <article
@@ -196,12 +204,12 @@ function PlanCard({ plan }) {
 
       <div className="relative z-10 mt-6">
         <div className="flex items-end gap-2">
-          {plan.oldPrice && <span className="pb-1 text-xl font-black text-white/30 line-through">{plan.oldPrice}</span>}
-          <span className="text-4xl font-black tracking-tight text-white">{plan.price}</span>
+          {displayOldPrice && <span className="pb-1 text-xl font-black text-white/30 line-through">{displayOldPrice}</span>}
+          <span className="text-4xl font-black tracking-tight text-white">{displayPrice}</span>
           <span className="pb-1 text-xs font-bold text-white/45">{plan.period}</span>
         </div>
-        <p className="mt-1 text-[11px] text-white/45">{plan.billing}</p>
-        {plan.highlight && <p className={`mt-1 text-[11px] font-black ${isBlue ? "text-blue-300" : "text-[#D7FF00]"}`}>{plan.highlight}</p>}
+        <p className="mt-1 text-[11px] text-white/45">{displayBilling}</p>
+        {displayHighlight && <p className={`mt-1 text-[11px] font-black ${isBlue ? "text-blue-300" : "text-[#D7FF00]"}`}>{displayHighlight}</p>}
       </div>
 
       <Link
@@ -344,7 +352,7 @@ export default function PricingPage() {
 
         <div className="mt-10 grid gap-5 lg:grid-cols-4">
           {plans.map((plan) => (
-            <PlanCard key={plan.name} plan={plan} />
+            <PlanCard key={plan.name} plan={plan} annual={annual} />
           ))}
         </div>
 
