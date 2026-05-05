@@ -2,10 +2,6 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { auth } from "@clerk/nextjs/server";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2026-04-22.dahlia",
-});
-
 const PRICE_MAP: Record<string, string> = {
   basic_monthly:    "price_1TTbBXPsIezuzlaECvxgoy59",
   basic_annual:     "price_1TTbElPsIezuzlaEdfyVUJw7",
@@ -18,6 +14,8 @@ const PRICE_MAP: Record<string, string> = {
 };
 
 export async function POST(req: Request) {
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
   try {
     const { userId } = await auth();
     if (!userId) {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import * as fal from "@fal-ai/client";
+import { fal } from "@fal-ai/client";
 import { validateApiKeyFromRequest } from "@/lib/apiKeys";
 import {
   debitApiCredits,
@@ -115,7 +115,10 @@ export async function POST(req) {
       ...(body.resolution && { resolution: body.resolution }),
     };
 
-    const result = await fal.run(endpoint, { input: falInput });
+    const result = await fal.subscribe(endpoint, {
+      input: falInput,
+      logs: true,
+    });
 
     const outputUrl =
       result?.video?.url ||
