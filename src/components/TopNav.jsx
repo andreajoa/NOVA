@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Show, UserButton } from "@clerk/nextjs";
 import { useState } from "react";
+import CreditBalancePill from "@/components/CreditBalancePill";
 
 const MENU_GROUPS = [
   {
@@ -275,6 +276,7 @@ export default function TopNav() {
           </Show>
 
           <Show when="signed-in">
+            <CreditBalancePill />
             <Link
               href="/dashboard"
               className="hidden rounded-xl bg-[#D7FF00] px-4 py-2.5 text-[11px] font-black uppercase tracking-[.12em] text-black no-underline transition hover:bg-[#c7ef00] sm:inline-flex"

@@ -1,70 +1,64 @@
 "use client";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import CreditBalanceCard from "@/components/CreditBalanceCard";
 
-const NAV = [
-  { href: "/dashboard",           label: "Dashboard",  icon: "⊞" },
-  { href: "/dashboard/generate",  label: "Generate",   icon: "✦" },
-  { href: "/dashboard/projects",  label: "Projects",   icon: "◫" },
-  { href: "/dashboard/templates", label: "Templates",  icon: "❑" },
-  { href: "/dashboard/models",    label: "Models",     icon: "◈" },
-  { href: "/dashboard/brandkit",  label: "Brand Kit",  icon: "◉" },
-  { href: "/dashboard/settings",  label: "Settings",   icon: "⊙" },
+const items = [
+  { href: "/dashboard", label: "Dashboard", icon: "▦" },
+  { href: "/dashboard/generate", label: "Generate", icon: "✦" },
+  { href: "/dashboard/projects", label: "Projects", icon: "▣" },
+  { href: "/dashboard/templates", label: "Templates", icon: "▰" },
+  { href: "/dashboard/models", label: "Models", icon: "◈" },
+  { href: "/dashboard/brandkit", label: "Brand Kit", icon: "◎" },
+  { href: "/dashboard/uploads", label: "Uploads", icon: "↑" },
+  { href: "/dashboard/settings", label: "Settings", icon: "⊙" },
 ];
 
 export default function Sidebar() {
-  const path = usePathname();
-  return (
-    <aside className="flex h-full w-[260px] flex-shrink-0 flex-col border-r border-white/8 bg-[#0A0A0A]">
+  const pathname = usePathname() || "/dashboard";
 
-      {/* LOGO */}
-      <div className="px-5 pt-6 pb-5 border-b border-white/8">
-        <Link href="/">
+  return (
+    <aside className="hidden h-full w-[260px] shrink-0 flex-col border-r border-white/10 bg-[#050505] lg:flex">
+      <div className="flex h-24 items-center border-b border-white/10 px-7">
+        <Link href="/dashboard" className="no-underline">
           <img
             src="/nova/nova-logo-full.png"
             alt="NOVA"
-            style={{ height: "52px", width: "auto", objectFit: "contain", display: "block" }}
+            className="h-9 w-auto object-contain"
           />
         </Link>
       </div>
 
-      {/* NAV */}
-      <nav className="flex-1 py-3 overflow-y-auto">
-        {NAV.map(({ href, label, icon }) => {
-          const active = path === href || (href !== "/dashboard" && href !== "/" && path.startsWith(href));
+      <nav className="flex-1 space-y-1 px-3 py-6">
+        {items.map((item) => {
+          const active =
+            pathname === item.href ||
+            (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"));
+
           return (
-            <Link key={href} href={href} className="block no-underline">
-              <div className={[
-                "mx-3 my-0.5 px-4 py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-all flex items-center gap-3",
+            <Link
+              key={item.href}
+              href={item.href}
+              className={[
+                "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-black no-underline transition",
                 active
                   ? "bg-[#D7FF00] text-black"
-                  : "text-white/50 hover:text-white hover:bg-white/5",
-              ].join(" ")}>
-                <span className="text-base leading-none">{icon}</span>
-                {label}
-              </div>
+                  : "text-white/45 hover:bg-white/[.04] hover:text-white",
+              ].join(" ")}
+            >
+              <span className="w-5 text-center">{item.icon}</span>
+              <span>{item.label}</span>
             </Link>
           );
         })}
       </nav>
 
-      {/* CREDITS */}
-      <div className="mx-3 mb-3 p-4 rounded-xl bg-[#D7FF00]/10 border border-[#D7FF00]/20">
-        <p className="text-[#D7FF00] text-sm font-black">500 credits</p>
-        <p className="text-white/40 text-xs mt-0.5">Free Plan</p>
-        <Link href="/pricing" className="mt-2 block text-xs text-[#D7FF00]/70 hover:text-[#D7FF00] transition no-underline font-bold">
-          Upgrade →
-        </Link>
-      </div>
+      <CreditBalanceCard />
 
-      {/* AVATAR */}
-      <div className="px-4 pb-5">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-[#D7FF00] flex items-center justify-center text-black text-xs font-black flex-shrink-0">N</div>
-          <span className="text-white/30 text-xs truncate">nova studio</span>
-        </div>
+      <div className="border-t border-white/10 px-5 py-5 text-xs text-white/25">
+        nova studio
       </div>
-
     </aside>
   );
 }
