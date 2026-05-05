@@ -2,74 +2,117 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-function generateApiKey() {
-  const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  const bytes = new Uint8Array(32);
+function formatUnix(value) {
+  if (!value) return "Never";
 
-  if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
-    window.crypto.getRandomValues(bytes);
-  } else {
-    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  try {
+    return new Date(Number(value) * 1000).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "Unknown";
   }
-
-  let token = "";
-  for (const byte of bytes) token += alphabet[byte % alphabet.length];
-
-  return `nv_live_sk_${token}`;
 }
 
-function maskKey(prefix, suffix) {
-  return `${prefix}••••••••••••••••••••••••${suffix}`;
+function maskKey(key) {
+  return `${key.keyPrefix}••••••••••••••••••••••••${key.keySuffix}`;
 }
-
-function todayLabel() {
-  return new Date().toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-const fallbackKeys = [
-  {
-    id: "prod",
-    name: "Production",
-    prefix: "nv_live_sk",
-    suffix: "eA9x",
-    created: "May 1, 2026",
-    lastUsed: "Today",
-  },
-  {
-    id: "dev",
-    name: "Development",
-    prefix: "nv_test_sk",
-    suffix: "F2cW",
-    created: "Apr 15, 2026",
-    lastUsed: "3 days ago",
-  },
-];
 
 export default function ApiKeysPage() {
-  const [keys, setKeys] = useState(fallbackKeys);
+  const [keys, setKeys] = useState([]);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [newSecret, setNewSecret] = useState(null);
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem("nova_api_key_metadata");
-      if (saved) setKeys(JSON.parse(saved));
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem("nova_api_key_metadata", JSON.stringify(keys));
-    } catch {}
-  }, [keys]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   const activeCount = useMemo(() => keys.length, [keys]);
+
+  async function loadKeys() {
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/api-keys", { cache: "no-store" });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Failed to load API keys");
+
+      setKeys(data.keys || []);
+    } catch (err) {
+      setError(err.message || "Failed to load API keys");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadKeys();
+  }, []);
+
+  async function createKey(e) {
+    e.preventDefault();
+
+    const name = newName.trim();
+    if (!name || busy) return;
+
+    setBusy(true);
+    setError("");
+    setCopied(false);
+
+    try {
+      const res = await fetch("/api/api-keys", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Failed to create API key");
+
+      setKeys((current) => [data.key, ...current]);
+      setNewSecret({ name, secret: data.secret });
+      setNewName("");
+      setCreating(false);
+    } catch (err) {
+      setError(err.message || "Failed to create API key");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeKey(id) {
+    if (busy) return;
+
+    const confirmed = window.confirm("Revoke this API key? This cannot be undone.");
+    if (!confirmed) return;
+
+    setBusy(true);
+    setError("");
+
+    try {
+      const res = await fetch(`/api/api-keys/${id}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Failed to revoke API key");
+
+      setKeys((current) => current.filter((key) => key.id !== id));
+    } catch (err) {
+      setError(err.message || "Failed to revoke API key");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function copySecret(secret) {
     try {
@@ -79,34 +122,6 @@ export default function ApiKeysPage() {
     } catch {
       setCopied(false);
     }
-  }
-
-  function createKey(e) {
-    e.preventDefault();
-
-    const name = newName.trim();
-    if (!name) return;
-
-    const secret = generateApiKey();
-    const metadata = {
-      id: String(Date.now()),
-      name,
-      prefix: secret.slice(0, 10),
-      suffix: secret.slice(-4),
-      created: todayLabel(),
-      lastUsed: "Never",
-    };
-
-    setKeys((current) => [metadata, ...current]);
-    setNewSecret({ name, secret });
-    setNewName("");
-    setCreating(false);
-    setCopied(false);
-  }
-
-  function revokeKey(id) {
-    setKeys((current) => current.filter((key) => key.id !== id));
-    if (newSecret) setNewSecret(null);
   }
 
   return (
@@ -120,7 +135,7 @@ export default function ApiKeysPage() {
             API Keys
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/45">
-            Create and manage keys for the NOVA API. For security, full keys are shown only once when created.
+            Create and manage keys for the NOVA API. Full secrets are shown only once when created.
           </p>
         </div>
 
@@ -132,6 +147,12 @@ export default function ApiKeysPage() {
         </button>
       </div>
 
+      {error && (
+        <div className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
           <p className="text-xs font-black uppercase tracking-[.16em] text-white/30">Active keys</p>
@@ -139,13 +160,13 @@ export default function ApiKeysPage() {
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-          <p className="text-xs font-black uppercase tracking-[.16em] text-white/30">Environment</p>
-          <p className="mt-3 text-lg font-black text-[#D7FF00]">Live + Test</p>
+          <p className="text-xs font-black uppercase tracking-[.16em] text-white/30">Database</p>
+          <p className="mt-3 text-lg font-black text-[#D7FF00]">Cloudflare D1</p>
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-          <p className="text-xs font-black uppercase tracking-[.16em] text-white/30">Status</p>
-          <p className="mt-3 text-lg font-black text-white">Ready for API access</p>
+          <p className="text-xs font-black uppercase tracking-[.16em] text-white/30">Security</p>
+          <p className="mt-3 text-lg font-black text-white">Hashed keys</p>
         </div>
       </div>
 
@@ -167,9 +188,10 @@ export default function ApiKeysPage() {
 
             <button
               type="submit"
-              className="h-11 rounded-xl bg-[#D7FF00] px-5 text-xs font-black uppercase tracking-[.14em] text-black transition hover:bg-[#c8f000]"
+              disabled={busy}
+              className="h-11 rounded-xl bg-[#D7FF00] px-5 text-xs font-black uppercase tracking-[.14em] text-black transition hover:bg-[#c8f000] disabled:opacity-50"
             >
-              Create
+              {busy ? "Creating..." : "Create"}
             </button>
 
             <button
@@ -210,35 +232,49 @@ export default function ApiKeysPage() {
       )}
 
       <div className="space-y-3">
-        {keys.map((key) => (
-          <div key={key.id} className="rounded-2xl border border-white/8 bg-[#0D0D0D] p-5">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div>
-                <p className="text-sm font-black text-white">{key.name}</p>
-                <p className="mt-1 text-xs text-white/30">
-                  Created {key.created} · Last used {key.lastUsed}
-                </p>
+        {loading ? (
+          <div className="rounded-2xl border border-white/8 bg-[#0D0D0D] p-5 text-sm text-white/40">
+            Loading API keys...
+          </div>
+        ) : keys.length === 0 ? (
+          <div className="rounded-2xl border border-white/8 bg-[#0D0D0D] p-8 text-center">
+            <p className="text-lg font-black text-white">No API keys yet</p>
+            <p className="mt-2 text-sm text-white/40">
+              Create your first key to access NOVA from external apps and automations.
+            </p>
+          </div>
+        ) : (
+          keys.map((key) => (
+            <div key={key.id} className="rounded-2xl border border-white/8 bg-[#0D0D0D] p-5">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-sm font-black text-white">{key.name}</p>
+                  <p className="mt-1 text-xs text-white/30">
+                    Created {formatUnix(key.createdAt)} · Last used {formatUnix(key.lastUsedAt)}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => revokeKey(key.id)}
+                  disabled={busy}
+                  className="w-fit rounded-lg border border-red-400/10 px-3 py-2 text-xs font-bold text-white/25 transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-300 disabled:opacity-50"
+                >
+                  Revoke
+                </button>
               </div>
 
-              <button
-                onClick={() => revokeKey(key.id)}
-                className="w-fit rounded-lg border border-red-400/10 px-3 py-2 text-xs font-bold text-white/25 transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-300"
-              >
-                Revoke
-              </button>
-            </div>
+              <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center">
+                <code className="min-w-0 flex-1 truncate rounded-lg border border-white/8 bg-[#111] px-3 py-2 text-xs text-white/40">
+                  {maskKey(key)}
+                </code>
 
-            <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center">
-              <code className="min-w-0 flex-1 truncate rounded-lg border border-white/8 bg-[#111] px-3 py-2 text-xs text-white/40">
-                {maskKey(key.prefix, key.suffix)}
-              </code>
-
-              <span className="rounded-lg border border-white/8 px-3 py-2 text-xs font-bold text-white/30">
-                Full key visible once only
-              </span>
+                <span className="rounded-lg border border-white/8 px-3 py-2 text-xs font-bold text-white/30">
+                  Full key visible once only
+                </span>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       <div className="mt-8 rounded-2xl border border-white/8 bg-[#0D0D0D] p-5">
