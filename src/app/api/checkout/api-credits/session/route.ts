@@ -6,13 +6,6 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-04-22.dahlia",
 });
 
-const PRICE_MAP: Record<string, string> = {
-  starter: process.env.STRIPE_PRICE_API_CREDITS_STARTER!,
-  growth: process.env.STRIPE_PRICE_API_CREDITS_GROWTH!,
-  pro: process.env.STRIPE_PRICE_API_CREDITS_PRO!,
-  scale: process.env.STRIPE_PRICE_API_CREDITS_SCALE!,
-};
-
 export async function POST(req: Request) {
   try {
     const { userId } = await auth();
@@ -21,10 +14,22 @@ export async function POST(req: Request) {
     }
 
     const { pack } = await req.json();
+
+    const PRICE_MAP: Record<string, string | undefined> = {
+      starter: process.env.STRIPE_PRICE_API_CREDITS_STARTER,
+      growth: process.env.STRIPE_PRICE_API_CREDITS_GROWTH,
+      pro: process.env.STRIPE_PRICE_API_CREDITS_PRO,
+      scale: process.env.STRIPE_PRICE_API_CREDITS_SCALE,
+    };
+
+    console.log("Pack received:", pack);
+    console.log("Price ID:", PRICE_MAP[pack]);
+    console.log("All price env vars:", JSON.stringify(PRICE_MAP));
+
     const priceId = PRICE_MAP[pack];
 
     if (!priceId) {
-      return NextResponse.json({ error: "Invalid pack" }, { status: 400 });
+      return NextResponse.json({ error: `Invalid pack: ${pack}` }, { status: 400 });
     }
 
     const session = await stripe.checkout.sessions.create({
