@@ -416,9 +416,13 @@ export async function activateBasicSubscription(data: {
 
 
 export async function isAdminUser(clerkId: string): Promise<boolean> {
-  const res = await queryD1(`SELECT role FROM users WHERE clerk_id = ? LIMIT 1`, [clerkId]);
-  const rows = d1Rows(res);
-  return rows[0]?.role === 'admin';
+  try {
+    const res = await queryD1(`SELECT role FROM users WHERE clerk_id = ? LIMIT 1`, [clerkId]);
+    const rows = d1Rows(res);
+    return rows[0]?.role === 'admin';
+  } catch {
+    return false;
+  }
 }
 
 export async function setAdminRole(clerkId: string): Promise<void> {
