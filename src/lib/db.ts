@@ -51,7 +51,7 @@ export function d1Rows(response: D1Response): Record<string, unknown>[] {
 export async function createUser(clerkId: string, email: string) {
   return queryD1(
     `INSERT OR IGNORE INTO users (id, email, clerk_id, plan, credits, created_at)
-     VALUES (?, ?, ?, 'free', 10, datetime('now'))`,
+     VALUES (?, ?, ?, 'trial', 10, datetime('now'))`,
     [clerkId, email, clerkId]
   )
 }
@@ -170,3 +170,67 @@ export async function touchApiKeyLastUsed(id: string) {
     [id]
   )
 }
+
+export async function ensureUserGenerationAccount(userId: string) {
+  const existing = await queryD1(
+    `SELECT id, clerk_id, plan, credits
+     FROM users
+     WHERE id = ? OR clerk_id = ?
+     LIMIT 1`,
+    [userId, userId]
+  )
+
+  const row = d1Rows(existing)[0]
+
+  if (row) {
+    return {
+      id: String(row.id ?? userId),
+      userId,
+      plan: String(row.plan ?? 'trial'),
+      credits: Number(row.credits ?? 0),
+    }
+  }
+
+  await queryD1(
+    `INSERT OR IGNORE INTO users (id, email, clerk_id, plan, credits, created_at)
+     VALUES (?, ?, ?, 'trial', 10, datetime('now'))`,
+    [userId, '', userId]
+  )
+
+  return {
+    id: userId,
+    userId,
+    plan: 'trial',
+    credits: 10,
+  }
+}
+
+export async function debitGenerationCredits(userId: string, amount: number) {
+  const account = await ensureUserGenerationAccount(userId)
+
+  if (account.credits < amount) {
+    return {
+      ok: false,
+      plan: account.plan,
+      currentCredits: account.credits,
+      requiredCredits: amount,
+      remainingCredits: account.credits,
+    }
+  }
+
+  await queryD1(
+    `UPDATE users
+     SET credits = credits - ?
+     WHERE (id = ? OR clerk_id = ?) AND credits >= ?`,
+    [amount, userId, userId, amount]
+  )
+
+  return {
+    ok: true,
+    plan: account.plan,
+    currentCredits: account.credits,
+    requiredCredits: amount,
+    remainingCredits: account.credits - amount,
+  }
+}
+
