@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { auth } from "@clerk/nextjs/server";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2025-03-31.basil",
+});
 
 const PRICE_MAP: Record<string, string> = {
   starter: process.env.STRIPE_PRICE_API_CREDITS_STARTER!,
@@ -26,7 +28,7 @@ export async function POST(req: Request) {
     }
 
     const session = await stripe.checkout.sessions.create({
-      ui_mode: "embedded",
+      ui_mode: "embedded" as const,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "payment",
       return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/api-keys?payment=success`,
