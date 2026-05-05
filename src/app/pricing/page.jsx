@@ -3,8 +3,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
-import Footer from "@/components/Footer";
-
 const plans = [
   {
     name: "Basic",
@@ -499,7 +497,54 @@ export default function PricingPage() {
         </Link>
       </div>
 
-      <Footer />
+      <footer className="relative z-10 mt-24 border-t border-white/10 bg-[#050505] px-5 py-16 md:px-8">
+        <div className="mx-auto max-w-[1500px]">
+          <div className="grid gap-10 md:grid-cols-[2fr_1fr_1fr_1fr]">
+            <div>
+              <img
+                src="/nova/nova-logo-full.png"
+                alt="NOVA"
+                className="mb-4 h-12 w-auto object-contain"
+              />
+              <p className="max-w-xs text-sm leading-7 text-white/40">
+                AI video studio for creators, brands, e-commerce teams and agencies.
+              </p>
+              <p className="mt-4 text-sm text-white/30">info@nova.online</p>
+            </div>
+
+            <div>
+              <p className="mb-4 text-xs font-black uppercase tracking-widest text-white/30">Product</p>
+              <a href="/dashboard" className="mb-3 block text-sm text-white/35 transition hover:text-white">Studio</a>
+              <a href="/dashboard/models" className="mb-3 block text-sm text-white/35 transition hover:text-white">Models</a>
+              <a href="/pricing" className="mb-3 block text-sm text-white/35 transition hover:text-white">Pricing</a>
+            </div>
+
+            <div>
+              <p className="mb-4 text-xs font-black uppercase tracking-widest text-white/30">Use cases</p>
+              <a href="/product-ad-generator" className="mb-3 block text-sm text-white/35 transition hover:text-white">Product Ads</a>
+              <a href="/generate" className="mb-3 block text-sm text-white/35 transition hover:text-white">UGC Creatives</a>
+              <a href="/explore" className="mb-3 block text-sm text-white/35 transition hover:text-white">Social Videos</a>
+            </div>
+
+            <div>
+              <p className="mb-4 text-xs font-black uppercase tracking-widest text-white/30">Company</p>
+              <a href="/terms" className="mb-3 block text-sm text-white/35 transition hover:text-white">Terms</a>
+              <a href="/privacy" className="mb-3 block text-sm text-white/35 transition hover:text-white">Privacy</a>
+              <a href="/contact" className="mb-3 block text-sm text-white/35 transition hover:text-white">Contact</a>
+            </div>
+          </div>
+
+          <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-8">
+            <p className="text-xs text-white/20">© 2026 NOVA AI. All rights reserved.</p>
+            <div className="flex items-center gap-6">
+              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-wider text-white/20 transition hover:text-white">Instagram</a>
+              <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-wider text-white/20 transition hover:text-white">X / Twitter</a>
+              <a href="https://tiktok.com" target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-wider text-white/20 transition hover:text-white">TikTok</a>
+            </div>
+          </div>
+        </div>
+      </footer>
+
     </main>
   );
 }
