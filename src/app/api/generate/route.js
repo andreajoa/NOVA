@@ -6,6 +6,7 @@ import {
   debitApiCredits,
   debitGenerationCredits,
   ensureUserGenerationAccount,
+  isAdminUser,
 } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -79,6 +80,37 @@ export async function POST(req) {
   const { endpoint = "", prompt = "", model = "", mode = "" } = body;
   const seconds = normalizeSeconds(body.seconds || body.duration);
   const creditsRequired = seconds * VIDEO_CREDITS_PER_SECOND;
+
+  // ── Admin bypass ──────────────────────────────────────────────
+  const adminCheck = !isApiRequest && await isAdminUser(userId);
+  if (adminCheck) {
+    try {
+      fal.config({ credentials: process.env.FAL_KEY });
+      const falInput = {
+        prompt,
+        ...(body.image_url && { image_url: body.image_url }),
+        ...(body.duration && { duration: seconds }),
+        ...(body.aspect_ratio && { aspect_ratio: body.aspect_ratio }),
+        ...(body.resolution && { resolution: body.resolution }),
+      };
+      const result = await fal.subscribe(endpoint, { input: falInput, logs: true });
+      const outputUrl =
+        result?.video?.url || result?.videos?.[0]?.url ||
+        result?.image?.url || result?.images?.[0]?.url ||
+        result?.output?.url || null;
+      const isVideo = String(endpoint).includes("video") || String(endpoint).includes("seedance") || String(endpoint).includes("kling") || String(endpoint).includes("wan");
+      return NextResponse.json({
+        success: true,
+        provider: "fal",
+        source: "admin",
+        data: { type: isVideo ? "video" : "image", url: outputUrl, model, mode, seconds, raw: result },
+        billing: { creditsPerSecond: 0, creditsCharged: 0, remainingCredits: 999999, wallet: "admin" },
+      });
+    } catch (err) {
+      return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    }
+  }
+  // ── End admin bypass ────────────────────────────────────────
 
   let remainingCredits = null;
 

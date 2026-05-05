@@ -4,14 +4,12 @@ import { Resend } from 'resend'
 import { NextResponse } from 'next/server'
 import { createUser } from '@/lib/db'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 function welcomeEmailHtml(name: string) {
   return `
   <div style="margin:0;padding:0;background:#050816;font-family:Arial,sans-serif;color:#ffffff;">
     <div style="max-width:640px;margin:0 auto;padding:40px 24px;">
       <div style="margin-bottom:24px;">
-        <img src="https://novvideos.online/nova/logo-nova.jpeg" alt="NOVA" style="height:40px;width:auto;display:block;" />
+        <img src="https://novvideos.online/nova/nova-logo-full.png" alt="NOVA" style="height:40px;width:auto;display:block;" />
       </div>
       <div style="background:linear-gradient(180deg,#0b1020 0%,#121a2b 100%);border:1px solid rgba(255,255,255,0.08);border-radius:24px;padding:32px;">
         <p style="margin:0 0 12px;font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.55);">Welcome to NOVA</p>
@@ -73,12 +71,17 @@ export async function POST(req: Request) {
         console.error('Failed to create user in D1:', error)
       }
 
-      await resend.emails.send({
-        from: 'NOVA <info@novvideos.online>',
-        to: email,
-        subject: 'Welcome to NOVA',
-        html: welcomeEmailHtml(name),
-      })
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY)
+        await resend.emails.send({
+          from: 'NOVA <info@novvideos.online>',
+          to: email,
+          subject: 'Welcome to NOVA',
+          html: welcomeEmailHtml(name),
+        })
+      } catch (error) {
+        console.error('Failed to send welcome email:', error)
+      }
     }
   }
 
