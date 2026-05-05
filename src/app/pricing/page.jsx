@@ -1,459 +1,502 @@
 "use client";
-import { useState } from "react";
+
 import Link from "next/link";
+import Image from "next/image";
+import { useState } from "react";
 import Footer from "@/components/Footer";
 
-const PLANS = [
+const plans = [
   {
-    id: "basic", name: "BASIC", badge: null, badgeColor: "",
-    desc: "For creators building AI content",
-    monthly: 7, annual: 5, credits: 70,
-    highlight: false, cta: "Get Plan",
-    border: "border-white/10", bg: "bg-[#111]",
-    accentColor: "text-white",
-    savings: null,
-    tags: [],
+    name: "Basic",
+    subtitle: "For first-time AI content creators",
+    price: "$5",
+    period: "/mo",
+    billing: "per month, billed annually",
+    button: "Get Basic",
+    tone: "default",
+    badge: "",
+    highlight: "",
     features: [
       "70 credits/mo",
-      "5 Seedance Fast videos",
-      "1 Kling 3.0 video",
+      "5 Nano Banana Pro Generations",
+      "8 Kling 3.0 videos",
       "Fixed amount of 70 credits/mo",
     ],
-    unlimited7: ["Seedance 2.0 Fast"],
-    unlimited365: [],
-    models: [
-      { name: "Seedance 2.0 Fast", tag: null },
-      { name: "Kling 3.0", tag: null },
+    included: [
+      "Access to selected models only",
+      "Parallel generations: up to 2 videos, 2 images",
+      "Early access to advanced AI features",
+      "Lowest cost per credit",
     ],
+    unlimited: ["Seedance 2.0 Fast"],
+    freeGens: [],
   },
   {
-    id: "plus", name: "PLUS", badge: "MOST POPULAR",
-    badgeColor: "bg-[#D7FF00] text-black",
-    desc: "For consistent and easy AI content creation",
-    monthly: 44, annual: 34, credits: 500,
-    highlight: true, cta: "Get Plan",
-    border: "border-[#D7FF00]", bg: "bg-[#0f1200]",
-    accentColor: "text-[#D7FF00]",
-    savings: "Save $120 compared to monthly",
-    tags: ["4x SEEDANCE FAST"],
+    name: "Plus",
+    subtitle: "For consistent and easy AI content creation",
+    price: "$34",
+    oldPrice: "$49",
+    period: "/mo",
+    billing: "per month, billed annually",
+    button: "Get Plus",
+    tone: "lime",
+    badge: "Most Popular",
+    highlight: "Save $120 compared to monthly",
     features: [
       "500 credits/mo",
       "38 Nano Banana Pro Generations",
       "114 Kling 3.0 videos",
       "Lowest cost per credit",
     ],
-    unlimited7: ["Seedance 2.0 Fast", "Seedance 2.0 Pro"],
-    unlimited365: ["Seedance 2.0 Fast", "Seedance 2.0 Pro", "Kling 3.0"],
-    models: [
-      { name: "Seedance 2.0 Fast", tag: "7D UNLIMITED" },
-      { name: "Seedance 2.0 Pro", tag: null },
-      { name: "Kling 3.0", tag: null },
-      { name: "Veo 3.1", tag: null },
-      { name: "Happy Horse", tag: null },
+    included: [
+      "Access to all models",
+      "Parallel generations: up to 6 videos, 8 images",
+      "Access to all features",
+      "Early access to advanced AI features",
+      "One 365-day Unlimited video model",
     ],
+    unlimited: ["Seedance 2.0 Fast", "Seedance 2.0 Pro", "Kling 3.0"],
+    freeGens: ["Seedream 4.0", "Flux 2 Pro", "GPT Image"],
   },
   {
-    id: "ultra", name: "ULTRA", badge: "BEST VALUE",
-    badgeColor: "bg-blue-500 text-white",
-    desc: "For teams producing AI video at scale",
-    monthly: 119, annual: 89, credits: 3000,
-    highlight: false, cta: "Get Plan",
-    border: "border-blue-500/40", bg: "bg-[#080b12]",
-    accentColor: "text-blue-400",
-    savings: "Save $360 compared to monthly",
-    tags: ["4x SEEDANCE FAST"],
+    name: "Ultra",
+    subtitle: "For creators building AI projects at scale",
+    price: "$89",
+    oldPrice: "$129",
+    period: "/mo",
+    billing: "per month, billed annually",
+    button: "Get Ultra",
+    tone: "blue",
+    badge: "Best Value",
+    highlight: "Save $360 compared to monthly",
     features: [
       "3,000 credits/mo",
       "230 Seedance Fast videos",
       "343 Kling 3.0 videos",
       "One 365-day Unlimited video model",
     ],
-    unlimited7: ["Seedance 2.0 Fast", "Seedance 2.0 Pro", "Kling 3.0", "Veo 3.1", "Happy Horse", "LTX Video", "Wan 2.2"],
-    unlimited365: ["Seedance 2.0 Fast", "Seedance 2.0 Pro", "Kling 3.0", "Veo 3.1", "Happy Horse", "LTX Video", "Wan 2.2"],
-    models: [
-      { name: "Seedance 2.0 Fast", tag: "UNLIMITED" },
-      { name: "Seedance 2.0 Pro", tag: "UNLIMITED" },
-      { name: "Kling 3.0", tag: "UNLIMITED" },
-      { name: "Veo 3.1", tag: "UNLIMITED" },
-      { name: "Happy Horse", tag: "UNLIMITED" },
-      { name: "LTX Video", tag: "UNLIMITED" },
-      { name: "Wan 2.2", tag: "UNLIMITED" },
+    included: [
+      "Access to all models",
+      "Parallel generations: up to 8 videos, 8 images",
+      "Access to all features",
+      "Early access to advanced AI features",
+      "Lowest cost per credit",
     ],
+    unlimited: ["Seedance 2.0 Fast", "Seedance 2.0 Pro", "Kling 3.0", "Hailuo 3.1", "Wan 2.2"],
+    freeGens: ["Seedream 4.0", "Flux 2 Pro", "Nano Banana", "Kling 3.0", "GPT Image"],
   },
   {
-    id: "business", name: "BUSINESS", badge: "BEST VALUE",
-    badgeColor: "bg-blue-600 text-white",
-    desc: "For agencies and small teams",
-    monthly: 89, annual: 62, credits: 3000,
-    highlight: false, cta: "Get Plan",
-    border: "border-white/10", bg: "bg-[#080d18]",
-    accentColor: "text-blue-300",
-    savings: null,
-    isTeam: true,
-    tags: ["4x SEEDANCE FAST"],
+    name: "Business",
+    subtitle: "For agencies and small teams",
+    price: "$62",
+    oldPrice: "$89",
+    period: "/seat/mo",
+    billing: "per seat/mo, billed annually",
+    button: "Get Business",
+    tone: "business",
+    badge: "Best Value",
+    highlight: "Calculated for min. 2 seats",
     features: [
       "3,000 credits in total/mo",
       "1,500 credits per seat/mo",
       "Shared credit pool",
       "Priority support",
     ],
-    teamFeatures: [
+    included: [
       "Access to all features & models",
-      "All members in one shared workspace",
+      "2 to 15 members in one shared workspace",
       "Shared credit pool",
-      "Usage analytics and tracking",
-      "Parallel generations: up to 16 Videos, 16 Images",
+      "Parallel generations: up to 16 videos, 16 images",
       "Priority support",
     ],
-    unlimited7: ["Seedance 2.0 Fast", "Seedance 2.0 Pro", "Kling 3.0", "Veo 3.1", "Happy Horse", "LTX Video", "Wan 2.2"],
-    unlimited365: ["Seedance 2.0 Fast", "Seedance 2.0 Pro", "Kling 3.0", "Veo 3.1", "Happy Horse", "LTX Video", "Wan 2.2"],
-    models: [
-      { name: "Seedance 2.0 Fast", tag: "UNLIMITED" },
-      { name: "Seedance 2.0 Pro", tag: "UNLIMITED" },
-      { name: "Kling 3.0", tag: "UNLIMITED" },
-      { name: "Veo 3.1", tag: "UNLIMITED" },
-      { name: "Happy Horse", tag: "UNLIMITED" },
-      { name: "LTX Video", tag: "365 UNLIMITED" },
-      { name: "Wan 2.2", tag: "7-DAY UNLIMITED" },
-    ],
+    unlimited: ["Seedance 2.0 Fast", "Seedance 2.0 Pro", "Kling 3.0", "GPT Image", "Nano Banana Pro"],
+    freeGens: ["Seedream 4.0", "Flux 2 Pro", "Kling 3.0", "GPT Image"],
   },
 ];
 
-const COMPARE_ROWS = [
-  { label: "Concurrent Jobs", values: ["1 concurrent job", "2 concurrent jobs", "6 concurrent jobs", "8 concurrent jobs", "16 concurrent jobs"] },
-  { label: "Seedance Fast (720p)", values: ["✗", "✗", "533 videos", "1600 videos", "1600 videos"] },
-  { label: "Seedance Fast 720p", values: ["✗", "48 videos", "685 videos", "2057 videos", "2057 videos"] },
-  { label: "Kling 3.0 videos", values: ["1", "1", "12", "75", "75+"] },
-  { label: "All models", values: ["✗", "✗", "✓", "✓", "✓"] },
-  { label: "7-Day Unlimited", values: ["✗", "Select", "Select", "All", "All"] },
-  { label: "365-Day Unlimited", values: ["✗", "✗", "✗", "✓", "✓"] },
-  { label: "Team workspace", values: ["✗", "✗", "✗", "✗", "✓"] },
+const compareRows = [
+  ["Concurrent Jobs", "1 concurrent job", "2 concurrent jobs", "6 concurrent jobs", "8 concurrent jobs", "16 concurrent jobs"],
+  ["Seedance 2.0 720p", "—", "—", "533 videos", "1600 videos", "1600 videos"],
+  ["Seedance 2.0 Fast 720p", "—", "48 videos", "685 videos", "2057 videos", "2057 videos"],
+  ["Kling 3.0 720p", "—", "112 videos", "1600 videos", "4800 videos", "4800 videos"],
+  ["All models", "—", "—", "—", "✓", "✓"],
+  ["7-Day Unlimited", "—", "—", "Select", "Select", "All"],
+  ["365-Day Unlimited", "—", "—", "—", "✓", "✓"],
+  ["Team workspace", "—", "—", "—", "—", "✓"],
 ];
 
-const FAQS = [
-  { q: "How do credits work?", a: "Each generation costs a fixed number of credits depending on the model. Seedance Fast = 10 cr, Kling = 40 cr, Veo = 50 cr. Credits reset monthly on your billing date. Unused credits do not carry over." },
-  { q: "Is my subscription automatically renewed?", a: "Yes. All plans renew automatically on your billing date. You can cancel anytime from account settings with no extra fees." },
-  { q: "How many videos can I generate?", a: "It depends on the model and your plan. On Plus (500 cr): ~38 Seedance Fast videos (10 cr each), ~12 Kling videos (40 cr each). On Ultra (3,000 cr): ~300 Seedance Fast or ~75 Kling videos." },
-  { q: "How can I purchase extra credits?", a: "You can purchase credit top-ups at any time from your billing page without changing your plan." },
-  { q: "How does Unlimited work?", a: "7-Day Unlimited gives unrestricted generations on select models for the first 7 days after subscribing. After 7 days, your normal monthly credit allowance applies." },
-  { q: "How does 365-Day Unlimited work?", a: "Ultra and Business subscribers get free generation runs on specific models for the entire year. These free gens are separate from your credit balance." },
-  { q: "Can I change my plan?", a: "Yes. Upgrades take effect immediately with prorated billing. Downgrades take effect at the next billing cycle." },
+const faqs = [
+  "How do credits work?",
+  "Is my subscription automatically renewed?",
+  "How many videos can I generate?",
+  "How can I purchase extra credits?",
+  "How does Unlimited work?",
+  "How does 365-Day Unlimited promo work?",
+  "Can I change my plan?",
 ];
 
-function tagStyle(tag) {
-  if (!tag) return "";
-  if (tag === "UNLIMITED" || tag === "365 UNLIMITED") return "bg-[#D7FF00] text-black text-[8px] font-black px-1.5 py-0.5 rounded";
-  if (tag === "7D UNLIMITED" || tag === "7-DAY UNLIMITED") return "bg-blue-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded";
-  return "bg-white/10 text-white/50 text-[8px] font-black px-1.5 py-0.5 rounded";
+function CheckIcon({ blue = false }) {
+  return (
+    <span className={`mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${blue ? "text-blue-400" : "text-[#D7FF00]"}`}>
+      ✓
+    </span>
+  );
+}
+
+function Pill({ children, blue = false }) {
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[.14em] ${blue ? "bg-blue-600 text-white" : "bg-[#D7FF00] text-black"}`}>
+      {children}
+    </span>
+  );
+}
+
+function PlanCard({ plan }) {
+  const isLime = plan.tone === "lime";
+  const isBlue = plan.tone === "blue" || plan.tone === "business";
+
+  return (
+    <article
+      className={[
+        "relative flex min-h-[720px] flex-col overflow-hidden rounded-2xl border p-5 transition duration-300",
+        "bg-[linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.018))]",
+        isLime ? "border-[#D7FF00] shadow-[0_0_55px_rgba(215,255,0,.16)]" : "",
+        isBlue ? "border-blue-500/80 shadow-[0_0_55px_rgba(37,99,235,.13)]" : "",
+        !isLime && !isBlue ? "border-white/10" : "",
+      ].join(" ")}
+    >
+      <div className="pointer-events-none absolute inset-0 opacity-70">
+        {isLime && <div className="absolute -top-24 left-1/2 h-52 w-52 -translate-x-1/2 rounded-full bg-[#D7FF00]/10 blur-3xl" />}
+        {isBlue && <div className="absolute -top-24 left-1/2 h-52 w-52 -translate-x-1/2 rounded-full bg-blue-600/12 blur-3xl" />}
+      </div>
+
+      {plan.badge && (
+        <div className="absolute left-1/2 top-0 z-10 -translate-x-1/2">
+          <div className={`rounded-b-xl px-4 py-1.5 text-[10px] font-black uppercase tracking-[.16em] ${isLime ? "bg-[#D7FF00] text-black" : "bg-blue-600 text-white"}`}>
+            ✦ {plan.badge}
+          </div>
+        </div>
+      )}
+
+      <div className="relative z-10 pt-5">
+        <h3 className={`text-sm font-black uppercase tracking-[.24em] ${isLime ? "text-[#D7FF00]" : isBlue ? "text-blue-400" : "text-white"}`}>
+          {plan.name}
+        </h3>
+        <p className="mt-3 min-h-10 text-xs leading-5 text-white/45">{plan.subtitle}</p>
+      </div>
+
+      <div className="relative z-10 mt-5 rounded-xl border border-white/8 bg-black/35 p-3">
+        <ul className="space-y-2 text-xs text-white/75">
+          {plan.features.map((item) => (
+            <li key={item} className="flex gap-2">
+              <CheckIcon blue={isBlue} />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="relative z-10 mt-6">
+        <div className="flex items-end gap-2">
+          {plan.oldPrice && <span className="pb-1 text-xl font-black text-white/30 line-through">{plan.oldPrice}</span>}
+          <span className="text-4xl font-black tracking-tight text-white">{plan.price}</span>
+          <span className="pb-1 text-xs font-bold text-white/45">{plan.period}</span>
+        </div>
+        <p className="mt-1 text-[11px] text-white/45">{plan.billing}</p>
+        {plan.highlight && <p className={`mt-1 text-[11px] font-black ${isBlue ? "text-blue-300" : "text-[#D7FF00]"}`}>{plan.highlight}</p>}
+      </div>
+
+      <Link
+        href="/dashboard"
+        className={[
+          "relative z-10 mt-5 grid h-12 place-items-center rounded-xl text-xs font-black uppercase tracking-[.14em] no-underline transition",
+          isLime ? "bg-[#D7FF00] text-black hover:bg-[#c7ef00]" : "",
+          isBlue ? "bg-blue-600 text-white hover:bg-blue-500" : "",
+          !isLime && !isBlue ? "bg-white/10 text-white hover:bg-white/15" : "",
+        ].join(" ")}
+      >
+        {plan.button}
+      </Link>
+
+      <div className="relative z-10 mt-6 space-y-2">
+        {plan.included.map((item) => (
+          <div key={item} className="flex gap-2 text-xs leading-5 text-white/55">
+            <CheckIcon blue={isBlue} />
+            <span>{item}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="relative z-10 mt-6 border-t border-white/8 pt-5">
+        <div className="mb-3 flex items-center justify-between text-[10px] font-black uppercase tracking-[.15em] text-white/30">
+          <span>7-Day Unlimited</span>
+          <span>Learn more</span>
+        </div>
+        <div className="space-y-2">
+          {plan.unlimited.map((item) => (
+            <div key={item} className="flex items-center justify-between gap-3 rounded-lg border border-white/6 bg-black/25 px-3 py-2 text-xs text-white/55">
+              <span>{item}</span>
+              <span className="rounded-full bg-[#D7FF00] px-2 py-0.5 text-[9px] font-black text-black">UNLIMITED</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {plan.freeGens.length > 0 && (
+        <div className="relative z-10 mt-5">
+          <div className="mb-3 text-[10px] font-black uppercase tracking-[.15em] text-white/30">365-Day Unlimited & Free Gens</div>
+          <div className="space-y-2">
+            {plan.freeGens.map((item) => (
+              <div key={item} className="flex items-center justify-between gap-3 rounded-lg border border-white/6 bg-black/25 px-3 py-2 text-xs text-white/55">
+                <span>{item}</span>
+                <span className="rounded-full bg-[#D7FF00] px-2 py-0.5 text-[9px] font-black text-black">365</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </article>
+  );
 }
 
 export default function PricingPage() {
   const [annual, setAnnual] = useState(true);
   const [openFaq, setOpenFaq] = useState(null);
-  const [seats, setSeats] = useState(2);
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
+    <main className="min-h-screen overflow-hidden bg-[#050505] text-white">
+      <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_50%_0%,rgba(215,255,0,.10),transparent_32%),radial-gradient(circle_at_85%_15%,rgba(37,99,235,.16),transparent_25%),linear-gradient(180deg,#050505,#080808_50%,#050505)]" />
 
-      {/* ── PROMO BANNER ── */}
-      <div className="bg-gradient-to-r from-indigo-900 via-purple-900 to-indigo-900 px-6 py-4 text-center">
-        <p className="text-sm font-black uppercase tracking-wider">
-          <span className="bg-[#D7FF00] text-black text-[10px] font-black px-2 py-0.5 rounded mr-3">SPECIAL 30% OFF</span>
-          UNLIMITED SEEDANCE FAST & KLING 3.0 UNLIMITED WITH 30% OFF
-        </p>
-        <p className="text-white/50 text-xs mt-1">Get Unlimited access to all models on Ultra plan for 7 days with Special 30% discount</p>
-      </div>
+      <header className="relative z-10 border-b border-white/8 bg-black/45 px-5 py-4 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-5">
+          <Link href="/" className="flex items-center gap-3 no-underline">
+            <Image
+              src="/nova/nova-logo-full.png"
+              alt="NOVA"
+              width={140}
+              height={60}
+              priority
+              className="h-9 w-auto object-contain"
+            />
+          </Link>
 
-      {/* ── HERO ── */}
-      <div className="pt-16 pb-8 px-6 text-center">
-        <h1 className="text-5xl font-black uppercase tracking-[-0.04em] mb-3">PICK YOUR PLAN</h1>
-        <p className="text-white/40 text-base max-w-lg mx-auto">Scale creativity with higher limits, priority access, and early features</p>
+          <nav className="hidden items-center gap-8 text-xs font-bold text-white/60 md:flex">
+            <Link href="/dashboard" className="hover:text-white">Studio</Link>
+            <Link href="/dashboard/models" className="hover:text-white">Models</Link>
+            <Link href="/features" className="hover:text-white">Features</Link>
+            <Link href="/pricing" className="text-[#D7FF00]">Pricing</Link>
+          </nav>
 
-        {/* TOGGLE */}
-        <div className="flex items-center justify-center gap-3 mt-8">
-          <span className={"text-sm font-bold transition " + (!annual ? "text-white" : "text-white/30")}>Monthly</span>
-          <button
-            onClick={() => setAnnual(a => !a)}
-            className={"relative w-12 h-6 rounded-full transition-colors border-none cursor-pointer " + (annual ? "bg-[#D7FF00]" : "bg-white/20")}>
-            <span className={"absolute top-1 w-4 h-4 rounded-full bg-[#0a0a0a] transition-all " + (annual ? "left-7" : "left-1")} />
-          </button>
-          <span className={"text-sm font-bold transition " + (annual ? "text-white" : "text-white/30")}>Annual</span>
-          {annual && <span className="bg-[#D7FF00] text-black text-[10px] font-black px-2 py-0.5 rounded">30% OFF</span>}
+          <div className="flex items-center gap-3">
+            <Link href="/login" className="hidden text-xs font-bold text-white/65 hover:text-white sm:block">Log in</Link>
+            <Link href="/dashboard" className="rounded-xl bg-[#D7FF00] px-4 py-2.5 text-xs font-black uppercase tracking-wide text-black no-underline hover:bg-[#c7ef00]">
+              Get Started
+            </Link>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* ── PLAN CARDS ── */}
-      <div className="px-4 pb-16">
-        <div className="max-w-[1400px] mx-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {PLANS.map(plan => (
-            <div key={plan.id}
-              className={"relative rounded-2xl border " + plan.border + " " + plan.bg + " p-5 flex flex-col " +
-                (plan.highlight ? "shadow-[0_0_40px_rgba(215,255,0,0.08)]" : "")}>
+      <section className="relative z-10 mx-auto max-w-[1500px] px-5 pt-8">
+        <div className="relative overflow-hidden rounded-[28px] border border-[#D7FF00]/25 bg-[linear-gradient(100deg,rgba(215,255,0,.12),rgba(255,255,255,.035)_42%,rgba(37,99,235,.10))] p-6 shadow-[0_0_80px_rgba(215,255,0,.08)] md:p-9">
+          <div className="absolute right-8 top-1/2 hidden h-44 w-44 -translate-y-1/2 rounded-[36px] border border-[#D7FF00]/20 bg-[#D7FF00]/10 shadow-[0_0_90px_rgba(215,255,0,.35)] rotate-12 md:block" />
+          <div className="absolute right-20 top-14 hidden text-5xl text-[#D7FF00] md:block">✦</div>
+          <div className="absolute right-52 bottom-12 hidden text-4xl text-[#D7FF00] md:block">✦</div>
 
-              {/* badge */}
-              {plan.badge && (
-                <div className={"absolute -top-3 left-1/2 -translate-x-1/2 text-[9px] font-black uppercase tracking-wider px-3 py-1 rounded-full whitespace-nowrap " + plan.badgeColor}>
-                  ★ {plan.badge}
-                </div>
-              )}
+          <div className="relative z-10 flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
+            <div>
+              <Pill>Limited Time</Pill>
+              <h1 className="mt-5 max-w-3xl text-3xl font-black leading-tight tracking-tight text-white md:text-5xl">
+                Create without limits. Save more.
+              </h1>
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-white/60">
+                Get <span className="font-black text-[#D7FF00]">30% OFF</span> on annual NOVA plans — including high limits, premium models and Unlimited video generation.
+              </p>
 
-              {/* name + desc */}
-              <div className="mb-4 mt-2">
-                <p className={"text-[10px] font-black uppercase tracking-[0.2em] mb-1 " + plan.accentColor}>{plan.name}</p>
-                <p className="text-white/40 text-xs leading-relaxed">{plan.desc}</p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-xs font-bold text-white/65">✦ Unlimited generations</div>
+                <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-xs font-bold text-white/65">✓ Cancel anytime</div>
               </div>
+            </div>
 
-              {/* tags */}
-              {plan.tags?.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {plan.tags.map((tag, i) => (
-                    <span key={i} className="bg-white/10 text-white/50 text-[9px] font-black uppercase px-2 py-0.5 rounded">{tag}</span>
-                  ))}
-                </div>
-              )}
+            <Link href="#plans" className="w-fit rounded-2xl bg-[#D7FF00] px-7 py-4 text-xs font-black uppercase tracking-[.14em] text-black no-underline hover:bg-[#c7ef00]">
+              30% Off Annual Plans
+            </Link>
+          </div>
+        </div>
+      </section>
 
-              {/* features */}
-              <div className="mb-4 space-y-1.5">
-                {plan.features.map((f, i) => (
-                  <div key={i} className="flex items-start gap-2 text-xs text-white/60">
-                    <span className="text-[#D7FF00] mt-0.5 shrink-0">+</span>
-                    <span>{f}</span>
+      <section id="plans" className="relative z-10 mx-auto max-w-[1500px] px-5 py-14">
+        <div className="text-center">
+          <h2 className="text-4xl font-black uppercase tracking-tight md:text-5xl">Pick your plan</h2>
+          <p className="mt-3 text-sm text-white/40">Scale creativity with higher limits, priority access, and early features</p>
+
+          <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[.035] px-4 py-2 text-xs text-white/45">
+            <span>Monthly</span>
+            <button
+              onClick={() => setAnnual(!annual)}
+              className={`relative h-6 w-11 rounded-full transition ${annual ? "bg-[#D7FF00]" : "bg-white/20"}`}
+              aria-label="Toggle annual billing"
+            >
+              <span className={`absolute top-1 h-4 w-4 rounded-full transition ${annual ? "left-6 bg-black" : "left-1 bg-white"}`} />
+            </button>
+            <span className="font-bold text-white">Annual</span>
+            <Pill>30% Off</Pill>
+          </div>
+        </div>
+
+        <div className="mt-10 grid gap-5 lg:grid-cols-4">
+          {plans.map((plan) => (
+            <PlanCard key={plan.name} plan={plan} />
+          ))}
+        </div>
+
+        <p className="mx-auto mt-6 max-w-4xl text-center text-[11px] leading-5 text-white/30">
+          Prices exclude VAT and local taxes, calculated at checkout. Unlimited usage may be subject to dynamic speed adjustments during high-traffic periods.
+        </p>
+      </section>
+
+      <section className="relative z-10 mx-auto grid max-w-[1500px] gap-6 px-5 pb-16 lg:grid-cols-[1.35fr_.65fr]">
+        <div className="rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.02))] p-7 md:p-9">
+          <h2 className="max-w-2xl text-2xl font-black uppercase leading-tight md:text-3xl">
+            Enterprise AI video infrastructure for teams that produce at scale
+          </h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-white/45">
+            Tailored workflows, dedicated support, seamless onboarding, full control at scale, and no training on your data.
+          </p>
+
+          <div className="mt-7 grid gap-4 md:grid-cols-3">
+            {[
+              ["🛡️", "Security & Compliance", "Your data is never used for model training. SOC 2 Type II in progress."],
+              ["🗄️", "Data & usage rights", "You retain all rights in every AI generated output."],
+              ["⚙️", "SSO & admin control", "Set and manage roles and permissions from one dashboard."],
+            ].map(([icon, title, text]) => (
+              <div key={title} className="rounded-2xl border border-white/8 bg-black/25 p-5">
+                <div className="mb-4 text-xl">{icon}</div>
+                <h3 className="text-sm font-black">{title}</h3>
+                <p className="mt-2 text-xs leading-5 text-white/40">{text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.02))] p-7 md:p-9">
+          <p className="text-xs font-black uppercase tracking-[.18em] text-white/35">Everything on Business Plan and...</p>
+
+          <ul className="mt-5 space-y-3 text-sm text-white/70">
+            {[
+              "Unlimited members",
+              "Custom credit amount",
+              "Dedicated model capacity",
+              "Access to all models on the platform",
+              "Volume-based discounts at the best rates",
+              "Priority queue for faster task processing",
+            ].map((item) => (
+              <li key={item} className="flex gap-3">
+                <CheckIcon />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+
+          <Link href="/contact" className="mt-7 grid h-12 w-full place-items-center rounded-xl bg-white text-xs font-black uppercase tracking-[.15em] text-black no-underline">
+            Contact Sales
+          </Link>
+          <Link href="/enterprise" className="mt-3 grid h-12 w-full place-items-center rounded-xl bg-white/10 text-xs font-black uppercase tracking-[.15em] text-white no-underline">
+            Learn More
+          </Link>
+        </div>
+      </section>
+
+      <section className="relative z-10 mx-auto max-w-[1500px] px-5 py-12">
+        <h2 className="text-center text-4xl font-black uppercase tracking-tight">Compare Plans</h2>
+
+        <div className="mt-10 overflow-hidden rounded-3xl border border-white/10 bg-black/20">
+          <div className="overflow-x-auto">
+            <div className="min-w-[980px]">
+              <div className="grid grid-cols-6 border-b border-white/8 bg-white/[.03] text-xs font-black uppercase tracking-[.14em] text-white/45">
+                <div className="p-4">Annual 30% Off</div>
+                {["Free", "Basic", "Plus", "Ultra", "Business"].map((head) => (
+                  <div key={head} className="p-4 text-center">
+                    <div className={head === "Plus" ? "text-[#D7FF00]" : head === "Business" ? "text-blue-400" : "text-white/65"}>{head}</div>
+                    <Link href="/dashboard" className="mt-3 inline-block rounded-lg bg-white/10 px-4 py-2 text-[10px] text-white no-underline hover:bg-white/15">
+                      Get Plan
+                    </Link>
                   </div>
                 ))}
               </div>
 
-              {/* team seats */}
-              {plan.isTeam && (
-                <div className="mb-4 flex items-center gap-3 bg-white/5 rounded-xl px-3 py-2 w-fit">
-                  <button onClick={() => setSeats(s => Math.max(2, s - 1))}
-                    className="text-white/40 hover:text-white font-bold bg-transparent border-none cursor-pointer text-base">−</button>
-                  <span className="font-black text-sm w-5 text-center">{seats}</span>
-                  <button onClick={() => setSeats(s => s + 1)}
-                    className="text-white/40 hover:text-white font-bold bg-transparent border-none cursor-pointer text-base">+</button>
-                  <span className="text-white/40 text-xs">seats</span>
-                </div>
-              )}
+              <div className="bg-white/[.025] px-4 py-3 text-xs font-black uppercase tracking-[.14em] text-white/50">Video</div>
 
-              {/* price */}
-              <div className="mb-1">
-                <div className="flex items-end gap-1">
-                  {plan.isTeam && annual && <span className="text-white/30 line-through text-lg mb-1">${plan.monthly}</span>}
-                  <span className="text-4xl font-black tracking-tighter">${annual ? plan.annual : plan.monthly}</span>
-                  <span className="text-white/30 text-xs mb-1.5">
-                    {plan.isTeam ? `/seat/mo · ${seats} seats` : "/mo"}
-                  </span>
-                </div>
-                {annual && plan.savings && (
-                  <p className="text-[#D7FF00] text-[10px] font-bold mt-1">{plan.savings}</p>
-                )}
-                {plan.isTeam && (
-                  <p className="text-white/30 text-[10px] mt-1">= ${(annual ? plan.annual : plan.monthly) * seats}/mo total · billed annually</p>
-                )}
-              </div>
-
-              {/* CTA */}
-              <Link href="/dashboard"
-                className={"mt-3 mb-5 flex items-center justify-center py-3 rounded-xl text-sm font-black uppercase tracking-wider transition no-underline " +
-                  (plan.highlight
-                    ? "bg-[#D7FF00] text-black hover:bg-[#c8f000]"
-                    : plan.id === "business"
-                    ? "bg-blue-600 text-white hover:bg-blue-500"
-                    : "bg-white/10 text-white hover:bg-white/20")}>
-                {plan.cta}
-              </Link>
-
-              {/* team features */}
-              {plan.teamFeatures && (
-                <div className="mb-4 space-y-1.5">
-                  {plan.teamFeatures.map((f, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-white/50">
-                      <span className="text-blue-400 mt-0.5 shrink-0">✓</span>
-                      <span>{f}</span>
-                    </div>
-                  ))}
-                  <p className="text-[10px] font-black uppercase tracking-wider text-white/20 mt-3 pt-3 border-t border-white/8">TEAM FEATURES</p>
-                  {["Shareable elements and Soul IDs","Usage analytics and tracking","Shared projects with integrated chat","Custom SSO access"].map((f, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-white/50">
-                      <span className="text-blue-400 mt-0.5 shrink-0">✓</span>
-                      <span>{f}</span>
+              {compareRows.map((row) => (
+                <div key={row[0]} className="grid grid-cols-6 border-b border-white/6 text-sm text-white/55 last:border-b-0">
+                  {row.map((cell, index) => (
+                    <div
+                      key={`${row[0]}-${index}`}
+                      className={[
+                        "p-4",
+                        index === 0 ? "font-bold text-white/70" : "text-center",
+                        cell === "✓" ? "font-black text-[#D7FF00]" : "",
+                        index === 3 && cell !== "—" && index !== 0 ? "font-black text-[#D7FF00]" : "",
+                      ].join(" ")}
+                    >
+                      {cell}
                     </div>
                   ))}
                 </div>
-              )}
+              ))}
+            </div>
+          </div>
+        </div>
 
-              {/* 7-day unlimited */}
-              {plan.unlimited7?.length > 0 && (
-                <div className="mt-auto pt-3 border-t border-white/8">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-white/30">⚡ 7-DAY UNLIMITED</p>
-                    <button className="text-[9px] text-white/30 hover:text-white">Learn more</button>
-                  </div>
-                  <div className="space-y-1.5">
-                    {plan.unlimited7.map((m, i) => (
-                      <div key={i} className="flex items-center justify-between">
-                        <span className="text-xs text-white/40">{m}</span>
-                        {plan.id !== "basic" && <span className="bg-[#D7FF00] text-black text-[8px] font-black px-1.5 py-0.5 rounded">UNLIMITED</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+        <div className="mt-8 text-center">
+          <button className="rounded-xl border border-white/15 px-7 py-3 text-xs font-black uppercase tracking-[.15em] text-white hover:bg-white/10">
+            Compare Features
+          </button>
+        </div>
+      </section>
 
-              {/* 365-day unlimited */}
-              {plan.unlimited365?.length > 0 && (
-                <div className="pt-3 mt-3 border-t border-white/8">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-white/30">★ 365-DAY UNLIMITED & FREE GENS</p>
-                    <button className="text-[9px] text-white/30 hover:text-white">Learn more</button>
-                  </div>
-                  <div className="space-y-1.5">
-                    {plan.unlimited365.map((m, i) => (
-                      <div key={i} className="flex items-center justify-between">
-                        <span className="text-xs text-white/40">{m}</span>
-                        <span className="bg-[#D7FF00] text-black text-[8px] font-black px-1.5 py-0.5 rounded">365 UNLIMITED</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+      <section className="relative z-10 mx-auto max-w-3xl px-5 py-12">
+        <h2 className="text-center text-3xl font-black tracking-tight md:text-4xl">Frequently Asked Questions</h2>
+
+        <div className="mt-8 space-y-3">
+          {faqs.map((question, index) => (
+            <div key={question} className="overflow-hidden rounded-xl border border-white/8 bg-white/[.035]">
+              <button
+                onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                className="flex w-full items-center justify-between px-5 py-4 text-left text-sm font-black text-white"
+              >
+                {question}
+                <span className={`text-white/45 transition ${openFaq === index ? "rotate-180" : ""}`}>⌄</span>
+              </button>
+
+              {openFaq === index && (
+                <p className="px-5 pb-5 text-sm leading-6 text-white/45">
+                  NOVA plans are designed for AI video and image generation. Credits, Unlimited access and model availability may vary depending on the selected plan and model usage.
+                </p>
               )}
             </div>
           ))}
         </div>
 
-        <p className="text-center text-white/20 text-xs mt-6 max-w-2xl mx-auto">
-          Prices exclude VAT and local taxes, calculated at checkout.<br />
-          Unlimited usage may be subject to dynamic speed adjustments during high-traffic periods.
-        </p>
-      </div>
-
-      {/* ── ENTERPRISE ── */}
-      <div className="px-6 pb-20">
-        <div className="max-w-[1400px] mx-auto rounded-2xl border border-white/10 bg-[#0d0d0d] p-10 grid md:grid-cols-2 gap-12 items-start">
-          <div>
-            <h2 className="text-3xl font-black uppercase tracking-tight mb-3">Enterprise AI video infrastructure for teams that produce at scale</h2>
-            <p className="text-white/40 text-sm leading-relaxed mb-8">Tailored workflows, dedicated support, seamless onboarding, full control at scale, and no training on your data.</p>
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                { icon: "🔒", title: "Security & Compliance", desc: "Your data is never used for model training. SOC 2 Type II in progress." },
-                { icon: "📊", title: "Data & usage rights", desc: "You retain all rights in every AI-generated output — no restrictions." },
-                { icon: "⚙️", title: "SSO & admin control", desc: "Set and manage roles and permissions from a single, centralized dashboard." },
-              ].map((item, i) => (
-                <div key={i} className="bg-white/5 rounded-xl p-4">
-                  <p className="text-xl mb-2">{item.icon}</p>
-                  <p className="text-xs font-black mb-1">{item.title}</p>
-                  <p className="text-white/40 text-xs leading-relaxed">{item.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="text-xs font-black uppercase tracking-wider text-white/30 mb-4">Everything on Business Plan and...</p>
-            <div className="space-y-2 mb-8">
-              {["Unlimited members","Custom credit amount","Dedicated model capacity","Access to all models on the platform","Volume-based discounts at the best rates","Priority queue for faster task processing"].map((f, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm text-white/60">
-                  <span className="text-[#D7FF00]">✓</span>{f}
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-3">
-              <Link href="/contact" className="bg-white text-black text-sm font-black uppercase tracking-wider px-6 py-3 rounded-xl hover:bg-[#D7FF00] transition no-underline">Contact Sales</Link>
-              <Link href="/pricing" className="border border-white/20 text-white text-sm font-black uppercase tracking-wider px-6 py-3 rounded-xl hover:bg-white/10 transition no-underline">Learn More</Link>
-            </div>
-          </div>
+        <div className="mt-10 rounded-3xl border border-[#D7FF00]/20 bg-[linear-gradient(100deg,rgba(215,255,0,.10),rgba(255,255,255,.035))] p-7 text-center">
+          <p className="text-sm text-white/40">Are you ready?</p>
+          <h3 className="mt-2 text-2xl font-black">Ready to create without limits?</h3>
+          <Link href="/dashboard" className="mt-5 inline-block rounded-xl bg-[#D7FF00] px-8 py-4 text-xs font-black uppercase tracking-[.16em] text-black no-underline hover:bg-[#c7ef00]">
+            Choose your plan
+          </Link>
         </div>
-      </div>
+      </section>
 
-      {/* ── COMPARE PLANS ── */}
-      <div className="px-6 pb-20">
-        <div className="max-w-[1400px] mx-auto">
-          <h2 className="text-4xl font-black uppercase tracking-tight text-center mb-12">COMPARE PLANS</h2>
-
-          {/* sticky header */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse min-w-[700px]">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="text-left py-4 text-white/30 font-bold text-xs uppercase tracking-wider w-1/4"></th>
-                  {["Free","Basic","Plus","Ultra","Business"].map((p, i) => (
-                    <th key={p} className="text-center pb-4 px-2">
-                      <p className={"text-xs font-black uppercase " + (i === 2 ? "text-[#D7FF00]" : "text-white/60")}>{p}</p>
-                      <p className="text-white/30 text-[10px] mt-1">
-                        {i === 0 ? "Free" : i === 1 ? `$${annual ? 5 : 7}/month` : i === 2 ? `$${annual ? 34 : 44}/month` : i === 3 ? `$${annual ? 89 : 119}/month` : `$${annual ? 62 : 89}/seat/month`}
-                      </p>
-                      <p className="text-white/20 text-[9px]">{i === 0 ? "Limited use" : "Billed annually"}</p>
-                      {i > 0 && (
-                        <Link href="/dashboard" className={"mt-2 inline-block text-[10px] font-black uppercase px-3 py-1.5 rounded-lg transition no-underline " +
-                          (i === 2 ? "bg-[#D7FF00] text-black" : "bg-white/10 text-white hover:bg-white/20")}>
-                          Get Plan
-                        </Link>
-                      )}
-                    </th>
-                  ))}
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="py-3 text-white/30 text-xs font-black uppercase tracking-wider">Annual 30% OFF</td>
-                  <td colSpan={5} className="py-3 text-right pr-2">
-                    <button onClick={() => setAnnual(a => !a)}
-                      className={"relative w-10 h-5 rounded-full border-none cursor-pointer transition-colors " + (annual ? "bg-[#D7FF00]" : "bg-white/20")}>
-                      <span className={"absolute top-0.5 w-4 h-4 rounded-full bg-[#0a0a0a] transition-all " + (annual ? "left-5" : "left-0.5")} />
-                    </button>
-                  </td>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td colSpan={6} className="py-3 text-xs font-black uppercase tracking-wider text-white/30 border-b border-white/5">Video</td></tr>
-                {COMPARE_ROWS.map(({ label, values }, i) => (
-                  <tr key={i} className="border-b border-white/5">
-                    <td className="py-3 text-white/50 text-xs">{label}</td>
-                    {["Free", ...values].slice(0, 6).map((v, j) => (
-                      <td key={j} className={"text-center py-3 text-xs font-bold " +
-                        (v === "✓" ? "text-[#D7FF00]" : v === "✗" ? "text-white/15" : j === 3 ? "text-[#D7FF00]" : "text-white/60")}>
-                        {j === 0 ? (i === 0 ? "1 concurrent job" : "✗") : v}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="text-center mt-8">
-            <Link href="/dashboard" className="inline-block border border-white/20 text-white text-sm font-black uppercase tracking-wider px-8 py-3 rounded-xl hover:bg-white/10 transition no-underline">
-              Compare Features
-            </Link>
-          </div>
+      <div className="fixed bottom-5 right-5 z-30 hidden w-[290px] rounded-2xl border border-[#D7FF00]/45 bg-black/95 p-4 shadow-[0_0_50px_rgba(215,255,0,.22)] backdrop-blur-xl md:block">
+        <div className="mb-2 flex items-center justify-between">
+          <Pill>30% Off</Pill>
+          <span className="text-white/35">×</span>
         </div>
-      </div>
-
-      {/* ── FAQ ── */}
-      <div className="px-6 pb-20">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-4xl font-black text-center mb-10">Frequently Asked Questions</h2>
-          <div className="space-y-2">
-            {FAQS.map((faq, i) => (
-              <div key={i} className="border border-white/8 rounded-2xl overflow-hidden">
-                <button
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full flex items-center justify-between px-6 py-5 text-left bg-[#0f0f0f] hover:bg-[#141414] transition cursor-pointer border-none text-white">
-                  <span className="font-bold text-sm">{faq.q}</span>
-                  <span className={"text-white/40 text-lg transition-transform inline-block " + (openFaq === i ? "rotate-180" : "")}>∨</span>
-                </button>
-                {openFaq === i && (
-                  <div className="px-6 py-5 bg-[#0a0a0a] border-t border-white/5">
-                    <p className="text-white/50 text-sm leading-relaxed">{faq.a}</p>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="text-center mt-12">
-            <p className="text-white/40 text-sm mb-4">Are you ready?</p>
-            <Link href="/dashboard" className="inline-block bg-[#D7FF00] text-black text-sm font-black uppercase tracking-wider px-8 py-3 rounded-xl hover:bg-[#c8f000] transition no-underline">
-              Choose your plan
-            </Link>
-          </div>
-        </div>
+        <p className="text-lg font-black leading-tight">Save 30% on Annual Plans</p>
+        <p className="mt-2 text-xs leading-5 text-white/45">Unlimited video, more power, better value.</p>
+        <Link href="#plans" className="mt-4 grid h-10 place-items-center rounded-xl bg-[#D7FF00] text-xs font-black uppercase text-black no-underline">
+          Claim 30% Off →
+        </Link>
       </div>
 
       <Footer />
