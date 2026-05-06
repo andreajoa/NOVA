@@ -48,10 +48,23 @@ export function d1Rows(response: D1Response): Record<string, unknown>[] {
   return response.result?.[0]?.results ?? []
 }
 
+export const PLAN_CONFIG: Record<string, {
+  credits: number
+  imageUnlimited: boolean
+  imageMonthlyLimit: number | null
+}> = {
+  trial:    { credits: 10,     imageUnlimited: false, imageMonthlyLimit: 10   },
+  basic:    { credits: 70,     imageUnlimited: true,  imageMonthlyLimit: null },
+  plus:     { credits: 500,    imageUnlimited: true,  imageMonthlyLimit: null },
+  ultra:    { credits: 3000,   imageUnlimited: true,  imageMonthlyLimit: null },
+  business: { credits: 3000,   imageUnlimited: true,  imageMonthlyLimit: null },
+  admin:    { credits: 999999, imageUnlimited: true,  imageMonthlyLimit: null },
+}
+
 export async function createUser(clerkId: string, email: string) {
   return queryD1(
-    `INSERT OR IGNORE INTO users (id, email, clerk_id, plan, credits, created_at)
-     VALUES (?, ?, ?, 'trial', 10, datetime('now'))`,
+    `INSERT OR IGNORE INTO users (id, email, clerk_id, plan, credits, image_gens_used, created_at)
+     VALUES (?, ?, ?, 'trial', 10, 0, datetime('now'))`,
     [clerkId, email, clerkId]
   )
 }
@@ -101,12 +114,9 @@ export type ApiKeyRow = {
 export async function listApiKeysByUser(userId: string) {
   const res = await queryD1(
     `SELECT id, user_id, name, key_prefix, key_suffix, created_at, last_used_at, revoked_at
-     FROM api_keys
-     WHERE user_id = ? AND revoked_at IS NULL
-     ORDER BY created_at DESC`,
+     FROM api_keys WHERE user_id = ? AND revoked_at IS NULL ORDER BY created_at DESC`,
     [userId]
   )
-
   return d1Rows(res)
 }
 
@@ -123,15 +133,11 @@ export async function createApiKeyRow(data: {
      VALUES (?, ?, ?, ?, ?, ?, unixepoch())`,
     [data.id, data.userId, data.name, data.keyHash, data.keyPrefix, data.keySuffix]
   )
-
   const res = await queryD1(
     `SELECT id, user_id, name, key_prefix, key_suffix, created_at, last_used_at, revoked_at
-     FROM api_keys
-     WHERE id = ? AND user_id = ?
-     LIMIT 1`,
+     FROM api_keys WHERE id = ? AND user_id = ? LIMIT 1`,
     [data.id, data.userId]
   )
-
   return d1Rows(res)[0] ?? null
 }
 
@@ -140,27 +146,21 @@ export async function revokeApiKeyById(id: string, userId: string) {
     `SELECT id FROM api_keys WHERE id = ? AND user_id = ? AND revoked_at IS NULL LIMIT 1`,
     [id, userId]
   )
-
   const row = d1Rows(existing)[0]
   if (!row) return false
-
   await queryD1(
     `UPDATE api_keys SET revoked_at = unixepoch() WHERE id = ? AND user_id = ?`,
     [id, userId]
   )
-
   return true
 }
 
 export async function findApiKeyByHash(keyHash: string) {
   const res = await queryD1(
     `SELECT id, user_id, name, key_hash, key_prefix, key_suffix, created_at, last_used_at, revoked_at
-     FROM api_keys
-     WHERE key_hash = ? AND revoked_at IS NULL
-     LIMIT 1`,
+     FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL LIMIT 1`,
     [keyHash]
   )
-
   return d1Rows(res)[0] ?? null
 }
 
@@ -173,27 +173,29 @@ export async function touchApiKeyLastUsed(id: string) {
 
 export async function ensureUserGenerationAccount(userId: string) {
   const existing = await queryD1(
-    `SELECT id, clerk_id, plan, credits
-     FROM users
-     WHERE id = ? OR clerk_id = ?
-     LIMIT 1`,
+    `SELECT id, clerk_id, plan, credits, image_gens_used
+     FROM users WHERE id = ? OR clerk_id = ? LIMIT 1`,
     [userId, userId]
   )
-
   const row = d1Rows(existing)[0]
 
   if (row) {
+    const plan = String(row.plan ?? 'trial')
+    const planConfig = PLAN_CONFIG[plan] ?? PLAN_CONFIG.trial
     return {
       id: String(row.id ?? userId),
       userId,
-      plan: String(row.plan ?? 'trial'),
+      plan,
       credits: Number(row.credits ?? 0),
+      imageUnlimited: planConfig.imageUnlimited,
+      imageMonthlyLimit: planConfig.imageMonthlyLimit,
+      imageGensUsed: Number(row.image_gens_used ?? 0),
     }
   }
 
   await queryD1(
-    `INSERT OR IGNORE INTO users (id, email, clerk_id, plan, credits, created_at)
-     VALUES (?, ?, ?, 'trial', 10, datetime('now'))`,
+    `INSERT OR IGNORE INTO users (id, email, clerk_id, plan, credits, image_gens_used, created_at)
+     VALUES (?, ?, ?, 'trial', 10, 0, datetime('now'))`,
     [userId, '', userId]
   )
 
@@ -202,6 +204,9 @@ export async function ensureUserGenerationAccount(userId: string) {
     userId,
     plan: 'trial',
     credits: 10,
+    imageUnlimited: false,
+    imageMonthlyLimit: 10,
+    imageGensUsed: 0,
   }
 }
 
@@ -219,8 +224,7 @@ export async function debitGenerationCredits(userId: string, amount: number) {
   }
 
   await queryD1(
-    `UPDATE users
-     SET credits = credits - ?
+    `UPDATE users SET credits = credits - ?
      WHERE (id = ? OR clerk_id = ?) AND credits >= ?`,
     [amount, userId, userId, amount]
   )
@@ -234,15 +238,55 @@ export async function debitGenerationCredits(userId: string, amount: number) {
   }
 }
 
+export async function checkAndDebitImageGen(userId: string): Promise<{
+  ok: boolean
+  reason?: string
+  imageUnlimited: boolean
+  imageGensUsed: number
+  imageMonthlyLimit: number | null
+}> {
+  const account = await ensureUserGenerationAccount(userId)
+
+  if (account.imageUnlimited) {
+    return {
+      ok: true,
+      imageUnlimited: true,
+      imageGensUsed: account.imageGensUsed,
+      imageMonthlyLimit: null,
+    }
+  }
+
+  const limit = account.imageMonthlyLimit ?? 10
+  if (account.imageGensUsed >= limit) {
+    return {
+      ok: false,
+      reason: 'trial_image_limit_reached',
+      imageUnlimited: false,
+      imageGensUsed: account.imageGensUsed,
+      imageMonthlyLimit: limit,
+    }
+  }
+
+  await queryD1(
+    `UPDATE users SET image_gens_used = image_gens_used + 1
+     WHERE id = ? OR clerk_id = ?`,
+    [userId, userId]
+  )
+
+  return {
+    ok: true,
+    imageUnlimited: false,
+    imageGensUsed: account.imageGensUsed + 1,
+    imageMonthlyLimit: limit,
+  }
+}
+
 export async function ensureApiCreditWallet(userId: string) {
   const existing = await queryD1(
     `SELECT id, user_id, balance, created_at, updated_at
-     FROM api_credit_wallets
-     WHERE user_id = ?
-     LIMIT 1`,
+     FROM api_credit_wallets WHERE user_id = ? LIMIT 1`,
     [userId]
   )
-
   const row = d1Rows(existing)[0]
 
   if (row) {
@@ -266,12 +310,9 @@ export async function ensureApiCreditWallet(userId: string) {
 
   const created = await queryD1(
     `SELECT id, user_id, balance, created_at, updated_at
-     FROM api_credit_wallets
-     WHERE user_id = ?
-     LIMIT 1`,
+     FROM api_credit_wallets WHERE user_id = ? LIMIT 1`,
     [userId]
   )
-
   const createdRow = d1Rows(created)[0]
 
   return {
@@ -285,11 +326,7 @@ export async function ensureApiCreditWallet(userId: string) {
 
 export async function getApiCreditBalance(userId: string) {
   const wallet = await ensureApiCreditWallet(userId)
-
-  return {
-    userId,
-    balance: wallet.balance,
-  }
+  return { userId, balance: wallet.balance }
 }
 
 export async function addApiCredits(data: {
@@ -305,18 +342,13 @@ export async function addApiCredits(data: {
       `SELECT id FROM api_credit_transactions WHERE stripe_session_id = ? LIMIT 1`,
       [data.stripeSessionId]
     )
-
-    if (d1Rows(existing)[0]) {
-      return getApiCreditBalance(data.userId)
-    }
+    if (d1Rows(existing)[0]) return getApiCreditBalance(data.userId)
   }
 
   const now = Math.floor(Date.now() / 1000)
 
   await queryD1(
-    `UPDATE api_credit_wallets
-     SET balance = balance + ?, updated_at = ?
-     WHERE user_id = ?`,
+    `UPDATE api_credit_wallets SET balance = balance + ?, updated_at = ? WHERE user_id = ?`,
     [data.amount, now, data.userId]
   )
 
@@ -324,14 +356,7 @@ export async function addApiCredits(data: {
     `INSERT OR IGNORE INTO api_credit_transactions
       (id, user_id, amount, type, reason, pack, stripe_session_id, created_at)
      VALUES (?, ?, ?, 'purchase', 'stripe_checkout', ?, ?, ?)`,
-    [
-      globalThis.crypto.randomUUID(),
-      data.userId,
-      data.amount,
-      data.pack,
-      data.stripeSessionId ?? null,
-      now,
-    ]
+    [globalThis.crypto.randomUUID(), data.userId, data.amount, data.pack, data.stripeSessionId ?? null, now]
   )
 
   return getApiCreditBalance(data.userId)
@@ -357,8 +382,7 @@ export async function debitApiCredits(data: {
   const now = Math.floor(Date.now() / 1000)
 
   await queryD1(
-    `UPDATE api_credit_wallets
-     SET balance = balance - ?, updated_at = ?
+    `UPDATE api_credit_wallets SET balance = balance - ?, updated_at = ?
      WHERE user_id = ? AND balance >= ?`,
     [data.amount, now, data.userId, data.amount]
   )
@@ -367,14 +391,7 @@ export async function debitApiCredits(data: {
     `INSERT INTO api_credit_transactions
       (id, user_id, amount, type, reason, api_key_id, created_at)
      VALUES (?, ?, ?, 'debit', ?, ?, ?)`,
-    [
-      globalThis.crypto.randomUUID(),
-      data.userId,
-      -Math.abs(data.amount),
-      data.reason ?? 'api_generation',
-      data.apiKeyId ?? null,
-      now,
-    ]
+    [globalThis.crypto.randomUUID(), data.userId, -Math.abs(data.amount), data.reason ?? 'api_generation', data.apiKeyId ?? null, now]
   )
 
   const updated = await getApiCreditBalance(data.userId)
@@ -387,47 +404,55 @@ export async function debitApiCredits(data: {
   }
 }
 
-export async function activateBasicSubscription(data: {
+export async function activatePlanSubscription(data: {
   userId: string
+  plan: string
   stripeCustomerId: string
   stripeSubscriptionId: string
   billingInterval: string
 }) {
   await ensureUserGenerationAccount(data.userId)
 
+  const planKey = data.plan.toLowerCase()
+  const config = PLAN_CONFIG[planKey] ?? PLAN_CONFIG.basic
+  const credits = config.credits
+
   return queryD1(
     `UPDATE users
-     SET plan = 'basic',
-         credits = CASE WHEN credits < 140 THEN 140 ELSE credits END,
+     SET plan = ?,
+         credits = CASE WHEN credits < ? THEN ? ELSE credits END,
+         image_gens_used = 0,
          stripe_customer_id = ?,
          stripe_subscription_id = ?,
          billing_interval = ?,
          subscription_status = 'active'
      WHERE id = ? OR clerk_id = ?`,
-    [
-      data.stripeCustomerId,
-      data.stripeSubscriptionId,
-      data.billingInterval,
-      data.userId,
-      data.userId,
-    ]
+    [planKey, credits, credits, data.stripeCustomerId, data.stripeSubscriptionId, data.billingInterval, data.userId, data.userId]
   )
 }
 
+export async function activateBasicSubscription(data: {
+  userId: string
+  stripeCustomerId: string
+  stripeSubscriptionId: string
+  billingInterval: string
+}) {
+  return activatePlanSubscription({ ...data, plan: 'basic' })
+}
 
 export async function isAdminUser(clerkId: string): Promise<boolean> {
   try {
-    const res = await queryD1(`SELECT role FROM users WHERE clerk_id = ? LIMIT 1`, [clerkId]);
-    const rows = d1Rows(res);
-    return rows[0]?.role === 'admin';
+    const res = await queryD1(`SELECT role FROM users WHERE clerk_id = ? LIMIT 1`, [clerkId])
+    const rows = d1Rows(res)
+    return rows[0]?.role === 'admin'
   } catch {
-    return false;
+    return false
   }
 }
 
 export async function setAdminRole(clerkId: string): Promise<void> {
   await queryD1(
-    `UPDATE users SET role = 'admin', credits = 999999, plan = 'admin' WHERE clerk_id = ?`,
+    `UPDATE users SET role = 'admin', credits = 999999, plan = 'admin', image_gens_used = 0 WHERE clerk_id = ?`,
     [clerkId]
-  );
+  )
 }

@@ -5,6 +5,7 @@ import { validateApiKeyFromRequest } from "@/lib/apiKeys";
 import {
   debitApiCredits,
   debitGenerationCredits,
+  checkAndDebitImageGen,
   ensureUserGenerationAccount,
   isAdminUser,
 } from "@/lib/db";
@@ -24,6 +25,14 @@ function normalizeSeconds(value) {
   return Math.max(1, Math.min(MAX_SECONDS, Math.ceil(n)));
 }
 
+function isImageEndpoint(endpoint) {
+  const patterns = [
+    "flux", "gpt-image", "recraft", "ideogram", "stable-diffusion",
+    "aura-flow", "nano-banana", "hidream", "sana", "kolors",
+  ];
+  return patterns.some((p) => String(endpoint).toLowerCase().includes(p));
+}
+
 function dashboardPaywallPayload({ currentCredits, creditsRequired, seconds }) {
   return {
     success: false,
@@ -36,7 +45,22 @@ function dashboardPaywallPayload({ currentCredits, creditsRequired, seconds }) {
     seconds,
     creditsPerSecond: VIDEO_CREDITS_PER_SECOND,
     plans: {
-      annual: { label: "Annual", price: "$5/mo", href: "/checkout/plan?plan=basic&billing=annual" },
+      annual:  { label: "Annual",  price: "$5/mo", href: "/checkout/plan?plan=basic&billing=annual"  },
+      monthly: { label: "Monthly", price: "$7/mo", href: "/checkout/plan?plan=basic&billing=monthly" },
+    },
+  };
+}
+
+function imageTrialPaywallPayload({ imageGensUsed, imageMonthlyLimit }) {
+  return {
+    success: false,
+    code: "IMAGE_TRIAL_LIMIT_REACHED",
+    error: "IMAGE_TRIAL_LIMIT_REACHED",
+    message: `You used all ${imageMonthlyLimit} free image generations. Upgrade to get unlimited images.`,
+    imageGensUsed,
+    imageMonthlyLimit,
+    plans: {
+      annual:  { label: "Annual",  price: "$5/mo", href: "/checkout/plan?plan=basic&billing=annual"  },
       monthly: { label: "Monthly", price: "$7/mo", href: "/checkout/plan?plan=basic&billing=monthly" },
     },
   };
@@ -54,10 +78,10 @@ function apiCreditsPayload({ currentBalance, creditsRequired, seconds }) {
     seconds,
     creditsPerSecond: VIDEO_CREDITS_PER_SECOND,
     packs: {
-      starter: { label: "Starter", price: "$10", credits: 140, href: "/checkout/api-credits?pack=starter" },
-      growth:  { label: "Growth",  price: "$25", credits: 375, href: "/checkout/api-credits?pack=growth"  },
-      pro:     { label: "Pro",     price: "$50", credits: 800, href: "/checkout/api-credits?pack=pro"     },
-      scale:   { label: "Scale",   price: "$100",credits: 1750,href: "/checkout/api-credits?pack=scale"   },
+      starter: { label: "Starter", price: "$10",  credits: 140,  href: "/checkout/api-credits?pack=starter" },
+      growth:  { label: "Growth",  price: "$25",  credits: 375,  href: "/checkout/api-credits?pack=growth"  },
+      pro:     { label: "Pro",     price: "$50",  credits: 800,  href: "/checkout/api-credits?pack=pro"     },
+      scale:   { label: "Scale",   price: "$100", credits: 1750, href: "/checkout/api-credits?pack=scale"   },
     },
   };
 }
@@ -80,110 +104,125 @@ export async function POST(req) {
   const { endpoint = "", prompt = "", model = "", mode = "" } = body;
   const seconds = normalizeSeconds(body.seconds || body.duration);
   const creditsRequired = seconds * VIDEO_CREDITS_PER_SECOND;
+  const isImage = isImageEndpoint(endpoint) || body.type === "image";
 
-  // ── Admin bypass ──────────────────────────────────────────────
-  const adminCheck = !isApiRequest && await isAdminUser(userId);
+  // ── Admin bypass ──────────────────────────────────────────────────────────
+  const adminCheck = !isApiRequest && (await isAdminUser(userId));
   if (adminCheck) {
     try {
-      fal.config({ credentials: process.env.FAL_KEY });
       const falInput = {
         prompt,
-        ...(body.image_url && { image_url: body.image_url }),
-        ...(body.duration && { duration: seconds }),
+        ...(body.image_url    && { image_url:    body.image_url    }),
+        ...(body.duration     && { duration:     seconds            }),
         ...(body.aspect_ratio && { aspect_ratio: body.aspect_ratio }),
-        ...(body.resolution && { resolution: body.resolution }),
+        ...(body.resolution   && { resolution:   body.resolution   }),
       };
       const result = await fal.subscribe(endpoint, { input: falInput, logs: true });
       const outputUrl =
-        result?.video?.url || result?.videos?.[0]?.url ||
-        result?.image?.url || result?.images?.[0]?.url ||
+        result?.video?.url  || result?.videos?.[0]?.url ||
+        result?.image?.url  || result?.images?.[0]?.url ||
         result?.output?.url || null;
-      const isVideo = String(endpoint).includes("video") || String(endpoint).includes("seedance") || String(endpoint).includes("kling") || String(endpoint).includes("wan");
       return NextResponse.json({
         success: true,
         provider: "fal",
         source: "admin",
-        data: { type: isVideo ? "video" : "image", url: outputUrl, model, mode, seconds, raw: result },
-        billing: { creditsPerSecond: 0, creditsCharged: 0, remainingCredits: 999999, wallet: "admin" },
+        data: { type: isImage ? "image" : "video", url: outputUrl, model, mode, seconds, raw: result },
+        billing: { creditsCharged: 0, remainingCredits: 999999, wallet: "admin" },
       });
     } catch (err) {
-      console.error("ADMIN BYPASS ERROR:", err.message, err.status, JSON.stringify(err));
       return NextResponse.json({ success: false, error: err.message }, { status: 500 });
     }
   }
-  // ── End admin bypass ────────────────────────────────────────
 
+  // ── Billing ───────────────────────────────────────────────────────────────
   let remainingCredits = null;
+  let billingWallet = "dashboard";
 
   if (isApiRequest) {
     const debit = await debitApiCredits({
       userId,
-      amount: creditsRequired,
+      amount: isImage ? 1 : creditsRequired,
       apiKeyId: apiIdentity.apiKeyId,
-      reason: "api_generation",
+      reason: isImage ? "api_image_generation" : "api_generation",
     });
     if (!debit.ok) {
-      return NextResponse.json(apiCreditsPayload({ currentBalance: debit.currentBalance, creditsRequired, seconds }), { status: 402 });
+      return NextResponse.json(
+        apiCreditsPayload({ currentBalance: debit.currentBalance, creditsRequired: isImage ? 1 : creditsRequired, seconds }),
+        { status: 402 }
+      );
     }
     remainingCredits = debit.remainingBalance;
+    billingWallet = "api";
+
+  } else if (isImage) {
+    const imageCheck = await checkAndDebitImageGen(userId);
+    if (!imageCheck.ok) {
+      return NextResponse.json(
+        imageTrialPaywallPayload({ imageGensUsed: imageCheck.imageGensUsed, imageMonthlyLimit: imageCheck.imageMonthlyLimit }),
+        { status: 402 }
+      );
+    }
+    billingWallet = "image_unlimited";
+
   } else {
     const account = await ensureUserGenerationAccount(userId);
     if (account.credits < creditsRequired) {
-      return NextResponse.json(dashboardPaywallPayload({ currentCredits: account.credits, creditsRequired, seconds }), { status: 402 });
+      return NextResponse.json(
+        dashboardPaywallPayload({ currentCredits: account.credits, creditsRequired, seconds }),
+        { status: 402 }
+      );
     }
     const debit = await debitGenerationCredits(userId, creditsRequired);
     if (!debit.ok) {
-      return NextResponse.json(dashboardPaywallPayload({ currentCredits: debit.currentCredits, creditsRequired, seconds }), { status: 402 });
+      return NextResponse.json(
+        dashboardPaywallPayload({ currentCredits: debit.currentCredits, creditsRequired, seconds }),
+        { status: 402 }
+      );
     }
     remainingCredits = debit.remainingCredits;
   }
 
+  // ── Call fal.ai ───────────────────────────────────────────────────────────
   try {
-    // Build fal.ai input
     const falInput = {
       prompt,
-      ...(body.image_url && { image_url: body.image_url }),
-      ...(body.duration && { duration: seconds }),
+      ...(body.image_url    && { image_url:    body.image_url    }),
+      ...(body.duration     && { duration:     seconds            }),
       ...(body.aspect_ratio && { aspect_ratio: body.aspect_ratio }),
-      ...(body.resolution && { resolution: body.resolution }),
+      ...(body.resolution   && { resolution:   body.resolution   }),
+      ...(body.num_images   && { num_images:   body.num_images   }),
+      ...(body.image_size   && { image_size:   body.image_size   }),
     };
 
-    const result = await fal.subscribe(endpoint, {
-      input: falInput,
-      logs: true,
-    });
+    const result = await fal.subscribe(endpoint, { input: falInput, logs: true });
 
     const outputUrl =
-      result?.video?.url ||
-      result?.videos?.[0]?.url ||
-      result?.image?.url ||
-      result?.images?.[0]?.url ||
-      result?.output?.url ||
-      null;
-
-    const isVideo = String(endpoint).includes("video") || String(endpoint).includes("seedance") || String(endpoint).includes("kling") || String(endpoint).includes("wan");
+      result?.video?.url  || result?.videos?.[0]?.url ||
+      result?.image?.url  || result?.images?.[0]?.url ||
+      result?.output?.url || null;
 
     return NextResponse.json({
       success: true,
       provider: "fal",
       source: isApiRequest ? "api" : "dashboard",
       data: {
-        type: isVideo ? "video" : "image",
+        type: isImage ? "image" : "video",
         url: outputUrl,
         model,
         mode,
-        seconds,
+        seconds: isImage ? null : seconds,
         raw: result,
       },
       billing: {
-        creditsPerSecond: VIDEO_CREDITS_PER_SECOND,
-        creditsCharged: creditsRequired,
+        creditsPerSecond: isImage ? 0 : VIDEO_CREDITS_PER_SECOND,
+        creditsCharged: isImage ? 0 : creditsRequired,
         remainingCredits,
-        wallet: isApiRequest ? "api" : "dashboard",
+        wallet: billingWallet,
+        imageUnlimited: isImage && billingWallet === "image_unlimited",
       },
     });
   } catch (err) {
-    console.error("FAL generation error:", err.message, err.status, JSON.stringify(err));
+    console.error("FAL generation error:", err.message);
     return NextResponse.json({ success: false, error: err.message, detail: String(err) }, { status: 500 });
   }
 }
