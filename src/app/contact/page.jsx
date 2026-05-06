@@ -64,7 +64,7 @@ export default function ContactPage() {
             <div className="space-y-4">
               <div className="bg-[#0D0D0D] border border-white/10 rounded-2xl p-5">
                 <p className="text-xs text-white/30 uppercase tracking-wider mb-1">Email</p>
-                <a href="mailto:info@nova.online" className="text-[#D7FF00] font-bold hover:underline text-sm">info@nova.online</a>
+                <a href="mailto:info@novvideos.online" className="text-[#D7FF00] font-bold hover:underline text-sm">info@novvideos.online</a>
               </div>
               <div className="bg-[#0D0D0D] border border-white/10 rounded-2xl p-5">
                 <p className="text-xs text-white/30 uppercase tracking-wider mb-1">HQ</p>
