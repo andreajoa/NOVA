@@ -73,5 +73,40 @@ export async function POST(request) {
     }
   }
 
+  if (event.type === "invoice.payment_succeeded") {
+    const invoice = event.data.object;
+    const subscriptionId = invoice.subscription;
+    const customerId = invoice.customer;
+
+    if (subscriptionId && customerId) {
+      try {
+        const subscription = await stripe.subscriptions.retrieve(String(subscriptionId));
+        const priceId = subscription.items.data[0]?.price?.id ?? "";
+        const plan = PRICE_TO_PLAN[priceId] ?? "basic";
+
+        // Find user by stripe customer id
+        const { queryD1, d1Rows, PLAN_CONFIG } = await import("@/lib/db");
+        const res = await queryD1(
+          "SELECT id, clerk_id FROM users WHERE stripe_customer_id = ? LIMIT 1",
+          [customerId]
+        );
+        const rows = d1Rows(res);
+        const user = rows[0];
+
+        if (user) {
+          const userId = String(user.clerk_id || user.id);
+          const credits = PLAN_CONFIG[plan]?.credits ?? 70;
+          await queryD1(
+            `UPDATE users SET credits = ?, image_gens_used = 0 WHERE id = ? OR clerk_id = ?`,
+            [credits, userId, userId]
+          );
+          console.log(`[stripe webhook] monthly renewal plan=${plan} userId=${userId} credits=${credits}`);
+        }
+      } catch (err) {
+        console.error("[stripe webhook] renewal error:", err);
+      }
+    }
+  }
+
   return NextResponse.json({ received: true });
 }
