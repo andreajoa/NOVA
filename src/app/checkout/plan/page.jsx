@@ -1,9 +1,13 @@
 "use client";
-import { useCallback } from "react";
+
+import { useCallback, useEffect } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { EmbeddedCheckout, EmbeddedCheckoutProvider } from "@stripe/react-stripe-js";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { trackBeginCheckout } from "@/lib/analytics";
+
+const PLAN_PRICES = { starter: 5, plus: 34, ultra: 119, business: 299 };
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
@@ -11,6 +15,11 @@ function CheckoutForm() {
   const params = useSearchParams();
   const plan = params.get("plan") || "plus";
   const billing = params.get("billing") || "monthly";
+
+  useEffect(() => {
+    const value = PLAN_PRICES[plan] ?? 0;
+    trackBeginCheckout({ value, plan: `Nova ${plan} (${billing})` });
+  }, [plan, billing]);
 
   const fetchClientSecret = useCallback(async () => {
     const res = await fetch("/api/checkout/plans/session", {
