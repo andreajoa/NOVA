@@ -1,6 +1,53 @@
 "use client";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+
+function FalBalanceAlert() {
+  const [balance, setBalance] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/admin/fal-balance")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setBalance(d.balance); })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading || balance === null) return null;
+
+  const low = balance < 10;
+  const critical = balance < 3;
+
+  if (!low) return null;
+
+  return (
+    <div className={[
+      "mx-8 mt-4 rounded-2xl border p-4 flex items-center justify-between gap-4",
+      critical
+        ? "border-red-500/40 bg-red-500/10"
+        : "border-yellow-400/40 bg-yellow-400/10",
+    ].join(" ")}>
+      <div>
+        <p className={["text-xs font-black uppercase tracking-wider mb-1", critical ? "text-red-400" : "text-yellow-300"].join(" ")}>
+          {critical ? "⚠️ Saldo fal.ai CRÍTICO" : "⚠️ Saldo fal.ai baixo"}
+        </p>
+        <p className="text-sm text-white/60">
+          Saldo atual: <span className={["font-black", critical ? "text-red-300" : "text-yellow-300"].join(" ")}>${typeof balance === "number" ? balance.toFixed(2) : balance}</span>
+          {critical ? " — Recarregue agora para não interromper as gerações." : " — Considere recarregar em breve."}
+        </p>
+      </div>
+      
+        href="https://fal.ai/dashboard"
+        target="_blank"
+        rel="noopener noreferrer"
+        className={["shrink-0 rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wider no-underline transition", critical ? "bg-red-500 text-white hover:bg-red-400" : "bg-yellow-400 text-black hover:bg-yellow-300"].join(" ")}
+      >
+        Recarregar →
+      </a>
+    </div>
+  );
+}
 
 const modelCards = [
   { name: "SEEDANCE", version: "2.0 FAST", slug: "seedance",    image: "/nova/nova-seedance-fast.png",
@@ -30,6 +77,8 @@ export default function DashboardPage() {
         </button>
       </div>
 
+      <FalBalanceAlert />
+
       {/* Prompt bar */}
       <div className="px-8 mt-6">
         <div className="bg-[#0D0D0D] border border-white/10 rounded-2xl p-5">
@@ -55,7 +104,7 @@ export default function DashboardPage() {
 
       {/* Model cards */}
       <div className="px-8 mt-8">
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {modelCards.map((m, i) => (
             <div
               key={i}
