@@ -1,95 +1,75 @@
 import Image from "next/image";
 import Link from "next/link";
 
-const workflow = [
-  {
-    number: "01",
-    title: "Upload your product",
-    text: "Start with a product photo, asset or simple prompt.",
-  },
-  {
-    number: "02",
-    title: "Choose the video style",
-    text: "Pick a model, scene direction and creative angle.",
-  },
-  {
-    number: "03",
-    title: "Generate ready creatives",
-    text: "Create product videos, UGC angles and social assets.",
-  },
-];
+const asset = "/nova/landing-v2/";
 
-const creativeExamples = [
+const creativeCards = [
   {
-    title: "Product Ads",
-    subtitle: "Ready-to-sell product creatives",
-    image: "/nova/landing/ad-headphones.png",
+    category: "Perfume",
+    title: "Luxury that lasts.",
+    image: asset + "ad-perfume.png",
+    accent: "from-amber-400/30 via-[#D7FF00]/10 to-transparent",
+    border: "border-amber-300/30",
   },
   {
-    title: "Beauty & Lifestyle",
-    subtitle: "Premium vertical ads for commerce",
-    image: "/nova/landing/ad-serum.png",
+    category: "Skincare",
+    title: "Glow deeper every day.",
+    image: asset + "ad-serum.png",
+    accent: "from-fuchsia-500/30 via-violet-500/10 to-transparent",
+    border: "border-fuchsia-300/30",
   },
   {
-    title: "UGC Creatives",
-    subtitle: "Creator-style assets for social",
-    image: "/nova/landing/ad-ugc-headphones.png",
+    category: "Sneakers",
+    title: "Built to move fast.",
+    image: asset + "ad-sneaker.png",
+    accent: "from-[#D7FF00]/30 via-cyan-400/10 to-transparent",
+    border: "border-[#D7FF00]/35",
   },
   {
-    title: "Luxury Products",
-    subtitle: "High-end product storytelling",
-    image: "/nova/landing/ad-perfume.png",
+    category: "Watches",
+    title: "Precision every second.",
+    image: asset + "ad-watch.png",
+    accent: "from-cyan-400/30 via-blue-500/10 to-transparent",
+    border: "border-cyan-300/30",
   },
   {
-    title: "Fitness & Wearables",
-    subtitle: "Dynamic creative variations",
-    image: "/nova/landing/ad-watch.png",
+    category: "Coffee",
+    title: "Better coffee. Better day.",
+    image: asset + "ad-coffee.png",
+    accent: "from-orange-500/30 via-amber-500/10 to-transparent",
+    border: "border-orange-300/30",
   },
   {
-    title: "Fashion & Footwear",
-    subtitle: "Fast-moving launch assets",
-    image: "/nova/landing/ad-sneaker.png",
+    category: "UGC Creator",
+    title: "Real people. Real results.",
+    image: asset + "ad-ugc.png",
+    accent: "from-purple-500/30 via-[#D7FF00]/10 to-transparent",
+    border: "border-purple-300/30",
   },
 ];
 
 const modelCards = [
-  {
-    name: "Seedance",
-    version: "2.0 Fast",
-    tag: "Fast motion",
-    image: "/nova/landing/model-seedance-fast-new.png",
-  },
-  {
-    name: "Seedance",
-    version: "2.0 Pro",
-    tag: "Premium detail",
-    image: "/nova/landing/model-seedance-pro-new.png",
-  },
-  {
-    name: "Kling",
-    version: "3.0",
-    tag: "Cinematic scenes",
-    image: "/nova/landing/model-kling-new.png",
-  },
-  {
-    name: "Veo",
-    version: "3.1",
-    tag: "Studio quality",
-    image: "/nova/landing/model-veo-new.png",
-  },
-  {
-    name: "Wan",
-    version: "2.6",
-    tag: "Creative control",
-    image: "/nova/landing/model-wan-new.png",
-  },
+  { name: "Seedance", version: "2.0 Fast", copy: "Speed meets simplicity.", accent: "from-violet-500/35 to-blue-500/10" },
+  { name: "Seedance", version: "2.0 Pro", copy: "Balanced power for pros.", accent: "from-[#D7FF00]/35 to-emerald-500/10" },
+  { name: "Kling", version: "3.0", copy: "Realistic depth and detail.", accent: "from-cyan-400/35 to-blue-500/10" },
+  { name: "Veo", version: "3.1", copy: "Next-gen visuals and motion.", accent: "from-white/18 to-zinc-500/10" },
+  { name: "Wan", version: "2.6", copy: "Optimized for social formats.", accent: "from-lime-300/30 to-yellow-500/10" },
+];
+
+const benefits = [
+  { title: "10x faster", copy: "Create in minutes, not days.", icon: "⚡", color: "text-[#D7FF00]" },
+  { title: "All AI models", copy: "Access the best engines in one place.", icon: "✦", color: "text-violet-300" },
+  { title: "Export-ready", copy: "Videos, images and ads ready to publish.", icon: "⬇", color: "text-amber-300" },
+  { title: "Product ads", copy: "Built to convert. Designed to sell.", icon: "▣", color: "text-[#D7FF00]" },
+  { title: "UGC & social", copy: "Real, relatable, ready to post.", icon: "◎", color: "text-cyan-300" },
+  { title: "All formats", copy: "9:16, 1:1, 16:9 and more.", icon: "⌁", color: "text-fuchsia-300" },
 ];
 
 const useCases = [
-  "Product Ads",
-  "UGC Creatives",
-  "Landing Page Videos",
-  "Reels, TikTok & Shorts",
+  { title: "Product Ads", copy: "High-impact ads that convert.", image: asset + "ad-perfume.png" },
+  { title: "UGC Creatives", copy: "Creator-style assets that feel real.", image: asset + "ad-ugc.png" },
+  { title: "Landing Page Videos", copy: "Boost trust and drive action.", image: asset + "workflow-banner.png" },
+  { title: "Reels, TikTok & Shorts", copy: "Short-form creatives that stop the scroll.", image: asset + "ad-sneaker.png" },
 ];
 
 const pricing = [
@@ -97,188 +77,201 @@ const pricing = [
     name: "Basic",
     annualPrice: "$5",
     monthlyPrice: "$7",
-    billing: "per month, billed annually",
     credits: "70 credits/mo",
-    details: ["Video generation", "All AI models", "MP4 download"],
+    description: "Perfect to get started.",
     highlight: false,
+    features: ["70 credits/mo", "Video generation", "All AI models", "MP4 download"],
   },
   {
     name: "Plus",
     annualPrice: "$34",
     monthlyPrice: "$49",
-    billing: "per month, billed annually",
     credits: "500 credits/mo",
-    details: ["Video generation", "All AI models", "MP4 download"],
+    description: "Everything you need to grow.",
     highlight: true,
+    features: ["500 credits/mo", "Video generation", "All AI models", "MP4 download"],
   },
   {
     name: "Ultra",
     annualPrice: "$89",
     monthlyPrice: "$129",
-    billing: "per month, billed annually",
     credits: "3,000 credits/mo",
-    details: ["Video generation", "All AI models", "MP4 download"],
+    description: "More power for serious creators.",
     highlight: false,
+    features: ["3,000 credits/mo", "Video generation", "All AI models", "MP4 download"],
   },
   {
     name: "Business",
     annualPrice: "$62",
     monthlyPrice: "$89",
-    billing: "per seat/mo, billed annually",
-    credits: "3,000 credits total/mo",
-    details: ["1,500 credits per seat/mo", "Video generation", "All AI models"],
+    credits: "3,000 total/mo + 1,500 per seat/mo",
+    description: "Scale content with your team.",
     highlight: false,
+    features: ["3,000 total/mo", "1,500 credits per seat/mo", "Team workflow", "Priority support"],
   },
 ];
 
-function GlowGrid() {
-  return (
-    <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_15%,rgba(215,255,0,.18),transparent_24%),radial-gradient(circle_at_82%_8%,rgba(215,255,0,.10),transparent_22%),linear-gradient(rgba(255,255,255,.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.025)_1px,transparent_1px)] bg-[size:100%_100%,100%_100%,76px_76px,76px_76px]" />
-  );
+function GlowOrb({ className }: { className: string }) {
+  return <div className={"pointer-events-none absolute rounded-full blur-3xl " + className} />;
 }
 
 export default function Home() {
   return (
-    <main className="overflow-hidden bg-[#050505] text-white">
-      <section className="relative px-4 pb-10 pt-8 md:px-8 md:pb-16 md:pt-12">
-        <GlowGrid />
+    <main className="min-h-screen overflow-hidden bg-[#030304] text-white">
+      <div className="relative isolate overflow-hidden border-b border-white/10 bg-[#050505]">
+        <GlowOrb className="-left-24 top-20 h-80 w-80 bg-[#D7FF00]/15" />
+        <GlowOrb className="right-0 top-24 h-96 w-96 bg-fuchsia-500/12" />
+        <GlowOrb className="right-40 bottom-0 h-72 w-72 bg-cyan-500/12" />
 
-        <div className="mx-auto grid max-w-[1500px] gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#D7FF00]/25 bg-[#D7FF00]/10 px-4 py-2 text-[11px] font-black uppercase tracking-[.18em] text-[#D7FF00] shadow-[0_0_30px_rgba(215,255,0,.10)]">
-              AI video studio for e-commerce
+        <div className="border-b border-white/10 bg-gradient-to-r from-purple-500/15 via-transparent to-[#D7FF00]/10 px-4 py-2 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-white/65">
+          Create product videos that sell — in minutes.
+        </div>
+
+        <section className="relative mx-auto grid max-w-[1540px] gap-8 px-4 py-10 md:px-8 md:py-16 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+          <div className="relative z-10">
+            <div className="mb-5 inline-flex rounded-full border border-[#D7FF00]/25 bg-[#D7FF00]/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-[#D7FF00] shadow-[0_0_40px_rgba(215,255,0,.12)]">
+              AI studio for product marketing
             </div>
 
-            <h1 className="mt-6 max-w-4xl text-[clamp(3.4rem,13vw,7.8rem)] font-black uppercase leading-[.82] tracking-[-.1em] text-white lg:text-[clamp(5rem,7vw,8.6rem)]">
-              Create <span className="text-[#D7FF00]">product</span> videos with AI
+            <h1 className="max-w-4xl text-[3.25rem] font-black uppercase leading-[0.82] tracking-[-0.09em] text-white sm:text-7xl md:text-8xl xl:text-[8.4rem]">
+              Create <span className="text-[#D7FF00]">product</span> videos that sell
             </h1>
 
-            <p className="mt-6 max-w-2xl text-base leading-7 text-white/62 md:text-xl md:leading-8">
-              Turn product photos, prompts and ideas into ads, UGC creatives and social videos ready to publish.
+            <p className="mt-6 max-w-xl text-base leading-7 text-white/60 md:text-lg md:leading-8">
+              Upload one product. Pick a style. Generate high-converting product videos, ads and social creatives in minutes.
             </p>
 
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/sign-up"
-                className="inline-flex justify-center rounded-2xl bg-[#D7FF00] px-7 py-4 text-xs font-black uppercase tracking-[.14em] text-black no-underline shadow-[0_0_40px_rgba(215,255,0,.20)] transition hover:bg-[#c7ef00]"
+                className="group inline-flex items-center justify-center rounded-2xl bg-[#D7FF00] px-7 py-4 text-sm font-black uppercase tracking-[0.12em] text-black no-underline shadow-[0_0_50px_rgba(215,255,0,.28)] transition hover:scale-[1.02] hover:bg-[#e3ff2f]"
               >
-                Start free
+                Start for free <span className="ml-2 transition group-hover:translate-x-1">→</span>
               </Link>
               <Link
-                href="/dashboard/generate"
-                className="inline-flex justify-center rounded-2xl border border-white/15 bg-white/[.03] px-7 py-4 text-xs font-black uppercase tracking-[.14em] text-white no-underline transition hover:border-[#D7FF00]/50 hover:text-[#D7FF00]"
+                href="/product-ad-generator"
+                className="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white/[.03] px-7 py-4 text-sm font-black uppercase tracking-[0.12em] text-white no-underline backdrop-blur transition hover:border-[#D7FF00]/40 hover:bg-white/[.06]"
               >
-                View studio
+                See product ads
               </Link>
             </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-3 text-sm font-bold text-white/55 sm:grid-cols-4">
-              {["10 free credits", "Videos in minutes", "Built for product ads", "Export MP4"].map((item) => (
-                <div key={item} className="rounded-2xl border border-white/10 bg-white/[.025] px-4 py-3">
-                  <span className="text-[#D7FF00]">✓</span> {item}
+            <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-3">
+              {[
+                ["10 free credits", "No card required"],
+                ["Video + image", "Creative outputs"],
+                ["Export-ready", "Assets for every channel"],
+              ].map(([title, copy]) => (
+                <div key={title} className="rounded-2xl border border-white/10 bg-white/[.035] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.08)] backdrop-blur">
+                  <p className="text-sm font-black text-white">{title}</p>
+                  <p className="mt-1 text-xs leading-5 text-white/40">{copy}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="relative">
-            <div className="absolute -inset-8 rounded-[3rem] bg-[#D7FF00]/10 blur-3xl" />
-            <div className="relative overflow-hidden rounded-[1.8rem] border border-[#D7FF00]/25 bg-[#090909] p-2 shadow-[0_0_100px_rgba(215,255,0,.16)] md:rounded-[2.4rem] md:p-3">
+          <div className="relative z-10">
+            <div className="group relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[.035] p-2 shadow-[0_0_120px_rgba(87,64,255,.18)] backdrop-blur-2xl">
+              <div className="absolute inset-0 bg-gradient-to-br from-[#D7FF00]/10 via-cyan-500/5 to-fuchsia-500/10 opacity-80" />
               <Image
-                src="/nova/landing/hero-dashboard.png"
-                alt="NOVA AI video studio dashboard generating product videos"
-                width={1448}
-                height={1086}
+                src={asset + "hero-desktop.png"}
+                alt="NOVA AI product video generation interface"
+                width={2172}
+                height={724}
                 priority
-                sizes="(max-width: 1024px) 100vw, 54vw"
-                className="h-auto w-full rounded-[1.35rem] object-cover md:rounded-[2rem]"
+                className="relative hidden w-full rounded-[1.5rem] object-cover transition duration-700 group-hover:scale-[1.015] md:block"
+              />
+              <Image
+                src={asset + "hero-mobile.png"}
+                alt="NOVA mobile AI product video generation"
+                width={1122}
+                height={1402}
+                priority
+                className="relative w-full rounded-[1.5rem] object-cover transition duration-700 group-hover:scale-[1.015] md:hidden"
               />
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
-      <section className="px-4 pb-12 md:px-8 md:pb-20">
-        <div className="mx-auto max-w-[1500px] overflow-hidden rounded-[1.8rem] border border-white/10 bg-[#090909] shadow-[0_0_80px_rgba(215,255,0,.08)] md:rounded-[2.4rem]">
+      <section className="px-4 py-8 md:px-8 md:py-12">
+        <div className="mx-auto max-w-[1540px] overflow-hidden rounded-[2rem] border border-white/10 bg-[#090909] p-2 shadow-[0_0_80px_rgba(215,255,0,.08)]">
           <Image
-            src="/nova/landing/hero-desktop-banner.png"
-            alt="NOVA creates product videos with AI"
+            src={asset + "creatives-banner.png"}
+            alt="NOVA product creative styles"
             width={2172}
             height={724}
-            priority
-            sizes="100vw"
-            className="h-[260px] w-full object-cover object-center md:h-auto"
+            className="w-full rounded-[1.5rem] object-cover"
           />
         </div>
       </section>
 
-      <section className="border-y border-white/10 bg-[#0A0A0A] px-4 py-14 md:px-8 md:py-24">
-        <div className="mx-auto max-w-[1500px]">
-          <div className="grid gap-8 lg:grid-cols-[.9fr_1.1fr] lg:items-end">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[.24em] text-[#D7FF00]">Workflow</p>
-              <h2 className="mt-4 text-4xl font-black uppercase leading-[.9] tracking-[-.08em] md:text-7xl">
-                From product image to finished creative.
-              </h2>
-            </div>
-            <p className="max-w-3xl text-base leading-7 text-white/52 md:text-lg md:leading-8">
-              NOVA keeps the page clear: upload a product, choose the creative direction, generate product videos and export assets for ads, UGC and social channels.
+      <section className="px-4 py-8 md:px-8 md:py-14">
+        <div className="mx-auto grid max-w-[1540px] gap-6 rounded-[2rem] border border-white/10 bg-white/[.025] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,.08)] md:p-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">Workflow</p>
+            <h2 className="mt-3 max-w-2xl text-4xl font-black uppercase leading-[0.92] tracking-[-0.08em] md:text-6xl">
+              From product image to finished creative.
+            </h2>
+            <p className="mt-4 max-w-lg text-sm leading-7 text-white/45 md:text-base">
+              A simple path from product input to ready-to-publish ads, videos and social formats.
             </p>
           </div>
 
-          <div className="mt-10 grid gap-4 md:mt-14 lg:grid-cols-3">
-            {workflow.map((step) => (
-              <article key={step.number} className="rounded-[1.5rem] border border-white/10 bg-white/[.035] p-6 md:rounded-[2rem] md:p-8">
-                <div className="text-5xl font-black tracking-[-.08em] text-[#D7FF00]">{step.number}</div>
-                <h3 className="mt-8 text-2xl font-black uppercase tracking-[-.06em] md:text-3xl">{step.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-white/45">{step.text}</p>
-              </article>
-            ))}
+          <div className="group overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/40 p-2">
+            <Image
+              src={asset + "workflow-banner.png"}
+              alt="NOVA workflow from product to creative outputs"
+              width={1672}
+              height={941}
+              className="w-full rounded-[1.15rem] object-cover transition duration-700 group-hover:scale-[1.02]"
+            />
           </div>
         </div>
       </section>
 
-      <section className="px-4 py-14 md:px-8 md:py-24">
-        <div className="mx-auto max-w-[1500px]">
-          <div className="grid gap-8 lg:grid-cols-[.95fr_1.05fr] lg:items-center">
+      <section className="px-4 py-10 md:px-8 md:py-18">
+        <div className="mx-auto max-w-[1540px]">
+          <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
             <div>
-              <p className="text-xs font-black uppercase tracking-[.24em] text-[#D7FF00]">Creative agent</p>
-              <h2 className="mt-4 text-4xl font-black uppercase leading-[.9] tracking-[-.08em] md:text-7xl">
-                Product creatives that actually explain the product.
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">Created with NOVA</p>
+              <h2 className="mt-3 max-w-4xl text-4xl font-black uppercase leading-[0.9] tracking-[-0.08em] md:text-7xl">
+                Product creatives that actually sell.
               </h2>
-              <p className="mt-5 max-w-2xl text-base leading-7 text-white/52 md:text-lg md:leading-8">
-                Clear visuals first. Text only where it helps. The landing page does not rely on tiny words inside images, so it stays readable on mobile.
+              <p className="mt-4 max-w-2xl text-base leading-7 text-white/45">
+                Different products. Different styles. One platform built to generate scroll-stopping assets.
               </p>
             </div>
-
-            <div className="rounded-[1.6rem] border border-white/10 bg-[#0B0B0B] p-2 md:rounded-[2.2rem] md:p-3">
-              <Image
-                src="/nova/landing/product-creatives-banner.png"
-                alt="NOVA product creatives generated from a product image"
-                width={2172}
-                height={724}
-                sizes="(max-width: 1024px) 100vw, 52vw"
-                className="h-[240px] w-full rounded-[1.2rem] object-cover object-center md:h-auto md:rounded-[1.8rem]"
-              />
-            </div>
+            <Link
+              href="/dashboard/templates"
+              className="inline-flex rounded-2xl border border-[#D7FF00]/25 bg-[#D7FF00]/10 px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#D7FF00] no-underline transition hover:bg-[#D7FF00] hover:text-black"
+            >
+              Explore templates →
+            </Link>
           </div>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {creativeExamples.map((item) => (
-              <article key={item.title} className="group overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#101010] md:rounded-[2rem]">
-                <div className="relative aspect-[3/4] overflow-hidden">
-                  <Image
-                    src={item.image}
-                    alt={item.title}
-                    width={1086}
-                    height={1448}
-                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/8 to-transparent" />
-                  <div className="absolute bottom-5 left-5 right-5">
-                    <p className="text-[11px] font-black uppercase tracking-[.18em] text-[#D7FF00]">{item.title}</p>
-                    <p className="mt-2 text-xl font-black uppercase leading-none tracking-[-.05em] text-white md:text-2xl">{item.subtitle}</p>
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {creativeCards.map((card) => (
+              <article
+                key={card.category}
+                className={"group relative overflow-hidden rounded-[1.7rem] border bg-[#0A0A0A] shadow-[0_30px_100px_rgba(0,0,0,.35)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_0_90px_rgba(215,255,0,.12)] " + card.border}
+              >
+                <div className={"absolute inset-0 bg-gradient-to-br opacity-80 " + card.accent} />
+                <Image
+                  src={card.image}
+                  alt={card.title}
+                  width={1086}
+                  height={1448}
+                  className="aspect-[4/3] w-full object-cover opacity-90 transition duration-700 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-5 md:p-6">
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#D7FF00]">{card.category}</p>
+                  <h3 className="mt-2 max-w-sm text-2xl font-black leading-[0.95] tracking-[-0.05em] md:text-3xl">
+                    {card.title}
+                  </h3>
+                  <div className="mt-4 inline-flex rounded-full border border-white/15 bg-black/50 px-3 py-2 text-[11px] font-black uppercase tracking-[0.10em] text-white/80 backdrop-blur">
+                    ▶ Play demo
                   </div>
                 </div>
               </article>
@@ -287,39 +280,30 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="models" className="border-y border-white/10 bg-[#0A0A0A] px-4 py-14 md:px-8 md:py-24">
-        <div className="mx-auto max-w-[1500px]">
+      <section id="models" className="px-4 py-10 md:px-8 md:py-18">
+        <div className="mx-auto max-w-[1540px] rounded-[2rem] border border-white/10 bg-[#080808] p-5 md:p-8">
           <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
             <div>
-              <p className="text-xs font-black uppercase tracking-[.24em] text-[#D7FF00]">Models</p>
-              <h2 className="mt-4 text-4xl font-black uppercase leading-[.9] tracking-[-.08em] md:text-7xl">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">AI Models</p>
+              <h2 className="mt-3 max-w-3xl text-4xl font-black uppercase leading-[0.9] tracking-[-0.08em] md:text-6xl">
                 Choose the right engine for each idea.
               </h2>
             </div>
-            <Link href="/dashboard/models" className="text-sm font-black uppercase tracking-[.14em] text-[#D7FF00] no-underline hover:underline">
-              Explore models →
+            <Link href="/dashboard/models" className="inline-flex rounded-2xl border border-white/15 px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-white no-underline transition hover:border-[#D7FF00]/45 hover:text-[#D7FF00]">
+              Compare models →
             </Link>
           </div>
 
-          <div className="mt-10 grid grid-cols-2 gap-4 md:mt-14 lg:grid-cols-5">
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {modelCards.map((model) => (
-              <Link key={model.name + model.version} href="/dashboard/models" className="group no-underline">
-                <article className="overflow-hidden rounded-[1.4rem] border border-white/10 bg-[#111] transition hover:border-[#D7FF00]/60 hover:shadow-[0_0_60px_rgba(215,255,0,.12)] md:rounded-[1.8rem]">
-                  <div className="relative aspect-[3/4]">
-                    <Image
-                      src={model.image}
-                      alt={`${model.name} ${model.version}`}
-                      width={1086}
-                      height={1448}
-                      sizes="(max-width: 768px) 50vw, 20vw"
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-transparent to-transparent" />
-                    <div className="absolute bottom-4 left-4 right-4">
-                      <p className="text-[10px] font-black uppercase tracking-[.16em] text-[#D7FF00]">{model.name}</p>
-                      <p className="mt-1 text-2xl font-black uppercase leading-none tracking-[-.07em] text-white">{model.version}</p>
-                      <p className="mt-3 rounded-full border border-white/15 bg-black/45 px-3 py-1 text-[10px] font-bold text-white/65 backdrop-blur">{model.tag}</p>
-                    </div>
+              <Link key={model.name + model.version} href="/dashboard/models" className="no-underline">
+                <article className="group relative min-h-[190px] overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[.025] p-5 transition duration-500 hover:-translate-y-1 hover:border-[#D7FF00]/45">
+                  <div className={"absolute inset-0 bg-gradient-to-br opacity-80 " + model.accent} />
+                  <div className="absolute right-4 top-4 text-[#D7FF00] transition group-hover:translate-x-1">→</div>
+                  <div className="relative">
+                    <p className="text-4xl font-black tracking-[-0.08em] text-[#D7FF00]">{model.version}</p>
+                    <h3 className="mt-5 text-xl font-black uppercase tracking-[-0.04em] text-white">{model.name}</h3>
+                    <p className="mt-3 text-sm leading-6 text-white/50">{model.copy}</p>
                   </div>
                 </article>
               </Link>
@@ -328,136 +312,156 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="px-4 py-14 md:px-8 md:py-24">
-        <div className="mx-auto max-w-[1500px]">
-          <div className="rounded-[1.8rem] border border-[#D7FF00]/25 bg-[#0B0B0B] p-6 shadow-[0_0_100px_rgba(215,255,0,.10)] md:rounded-[2.5rem] md:p-10">
-            <div className="grid gap-10 lg:grid-cols-[.85fr_1.15fr] lg:items-center">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[.24em] text-[#D7FF00]">Value stack</p>
-                <h2 className="mt-4 text-4xl font-black uppercase leading-[.9] tracking-[-.08em] md:text-7xl">
-                  More output. Less creative friction.
-                </h2>
-                <p className="mt-5 text-base leading-7 text-white/52 md:text-lg md:leading-8">
-                  The first conversion goal is simple: get the visitor to generate one video and understand the result quickly.
-                </p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                {[
-                  "10 free credits to start",
-                  "Product ads, UGC and social creatives",
-                  "All AI models in one studio",
-                  "MP4 exports ready to publish",
-                  "Clean workflow for teams",
-                  "Upgrade only when ready",
-                ].map((item) => (
-                  <div key={item} className="rounded-2xl border border-white/10 bg-white/[.035] p-4 text-sm font-bold text-white/70">
-                    <span className="text-[#D7FF00]">✓</span> {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="border-y border-white/10 bg-[#0A0A0A] px-4 py-14 md:px-8 md:py-24">
-        <div className="mx-auto max-w-[1500px]">
-          <div className="text-center">
-            <p className="text-xs font-black uppercase tracking-[.24em] text-[#D7FF00]">Use cases</p>
-            <h2 className="mx-auto mt-4 max-w-5xl text-4xl font-black uppercase leading-[.9] tracking-[-.08em] md:text-7xl">
-              One AI studio for every product channel.
+      <section className="px-4 py-10 md:px-8 md:py-18">
+        <div className="mx-auto grid max-w-[1540px] gap-6 rounded-[2rem] border border-white/10 bg-white/[.025] p-5 md:p-8 lg:grid-cols-[0.65fr_1.35fr]">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">Why NOVA</p>
+            <h2 className="mt-3 text-4xl font-black uppercase leading-[0.9] tracking-[-0.08em] md:text-6xl">
+              More output. Less creative friction.
             </h2>
+            <p className="mt-4 text-base leading-7 text-white/45">
+              Everything your team needs to create, test and scale product creatives.
+            </p>
           </div>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {useCases.map((item) => (
-              <div key={item} className="rounded-[1.5rem] border border-white/10 bg-white/[.035] p-6 md:rounded-[2rem]">
-                <div className="mb-8 grid h-12 w-12 place-items-center rounded-2xl bg-[#D7FF00] text-2xl font-black text-black">✦</div>
-                <h3 className="text-2xl font-black uppercase tracking-[-.06em]">{item}</h3>
-                <p className="mt-3 text-sm leading-7 text-white/45">Generate platform-ready assets without starting from a blank page.</p>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {benefits.map((item) => (
+              <div key={item.title} className="group rounded-[1.4rem] border border-white/10 bg-black/35 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,.08)] transition duration-500 hover:-translate-y-1 hover:border-[#D7FF00]/35 hover:bg-white/[.04]">
+                <div className={"text-3xl " + item.color}>{item.icon}</div>
+                <h3 className="mt-5 text-sm font-black uppercase tracking-[0.12em] text-white">{item.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-white/45">{item.copy}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section id="pricing" className="px-4 py-14 md:px-8 md:py-24">
-        <div className="mx-auto max-w-[1500px]">
-          <div className="text-center">
-            <p className="text-xs font-black uppercase tracking-[.24em] text-[#D7FF00]">Pricing</p>
-            <h2 className="mt-4 text-4xl font-black uppercase leading-[.9] tracking-[-.08em] md:text-7xl">
-              Choose your plan.
-            </h2>
-            <p className="mt-4 text-sm text-white/42">Annual billing — save up to 30%</p>
+      <section className="px-4 py-10 md:px-8 md:py-18">
+        <div className="mx-auto max-w-[1540px]">
+          <div className="grid gap-6 lg:grid-cols-[0.55fr_1.45fr] lg:items-end">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">Use cases</p>
+              <h2 className="mt-3 text-4xl font-black uppercase leading-[0.9] tracking-[-0.08em] md:text-6xl">
+                One AI studio for every channel.
+              </h2>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {useCases.map((item) => (
+                <article key={item.title} className="group relative min-h-[220px] overflow-hidden rounded-[1.4rem] border border-white/10 bg-black transition duration-500 hover:-translate-y-1 hover:border-[#D7FF00]/35">
+                  <Image src={item.image} alt={item.title} width={1086} height={1448} className="absolute inset-0 h-full w-full object-cover opacity-45 transition duration-700 group-hover:scale-110 group-hover:opacity-65" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-black/10" />
+                  <div className="relative flex min-h-[220px] flex-col justify-end p-5">
+                    <h3 className="text-lg font-black uppercase tracking-[-0.03em]">{item.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-white/55">{item.copy}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing" className="px-4 py-12 md:px-8 md:py-20">
+        <div className="mx-auto max-w-[1540px]">
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">Pricing</p>
+              <h2 className="mt-3 text-4xl font-black uppercase leading-[0.9] tracking-[-0.08em] md:text-7xl">
+                Choose your plan.
+              </h2>
+              <p className="mt-3 text-sm text-white/45">Annual billing. Upgrade anytime.</p>
+            </div>
+            <Link href="/pricing" className="text-sm font-bold text-[#D7FF00] no-underline hover:underline">
+              See full pricing details →
+            </Link>
           </div>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {pricing.map((plan) => (
-              <article key={plan.name} className={(plan.highlight ? "border-[#D7FF00] bg-[#D7FF00] text-black" : "border-white/10 bg-[#111] text-white") + " rounded-[1.5rem] border p-6 md:rounded-[2rem]"}>
-                {plan.highlight && <p className="mb-4 inline-flex rounded-full bg-black px-3 py-1 text-[10px] font-black uppercase tracking-[.16em] text-[#D7FF00]">Most popular</p>}
-                <p className={(plan.highlight ? "text-black/55" : "text-white/35") + " text-xs font-black uppercase tracking-[.18em]"}>{plan.name}</p>
+              <article
+                key={plan.name}
+                className={
+                  "relative overflow-hidden rounded-[1.7rem] border p-5 transition duration-500 hover:-translate-y-1 md:p-6 " +
+                  (plan.highlight
+                    ? "border-[#D7FF00] bg-[#D7FF00] text-black shadow-[0_0_90px_rgba(215,255,0,.25)]"
+                    : "border-white/10 bg-[#0D0D0D] text-white hover:border-[#D7FF00]/35")
+                }
+              >
+                {plan.highlight && (
+                  <div className="mb-4 inline-flex rounded-full bg-black px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[#D7FF00]">
+                    Most popular
+                  </div>
+                )}
+                <p className={"text-xs font-black uppercase tracking-[0.16em] " + (plan.highlight ? "text-black/55" : "text-white/35")}>{plan.name}</p>
                 <div className="mt-5 flex items-end gap-1">
-                  <p className="text-5xl font-black tracking-[-.09em]">{plan.annualPrice}</p>
-                  <span className="mb-1 text-base font-bold opacity-55">/mo</span>
+                  <p className="text-5xl font-black tracking-[-0.08em]">{plan.annualPrice}</p>
+                  <span className="mb-1 text-sm font-semibold opacity-50">/mo</span>
                 </div>
-                <p className={(plan.highlight ? "text-black/55" : "text-white/35") + " mt-2 text-xs font-bold"}>{plan.billing}</p>
-                <p className={(plan.highlight ? "text-black/75" : "text-[#D7FF00]") + " mt-4 text-sm font-black"}>{plan.credits}</p>
-                <p className={(plan.highlight ? "text-black/50" : "text-white/30") + " mt-1 text-xs"}>{plan.monthlyPrice}/mo billed monthly</p>
-                <div className={(plan.highlight ? "text-black/70" : "text-white/62") + " mt-6 space-y-2 text-sm font-semibold"}>
-                  {plan.details.map((detail) => <p key={detail}>✓ {detail}</p>)}
+                <p className={"mt-1 text-xs " + (plan.highlight ? "text-black/55" : "text-white/35")}>
+                  {plan.monthlyPrice}/mo billed monthly
+                </p>
+                <p className={"mt-4 text-sm font-black " + (plan.highlight ? "text-black/75" : "text-[#D7FF00]")}>{plan.credits}</p>
+                <p className={"mt-2 text-sm leading-6 " + (plan.highlight ? "text-black/60" : "text-white/45")}>{plan.description}</p>
+                <div className="mt-6 space-y-2 text-sm font-semibold">
+                  {plan.features.map((feature) => (
+                    <p key={feature} className={plan.highlight ? "text-black/75" : "text-white/65"}>✓ {feature}</p>
+                  ))}
                 </div>
                 <Link
-                  href={`/checkout/plan?plan=${plan.name.toLowerCase()}&billing=annual`}
-                  className={(plan.highlight ? "bg-black text-white hover:bg-[#111]" : "bg-white text-black hover:bg-[#D7FF00]") + " mt-7 inline-flex w-full justify-center rounded-xl px-5 py-3 text-xs font-black uppercase tracking-[.14em] no-underline transition"}
+                  href={"/checkout/plan?plan=" + plan.name.toLowerCase() + "&billing=annual"}
+                  className={
+                    "mt-7 inline-flex w-full justify-center rounded-xl px-5 py-3 text-xs font-black uppercase tracking-[0.12em] no-underline transition " +
+                    (plan.highlight ? "bg-black text-white hover:bg-[#111]" : "bg-white text-black hover:bg-[#D7FF00]")
+                  }
                 >
                   Get {plan.name}
                 </Link>
               </article>
             ))}
           </div>
-
-          <p className="mt-8 text-center">
-            <Link href="/pricing" className="text-sm font-bold text-[#D7FF00] no-underline hover:underline">See full pricing details →</Link>
-          </p>
         </div>
       </section>
 
-      <section className="bg-[#D7FF00] px-4 py-16 text-center text-black md:px-8 md:py-24">
-        <h2 className="mx-auto max-w-6xl text-4xl font-black uppercase leading-[.9] tracking-[-.09em] md:text-8xl">
-          Generate your first product video today.
-        </h2>
-        <p className="mx-auto mt-6 max-w-2xl text-base font-semibold leading-7 text-black/62 md:text-lg md:leading-8">
-          Start with 10 free credits and turn one product into ready-to-publish creatives.
-        </p>
-        <Link href="/sign-up" className="mt-8 inline-flex rounded-xl bg-black px-8 py-4 text-xs font-black uppercase tracking-[.14em] text-[#D7FF00] no-underline transition hover:bg-[#111]">
-          Start free →
-        </Link>
+      <section className="px-4 py-10 md:px-8 md:py-16">
+        <div className="mx-auto overflow-hidden rounded-[2rem] bg-[#D7FF00] text-black shadow-[0_0_100px_rgba(215,255,0,.25)]">
+          <div className="relative px-6 py-14 text-center md:px-10 md:py-20">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_20%,rgba(0,0,0,.22),transparent_24%),radial-gradient(circle_at_88%_30%,rgba(37,99,235,.22),transparent_24%)]" />
+            <div className="relative">
+              <h2 className="mx-auto max-w-5xl text-4xl font-black uppercase leading-[0.88] tracking-[-0.09em] md:text-8xl">
+                Generate your first product video today.
+              </h2>
+              <p className="mt-5 text-base font-semibold text-black/65 md:text-lg">Start with 10 free credits.</p>
+              <Link href="/sign-up" className="mt-8 inline-flex rounded-xl bg-black px-8 py-4 text-sm font-black uppercase tracking-[0.12em] text-[#D7FF00] no-underline transition hover:scale-[1.02]">
+                Start for free →
+              </Link>
+            </div>
+          </div>
+        </div>
       </section>
 
       <footer className="border-t border-white/10 px-4 py-10 md:px-8">
-        <div className="mx-auto max-w-[1500px]">
+        <div className="mx-auto max-w-[1540px]">
           <div className="grid gap-8 md:grid-cols-[2fr_1fr_1fr_1fr]">
             <div>
-              <img src="/nova/logo-nova.jpeg" alt="NOVA logo" className="mb-4 h-11 w-auto object-contain" />
-              <p className="max-w-sm text-sm leading-7 text-white/40">AI video studio for creators, brands, e-commerce teams and agencies.</p>
+              <img src="/nova/logo-nova.jpeg" alt="NOVA logo" style={{ height: "44px", width: "auto", objectFit: "contain", display: "block", marginBottom: "16px" }} />
+              <p className="max-w-sm text-sm leading-7 text-white/40">The AI studio for product videos, ads and social creatives that sell.</p>
               <p className="mt-4 text-sm text-white/35">info@novvideos.online</p>
             </div>
             <div>
-              <p className="mb-4 text-sm font-black uppercase tracking-[.16em] text-white/40">Product</p>
+              <p className="mb-4 text-sm font-black uppercase tracking-[0.16em] text-white/40">Product</p>
               <Link href="/dashboard" className="mb-3 block text-sm text-white/35 no-underline hover:text-white">Studio</Link>
               <Link href="/dashboard/models" className="mb-3 block text-sm text-white/35 no-underline hover:text-white">Models</Link>
               <Link href="/pricing" className="mb-3 block text-sm text-white/35 no-underline hover:text-white">Pricing</Link>
               <Link href="/product-ad-generator" className="mb-3 block text-sm text-white/35 no-underline hover:text-white">Ad Generator</Link>
             </div>
             <div>
-              <p className="mb-4 text-sm font-black uppercase tracking-[.16em] text-white/40">Use cases</p>
+              <p className="mb-4 text-sm font-black uppercase tracking-[0.16em] text-white/40">Use cases</p>
               <Link href="/product-ad-generator" className="mb-3 block text-sm text-white/35 no-underline hover:text-white">Product Ads</Link>
               <Link href="/dashboard/templates" className="mb-3 block text-sm text-white/35 no-underline hover:text-white">UGC Creatives</Link>
               <Link href="/explore" className="mb-3 block text-sm text-white/35 no-underline hover:text-white">Social Videos</Link>
             </div>
             <div>
-              <p className="mb-4 text-sm font-black uppercase tracking-[.16em] text-white/40">Company</p>
+              <p className="mb-4 text-sm font-black uppercase tracking-[0.16em] text-white/40">Company</p>
               <Link href="/terms" className="mb-3 block text-sm text-white/35 no-underline hover:text-white">Terms</Link>
               <Link href="/privacy" className="mb-3 block text-sm text-white/35 no-underline hover:text-white">Privacy</Link>
               <Link href="/contact" className="mb-3 block text-sm text-white/35 no-underline hover:text-white">Contact</Link>
