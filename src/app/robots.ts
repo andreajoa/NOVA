@@ -9,6 +9,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/dashboard/", "/api/", "/sign-in", "/sign-up", "/settings", "/checkout/"],
       },
     ],
-    sitemap: "https://novvideos.online/sitemap.xml",
+    sitemap: "https://www.novvideos.online/sitemap.xml",
   };
 }
