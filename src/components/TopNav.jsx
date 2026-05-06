@@ -8,99 +8,70 @@ import CreditBalancePill from "@/components/CreditBalancePill";
 
 const MENU_GROUPS = [
   {
-    key: "product",
-    label: "Product",
-    description: "Main NOVA pages",
+    key: "criar",
+    label: "Criar",
+    description: "Escolha o tipo de conteúdo que quer gerar",
     columns: [
       {
-        title: "Website",
+        title: "Geração",
         items: [
-          { label: "Home", href: "/", path: "/" },
-          { label: "Pricing", href: "/pricing", path: "/pricing" },
-          { label: "Explore", href: "/explore", path: "/explore" },
-          { label: "Generate", href: "/generate", path: "/generate" },
+          { label: "Gerar Imagem",  href: "/dashboard/models",    path: "/dashboard/models"    },
+          { label: "Gerar Vídeo",   href: "/dashboard/generate",  path: "/dashboard/generate"  },
+          { label: "UGC Produto",   href: "/dashboard/templates", path: "/dashboard/templates" },
         ],
       },
       {
-        title: "Creation Tools",
+        title: "Recursos",
         items: [
-          { label: "Product Ad Generator", href: "/product-ad-generator", path: "/product-ad-generator" },
-          { label: "Originals", href: "/originals", path: "/originals" },
-          { label: "Brand Kit", href: "/brandkit", path: "/brandkit" },
-          { label: "Plus Promo Checkout", href: "/checkout/plus-promo", path: "/checkout/plus-promo" },
+          { label: "Brand Kit",     href: "/dashboard/brandkit",  path: "/dashboard/brandkit"  },
+          { label: "Uploads",       href: "/dashboard/uploads",   path: "/dashboard/uploads"   },
+          { label: "Projetos",      href: "/dashboard/projects",  path: "/dashboard/projects"  },
         ],
       },
     ],
   },
   {
-    key: "dashboard",
-    label: "Dashboard",
-    description: "Workspace, models, projects and account tools",
+    key: "produto",
+    label: "Produto",
+    description: "Saiba mais sobre o NOVA e escolha seu plano",
     columns: [
       {
-        title: "Workspace",
+        title: "NOVA",
         items: [
-          { label: "Dashboard Home", href: "/dashboard", path: "/dashboard" },
-          { label: "Dashboard Generate", href: "/dashboard/generate", path: "/dashboard/generate" },
-          { label: "Projects", href: "/dashboard/projects", path: "/dashboard/projects" },
-          { label: "Templates", href: "/dashboard/templates", path: "/dashboard/templates" },
-          { label: "Uploads", href: "/dashboard/uploads", path: "/dashboard/uploads" },
-        ],
-      },
-      {
-        title: "Models",
-        items: [
-          { label: "Models", href: "/dashboard/models", path: "/dashboard/models" },
-          { label: "Model Detail Route", href: "/dashboard/models", path: "/dashboard/models/[model]" },
-          { label: "Model Mode Route", href: "/dashboard/models", path: "/dashboard/models/[model]/[mode]" },
-        ],
-      },
-      {
-        title: "Brand Kit",
-        items: [
-          { label: "Dashboard Brand Kit", href: "/dashboard/brandkit", path: "/dashboard/brandkit" },
-          { label: "Brand Kit Assets", href: "/dashboard/brandkit/assets", path: "/dashboard/brandkit/assets" },
-          { label: "Brand Kit Upload", href: "/dashboard/brandkit/upload", path: "/dashboard/brandkit/upload" },
-        ],
-      },
-      {
-        title: "Settings",
-        items: [
-          { label: "Dashboard Settings", href: "/dashboard/settings", path: "/dashboard/settings" },
-          { label: "Profile", href: "/dashboard/settings/profile", path: "/dashboard/settings/profile" },
-          { label: "Billing", href: "/dashboard/settings/billing", path: "/dashboard/settings/billing" },
-          { label: "API Keys", href: "/dashboard/settings/api-keys", path: "/dashboard/settings/api-keys" },
+          { label: "Home",                href: "/",                     path: "/"                      },
+          { label: "Pricing",             href: "/pricing",              path: "/pricing"               },
+          { label: "Product Ad Generator",href: "/product-ad-generator", path: "/product-ad-generator"  },
+          { label: "Explorar",            href: "/explore",              path: "/explore"               },
         ],
       },
     ],
   },
   {
-    key: "account",
-    label: "Account",
-    description: "Login, signup and user settings",
+    key: "api",
+    label: "API",
+    description: "Use os modelos NOVA no seu próprio projeto",
     columns: [
       {
-        title: "Account",
+        title: "Desenvolvedor",
         items: [
-          { label: "Settings", href: "/settings", path: "/settings" },
-          { label: "Sign In", href: "/sign-in", path: "/sign-in/[[...sign-in]]" },
-          { label: "Sign Up", href: "/sign-up", path: "/sign-up/[[...sign-up]]" },
+          { label: "API Credits",   href: "/dashboard/settings/api-keys", path: "/dashboard/settings/api-keys" },
+          { label: "Billing",       href: "/dashboard/settings/billing",   path: "/dashboard/settings/billing"  },
+          { label: "Settings",      href: "/dashboard/settings",           path: "/dashboard/settings"           },
         ],
       },
     ],
   },
   {
-    key: "company",
-    label: "Company",
-    description: "Legal and contact pages",
+    key: "empresa",
+    label: "Empresa",
+    description: "Informações legais e contato",
     columns: [
       {
-        title: "Company",
+        title: "Empresa",
         items: [
-          { label: "Contact", href: "/contact", path: "/contact" },
-          { label: "Terms", href: "/terms", path: "/terms" },
-          { label: "Privacy", href: "/privacy", path: "/privacy" },
-          { label: "Cookies", href: "/cookies", path: "/cookies" },
+          { label: "Contato",  href: "/contact", path: "/contact" },
+          { label: "Termos",   href: "/terms",   path: "/terms"   },
+          { label: "Privacy",  href: "/privacy", path: "/privacy" },
         ],
       },
     ],
