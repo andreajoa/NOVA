@@ -29,7 +29,7 @@ export default function GerarImagemPage() {
       <h1 className="text-4xl font-black uppercase tracking-[-0.05em] mb-2">Gerar Imagem</h1>
       <p className="text-white/40 text-sm mb-8">{imageModels.length} modelos disponíveis · Escolha o modelo e comece a gerar</p>
 
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {imageModels.map(([key, model]) => {
           const m = IMAGE_META[key] || { badge:"", img:"/nova/nova-seedance-pro.png" };
           const modeCount = Object.keys(model.modes || {}).length;
