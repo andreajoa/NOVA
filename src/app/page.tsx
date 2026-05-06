@@ -173,7 +173,7 @@ export default function Home() {
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-3 text-sm font-bold text-white/55 sm:grid-cols-4">
-              {["50 free credits", "Videos in minutes", "Built for product ads", "Export MP4"].map((item) => (
+              {["10 free credits", "Videos in minutes", "Built for product ads", "Export MP4"].map((item) => (
                 <div key={item} className="rounded-2xl border border-white/10 bg-white/[.025] px-4 py-3">
                   <span className="text-[#D7FF00]">✓</span> {item}
                 </div>
@@ -344,7 +344,7 @@ export default function Home() {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 {[
-                  "50 free credits to start",
+                  "10 free credits to start",
                   "Product ads, UGC and social creatives",
                   "All AI models in one studio",
                   "MP4 exports ready to publish",
@@ -428,7 +428,7 @@ export default function Home() {
           Generate your first product video today.
         </h2>
         <p className="mx-auto mt-6 max-w-2xl text-base font-semibold leading-7 text-black/62 md:text-lg md:leading-8">
-          Start with 50 free credits and turn one product into ready-to-publish creatives.
+          Start with 10 free credits and turn one product into ready-to-publish creatives.
         </p>
         <Link href="/sign-up" className="mt-8 inline-flex rounded-xl bg-black px-8 py-4 text-xs font-black uppercase tracking-[.14em] text-[#D7FF00] no-underline transition hover:bg-[#111]">
           Start free →
