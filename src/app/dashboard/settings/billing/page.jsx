@@ -2,7 +2,7 @@
 import Link from "next/link";
 
 const plans = [
-  { id:"free", name:"Free", price:"$0", credits:"50 cr total", active:true },
+  { id:"free", name:"Free", price:"$0", credits:"10 cr total", active:true },
   { id:"starter", name:"Starter", price:"$5/mo", credits:"70 cr/mo", active:false },
   { id:"plus", name:"Plus", price:"$34/mo", credits:"500 cr/mo", active:false },
   { id:"ultra", name:"Ultra", price:"$119/mo", credits:"3,000 cr/mo", active:false },
@@ -26,7 +26,7 @@ export default function BillingPage() {
           <div>
             <p className="text-xs font-black uppercase tracking-wider text-[#D7FF00] mb-1">Current Plan</p>
             <p className="text-2xl font-black text-white">Free</p>
-            <p className="text-white/40 text-sm mt-1">50 total credits · No renewal</p>
+            <p className="text-white/40 text-sm mt-1">10 total credits · No renewal</p>
           </div>
           <Link href="/pricing" className="bg-[#D7FF00] text-black text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl hover:bg-[#c8f000] transition no-underline">
             Upgrade Plan →
@@ -36,7 +36,7 @@ export default function BillingPage() {
 
       {/* Credit balance */}
       <div className="grid grid-cols-3 gap-4 mb-8">
-        {[["Credits Left","50","of 50 total"],["Next Renewal","—","No active plan"],["Spent this month","0 cr","0 generations"]].map(([label,val,sub]) => (
+        {[["Credits Left","10","of 10 total"],["Next Renewal","—","No active plan"],["Spent this month","0 cr","0 generations"]].map(([label,val,sub]) => (
           <div key={label} className="bg-[#0D0D0D] border border-white/8 rounded-2xl p-5">
             <p className="text-xs font-black uppercase tracking-wider text-white/30 mb-2">{label}</p>
             <p className="text-2xl font-black text-white">{val}</p>
