@@ -120,9 +120,6 @@ function MenuItem({ item, pathname, closeMenu }) {
           →
         </span>
       </div>
-      <div className="mt-1 truncate text-[11px] text-white/30">
-        {item.path || item.href}
-      </div>
     </Link>
   );
 }
