@@ -5,7 +5,10 @@ import { falModels } from "@/lib/falModels";
 export default function ModelPage() {
   const router = useRouter();
   const { model: modelKey } = useParams();
-  const model = falModels.video[modelKey];
+
+  const isImageModel = !falModels.video[modelKey] && Boolean(falModels.image?.[modelKey]);
+  const model = falModels.video[modelKey] || falModels.image?.[modelKey];
+
   if (!model) return <div className="p-8 text-white">Model not found.</div>;
 
   return (
@@ -14,7 +17,9 @@ export default function ModelPage() {
         className="text-white/30 text-sm mb-6 flex items-center gap-2 hover:text-white transition bg-transparent border-none cursor-pointer">
         ← Models
       </button>
-      <p className="text-xs font-black uppercase tracking-[0.25em] text-[#D7FF00] mb-2">Model</p>
+      <p className="text-xs font-black uppercase tracking-[0.25em] text-[#D7FF00] mb-2">
+        {isImageModel ? "Image Model" : "Video Model"}
+      </p>
       <h1 className="text-4xl font-black uppercase tracking-[-0.05em] mb-2">{model.label}</h1>
       <p className="text-white/40 text-sm mb-10">{model.description}</p>
 
