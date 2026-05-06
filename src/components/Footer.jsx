@@ -37,7 +37,7 @@ export default function Footer() {
               className="h-14 w-auto object-contain mb-4"
             />
             <p className="text-sm text-white/40 leading-7 max-w-xs">{s.tagline}</p>
-            <p className="mt-4 text-sm text-white/30">info@nova.online</p>
+            <p className="mt-4 text-sm text-white/30">info@novvideos.online</p>
           </div>
           <div>
             <p className="mb-4 text-xs font-black uppercase tracking-widest text-white/30">{s.product}</p>

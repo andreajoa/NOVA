@@ -177,7 +177,7 @@ export default function Home() {
               <img src="/nova/logo-nova.jpeg" alt="NOVA logo"
                 style={{height:"44px",width:"auto",objectFit:"contain",display:"block",marginBottom:"16px"}} />
               <p className="max-w-sm text-sm leading-7 text-white/40">AI video studio for creators, brands, e-commerce teams and agencies.</p>
-              <p className="mt-4 text-sm text-white/35">info@nova.online</p>
+              <p className="mt-4 text-sm text-white/35">info@novvideos.online</p>
             </div>
             <div>
               <p className="mb-4 text-sm font-black uppercase tracking-[0.16em] text-white/40">Product</p>

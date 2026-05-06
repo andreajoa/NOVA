@@ -474,7 +474,7 @@ export default function PricingPage() {
               <p className="max-w-xs text-sm leading-7 text-white/40">
                 AI video studio for creators, brands, e-commerce teams and agencies.
               </p>
-              <p className="mt-4 text-sm text-white/30">info@nova.online</p>
+              <p className="mt-4 text-sm text-white/30">info@novvideos.online</p>
             </div>
 
             <div>

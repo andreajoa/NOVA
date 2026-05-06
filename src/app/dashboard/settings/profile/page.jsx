@@ -3,7 +3,7 @@ import { useState } from "react";
 
 export default function ProfilePage() {
   const [saved, setSaved] = useState(false);
-  const [form, setForm] = useState({ name: "Nova Studio", email: "info@nova.online", bio: "" });
+  const [form, setForm] = useState({ name: "Nova Studio", email: "info@novvideos.online", bio: "" });
 
   function save(e) {
     e.preventDefault();
@@ -26,7 +26,7 @@ export default function ProfilePage() {
       </div>
 
       <form onSubmit={save} className="space-y-5">
-        {[["Full name","name","text","Nova Studio"],["Email","email","email","info@nova.online"]].map(([label,field,type,ph]) => (
+        {[["Full name","name","text","Nova Studio"],["Email","email","email","info@novvideos.online"]].map(([label,field,type,ph]) => (
           <div key={field}>
             <label className="block text-xs font-black uppercase tracking-wider text-white/40 mb-2">{label}</label>
             <input
