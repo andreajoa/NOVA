@@ -24,7 +24,7 @@ export default function ModelPage() {
       <p className="text-white/40 text-sm mb-10">{model.description}</p>
 
       <p className="text-xs font-black uppercase tracking-[0.2em] text-white/30 mb-4">Choose Mode</p>
-      <div className="grid grid-cols-3 gap-4 max-w-2xl">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 max-w-2xl">
         {Object.entries(model.modes).map(([modeKey, modeData]) => (
           <div
             key={modeKey}
