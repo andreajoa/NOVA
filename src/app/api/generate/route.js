@@ -107,6 +107,7 @@ export async function POST(req) {
         billing: { creditsPerSecond: 0, creditsCharged: 0, remainingCredits: 999999, wallet: "admin" },
       });
     } catch (err) {
+      console.error("ADMIN BYPASS ERROR:", err.message, err.status, JSON.stringify(err));
       return NextResponse.json({ success: false, error: err.message }, { status: 500 });
     }
   }
@@ -182,7 +183,7 @@ export async function POST(req) {
       },
     });
   } catch (err) {
-    console.error("FAL generation error:", err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    console.error("FAL generation error:", err.message, err.status, JSON.stringify(err));
+    return NextResponse.json({ success: false, error: err.message, detail: String(err) }, { status: 500 });
   }
 }
