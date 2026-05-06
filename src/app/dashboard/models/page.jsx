@@ -218,7 +218,6 @@ function AbstractCard({ item }) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">{item.brand}</p>
-            <p className="mt-2 text-2xl font-black tracking-[-0.07em] text-white">{item.version}</p>
           </div>
           <span className={"rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] backdrop-blur " + item.chip}>
             {item.label}
@@ -262,7 +261,6 @@ function ImageCard({ item }) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/65">{item.brand}</p>
-            <p className="mt-2 text-2xl font-black tracking-[-0.07em] text-white">{item.version}</p>
           </div>
           <span className={"rounded-full border border-white/10 bg-black/55 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] backdrop-blur " + item.chip}>
             {item.label}
@@ -303,7 +301,7 @@ export default function DashboardModelsPage() {
                   Escolha o modelo ideal para cada imagem.
                 </h1>
                 <p className="mt-4 max-w-2xl text-sm leading-7 text-white/50 md:text-base">
-                  Um visual mais claro, mais desejável e mais fácil de usar. Compare rapidamente os modelos e entre no fluxo de geração com mais confiança.
+                  Escolha o melhor modelo para cada tipo de imagem: produto, retrato, campanha, conceito, UGC ou visual cinematográfico.
                 </p>
 
                 <div className="mt-5 flex flex-wrap gap-2">
@@ -326,12 +324,12 @@ export default function DashboardModelsPage() {
 
               <div className="group relative overflow-hidden rounded-[1.7rem] border border-white/10 bg-black/40 p-2">
                 <Image
-                  src={asset + "hero-banner.png"}
+                  src={asset + "hero-banner-clean.png"}
                   alt="NOVA image models hero banner"
                   width={2172}
                   height={724}
                   priority
-                  className="w-full rounded-[1.25rem] object-cover transition duration-700 group-hover:scale-[1.01]"
+                  className="h-[180px] w-full rounded-[1.25rem] object-cover object-center transition duration-700 group-hover:scale-[1.01] sm:h-[240px] lg:h-auto"
                 />
               </div>
             </div>
@@ -347,7 +345,7 @@ export default function DashboardModelsPage() {
               </h2>
             </div>
             <p className="max-w-xl text-sm leading-6 text-white/40">
-              O objetivo aqui é gerar desejo e facilitar a escolha: cards maiores, mais contraste, mais glow, mais personalidade e leitura melhor no mobile.
+              Cards mais visuais, comparação rápida e seleção direta para começar a gerar.
             </p>
           </div>
 
