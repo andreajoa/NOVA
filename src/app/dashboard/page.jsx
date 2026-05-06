@@ -21,29 +21,27 @@ function FalBalanceAlert() {
 
   if (!low) return null;
 
+  const borderClass = critical ? "border-red-500/40 bg-red-500/10" : "border-yellow-400/40 bg-yellow-400/10";
+  const labelClass = critical ? "text-red-400" : "text-yellow-300";
+  const valueClass = critical ? "text-red-300" : "text-yellow-300";
+  const btnClass = critical ? "bg-red-500 text-white hover:bg-red-400" : "bg-yellow-400 text-black hover:bg-yellow-300";
+  const label = critical ? "Saldo fal.ai CRITICO" : "Saldo fal.ai baixo";
+  const msg = critical ? " Recarregue agora para nao interromper as geracoes." : " Considere recarregar em breve.";
+  const bal = typeof balance === "number" ? balance.toFixed(2) : balance;
+
   return (
-    <div className={[
-      "mx-8 mt-4 rounded-2xl border p-4 flex items-center justify-between gap-4",
-      critical
-        ? "border-red-500/40 bg-red-500/10"
-        : "border-yellow-400/40 bg-yellow-400/10",
-    ].join(" ")}>
+    <div className={"mx-8 mt-4 rounded-2xl border p-4 flex items-center justify-between gap-4 " + borderClass}>
       <div>
-        <p className={["text-xs font-black uppercase tracking-wider mb-1", critical ? "text-red-400" : "text-yellow-300"].join(" ")}>
-          {critical ? "⚠️ Saldo fal.ai CRÍTICO" : "⚠️ Saldo fal.ai baixo"}
+        <p className={"text-xs font-black uppercase tracking-wider mb-1 " + labelClass}>
+          {label}
         </p>
         <p className="text-sm text-white/60">
-          Saldo atual: <span className={["font-black", critical ? "text-red-300" : "text-yellow-300"].join(" ")}>${typeof balance === "number" ? balance.toFixed(2) : balance}</span>
-          {critical ? " — Recarregue agora para não interromper as gerações." : " — Considere recarregar em breve."}
+          Saldo atual: <span className={"font-black " + valueClass}>${bal}</span>{msg}
         </p>
       </div>
-      
-        href="https://fal.ai/dashboard"
-        target="_blank"
-        rel="noopener noreferrer"
-        className={["shrink-0 rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wider no-underline transition", critical ? "bg-red-500 text-white hover:bg-red-400" : "bg-yellow-400 text-black hover:bg-yellow-300"].join(" ")}
-      >
-        Recarregar →
+      <a href="https://fal.ai/dashboard" target="_blank" rel="noopener noreferrer"
+        className={"shrink-0 rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wider no-underline transition " + btnClass}>
+        Recarregar
       </a>
     </div>
   );
