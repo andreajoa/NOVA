@@ -235,8 +235,8 @@ export const falModels = {
 
 export const PLAN_CONFIG = {
   trial:    { credits: 10,     imageUnlimited: false, imageMonthlyLimit: 10   },
-  basic:    { credits: 70,     imageUnlimited: true,  imageMonthlyLimit: null },
-  plus:     { credits: 500,    imageUnlimited: true,  imageMonthlyLimit: null },
+  basic:    { credits: 70,     imageUnlimited: false, imageMonthlyLimit: null },
+  plus:     { credits: 500,    imageUnlimited: false, imageMonthlyLimit: null },
   ultra:    { credits: 3000,   imageUnlimited: true,  imageMonthlyLimit: null },
   business: { credits: 3000,   imageUnlimited: true,  imageMonthlyLimit: null },
   admin:    { credits: 999999, imageUnlimited: true,  imageMonthlyLimit: null },
