@@ -1,42 +1,86 @@
 "use client";
-import { useRouter, useParams } from "next/navigation";
+
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { falModels } from "@/lib/falModels";
+
+function getModelType(modelKey) {
+  if (falModels.image?.[modelKey]) return "image";
+  if (falModels.video?.[modelKey]) return "video";
+  return null;
+}
 
 export default function ModelPage() {
   const router = useRouter();
   const { model: modelKey } = useParams();
 
-  const isImageModel = !falModels.video[modelKey] && Boolean(falModels.image?.[modelKey]);
-  const model = falModels.video[modelKey] || falModels.image?.[modelKey];
+  const type = getModelType(modelKey);
+  const model = falModels.image?.[modelKey] || falModels.video?.[modelKey];
+  const modes = Object.entries(model?.modes || {});
 
-  if (!model) return <div className="p-8 text-white">Model not found.</div>;
+  if (!model) {
+    return (
+      <main className="min-h-screen bg-[#020303] p-6 text-white">
+        <div className="rounded-3xl border border-white/10 bg-white/[.03] p-8">
+          Modelo não encontrado.
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <div className="p-8 text-white">
-      <button onClick={() => router.push("/dashboard/models")}
-        className="text-white/30 text-sm mb-6 flex items-center gap-2 hover:text-white transition bg-transparent border-none cursor-pointer">
-        ← Models
-      </button>
-      <p className="text-xs font-black uppercase tracking-[0.25em] text-[#D7FF00] mb-2">
-        {isImageModel ? "Image Model" : "Video Model"}
-      </p>
-      <h1 className="text-4xl font-black uppercase tracking-[-0.05em] mb-2">{model.label}</h1>
-      <p className="text-white/40 text-sm mb-10">{model.description}</p>
+    <main className="min-h-screen bg-[#020303] text-white">
+      <div className="mx-auto max-w-[1300px] px-4 py-6 md:px-6 md:py-10">
+        <button
+          type="button"
+          onClick={() => router.push(type === "video" ? "/dashboard/generate" : "/dashboard/models")}
+          className="mb-5 border-0 bg-transparent p-0 text-sm text-white/35 transition hover:text-white"
+        >
+          ← Voltar
+        </button>
 
-      <p className="text-xs font-black uppercase tracking-[0.2em] text-white/30 mb-4">Choose Mode</p>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 max-w-2xl">
-        {Object.entries(model.modes).map(([modeKey, modeData]) => (
-          <div
-            key={modeKey}
-            onClick={() => router.push("/dashboard/models/" + modelKey + "/" + modeKey)}
-            className="bg-[#0D0D0D] border border-white/10 rounded-2xl p-6 cursor-pointer transition hover:border-[#D7FF00]/60 hover:shadow-[0_0_30px_rgba(215,255,0,0.10)] group"
-          >
-            <p className="text-2xl mb-3 text-[#D7FF00]">◈</p>
-            <p className="font-black uppercase text-sm tracking-tight">{modeData.label}</p>
-            <p className="text-white/30 text-xs mt-2">{modeData.needsImage ? "Requires image" : "Prompt only"}</p>
+        <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#070707] p-6 shadow-[0_0_100px_rgba(215,255,0,.06)] md:p-8">
+          <div className="absolute -left-20 top-10 h-72 w-72 rounded-full bg-[#D7FF00]/12 blur-3xl" />
+          <div className="absolute right-0 top-0 h-80 w-80 rounded-full bg-fuchsia-500/10 blur-3xl" />
+
+          <div className="relative">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-[#D7FF00]">
+              {type === "image" ? "Modelo de imagem" : "Modelo de vídeo"}
+            </p>
+            <h1 className="mt-4 text-4xl font-black uppercase leading-[0.9] tracking-[-0.08em] md:text-7xl">
+              {model.label}
+            </h1>
+            <p className="mt-4 max-w-3xl text-base leading-7 text-white/50">
+              {model.description}
+            </p>
+
+            <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {modes.map(([modeKey, modeData]) => (
+                <Link
+                  key={modeKey}
+                  href={`/dashboard/models/${modelKey}/${modeKey}`}
+                  className="group rounded-[1.5rem] border border-white/10 bg-black/35 p-5 no-underline transition hover:-translate-y-1 hover:border-[#D7FF00]/45 hover:shadow-[0_0_70px_rgba(215,255,0,.10)]"
+                >
+                  <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#D7FF00]/10 text-2xl text-[#D7FF00]">
+                    {modeData.needsImage ? "▧" : "✦"}
+                  </div>
+                  <h2 className="mt-5 text-2xl font-black uppercase tracking-[-0.05em] text-white">
+                    {modeData.label}
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-white/45">
+                    {modeData.needsImage
+                      ? "Use uma imagem ou vídeo de referência para guiar a geração."
+                      : "Comece apenas com prompt e ajuste as opções antes de gerar."}
+                  </p>
+                  <div className="mt-5 text-xs font-black uppercase tracking-[0.12em] text-[#D7FF00]">
+                    Abrir gerador →
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
-        ))}
+        </section>
       </div>
-    </div>
+    </main>
   );
 }

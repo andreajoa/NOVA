@@ -116,6 +116,8 @@ export async function POST(req) {
         ...(body.duration     && { duration:     seconds            }),
         ...(body.aspect_ratio && { aspect_ratio: body.aspect_ratio }),
         ...(body.resolution   && { resolution:   body.resolution   }),
+        ...(body.num_images   && { num_images:   body.num_images   }),
+        ...(body.image_size   && { image_size:   body.image_size   }),
       };
       const result = await fal.subscribe(endpoint, { input: falInput, logs: true });
       const outputUrl =
