@@ -5,21 +5,25 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 const asset = "/nova/explore-v1/";
+const BASE_VIDEO = "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/videos-explorar/";
 
 const categories = [
   { id: "all", pt: "Todos", en: "All" },
   { id: "product", pt: "Product Ads", en: "Product Ads" },
   { id: "ugc", pt: "UGC Creatives", en: "UGC Creatives" },
   { id: "cinematic", pt: "Cinemático", en: "Cinematic" },
-  { id: "beauty", pt: "Beauty", en: "Beauty" },
+  { id: "beauty",
+    video: BASE_VIDEO + "6.mp4",, pt: "Beauty", en: "Beauty" },
   { id: "food", pt: "Food", en: "Food" },
   { id: "tech", pt: "Tech", en: "Tech" },
-  { id: "interior", pt: "Interior", en: "Interior" },
+  { id: "interior",
+    video: BASE_VIDEO + "4.mp4",, pt: "Interior", en: "Interior" },
 ];
 
 const cards = [
   {
     id: "luxury-watch",
+    video: BASE_VIDEO + "1.mp4",,
     category: "product",
     image: asset + "card-watch.png",
     time: "00:07",
@@ -33,6 +37,7 @@ const cards = [
   },
   {
     id: "gaming-chair",
+    video: BASE_VIDEO + "2.mp4",,
     category: "tech",
     image: asset + "card-gaming-chair.png",
     time: "00:08",
@@ -46,6 +51,7 @@ const cards = [
   },
   {
     id: "coffee",
+    video: BASE_VIDEO + "3.mp4",,
     category: "food",
     image: asset + "card-coffee.png",
     time: "00:06",
@@ -59,6 +65,7 @@ const cards = [
   },
   {
     id: "interior",
+    video: BASE_VIDEO + "4.mp4",,
     category: "interior",
     image: asset + "card-interior.png",
     time: "00:06",
@@ -72,6 +79,7 @@ const cards = [
   },
   {
     id: "citrus-drink",
+    video: BASE_VIDEO + "5.mp4",,
     category: "product",
     image: asset + "card-drink.png",
     time: "00:07",
@@ -85,6 +93,7 @@ const cards = [
   },
   {
     id: "beauty",
+    video: BASE_VIDEO + "6.mp4",,
     category: "beauty",
     image: asset + "card-beauty.png",
     time: "00:07",
@@ -98,6 +107,7 @@ const cards = [
   },
   {
     id: "dessert",
+    video: BASE_VIDEO + "7.mp4",,
     category: "food",
     image: asset + "card-dessert.png",
     time: "00:06",
@@ -111,6 +121,7 @@ const cards = [
   },
   {
     id: "cosmic-gallery",
+    video: BASE_VIDEO + "8.mp4",,
     category: "cinematic",
     image: asset + "explore-gallery.png",
     time: "00:10",
@@ -140,13 +151,24 @@ function ExploreCard({ item, lang, onCopy, copied }) {
   return (
     <article className="group relative overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#090909] shadow-[0_24px_80px_rgba(0,0,0,.35)] transition duration-500 hover:-translate-y-1 hover:border-[#D7FF00]/45 hover:shadow-[0_0_80px_rgba(215,255,0,.12)]">
       <div className="relative aspect-[4/5] overflow-hidden">
-        <Image
-          src={item.image}
-          alt={item.title[lang]}
-          width={1080}
-          height={1350}
-          className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
-        />
+        {item.video ? (
+          <video
+            src={item.video}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <Image
+            src={item.image}
+            alt={item.title[lang]}
+            width={1080}
+            height={1350}
+            className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-black/5" />
         <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/60 px-2.5 py-1 text-[10px] font-black text-white backdrop-blur">
           ▶ {item.time}

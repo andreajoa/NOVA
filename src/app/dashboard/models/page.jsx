@@ -1,195 +1,21 @@
 import Image from "next/image";
 import Link from "next/link";
+import { falModels } from "@/lib/falModels";
 
 const asset = "/nova/models-v2/";
 
-const filters = [
-  "Todos",
-  "Ultra realista",
-  "Cinemático",
-  "Design",
-  "Ilustração",
-  "Criativo",
-  "Produto",
-  "Texto",
-  "Vídeo",
-];
-
-const stats = [
-  {
-    icon: "◈",
-    title: "13 modelos de imagem",
-    copy: "Cada modelo foi escolhido para entregar um tipo de resultado.",
-  },
-  {
-    icon: "⚡",
-    title: "Escolha mais rápida",
-    copy: "Visual, estilo e finalidade ficam claros antes de abrir.",
-  },
-  {
-    icon: "✦",
-    title: "Para todo tipo de criação",
-    copy: "Produto, retrato, campanha, conceito, UGC e branding.",
-  },
-];
-
-const models = [
-  {
-    slug: "seedance-fast",
-    eyebrow: "Seedance",
-    badge: "Fast",
-    title: "Seedance 2.0 Fast",
-    category: "Ultra realistic",
-    description: "Ultra realista, perfeito para visuais automotivos e de impacto.",
-    modes: "2 modos",
-    image: asset + "card-car.png",
-    accent: "border-[#D7FF00]/35",
-    chip: "text-[#D7FF00]",
-  },
-  {
-    slug: "flux-dev",
-    eyebrow: "UGC Creatives",
-    badge: "UGC",
-    title: "Flux Dev",
-    category: "Creator style",
-    description: "Estilo criativo e autêntico para conteúdo e campanhas.",
-    modes: "2 modos",
-    image: asset + "card-portrait.png",
-    accent: "border-fuchsia-300/30",
-    chip: "text-fuchsia-300",
-  },
-  {
-    slug: "flux-pro-1-1",
-    eyebrow: "Veo 3",
-    badge: "Pro",
-    title: "Flux Pro 1.1",
-    category: "Cinematic",
-    description: "Cinemático e dramático para narrativas visuais de alto nível.",
-    modes: "2 modos",
-    image: asset + "card-astronaut.png",
-    accent: "border-amber-300/30",
-    chip: "text-amber-300",
-  },
-  {
-    slug: "flux-ultra",
-    eyebrow: "Cinematic Video",
-    badge: "4MP",
-    title: "Flux Ultra",
-    category: "Studio quality",
-    description: "Detalhes extremos e iluminação avançada para resultados premium.",
-    modes: "1 modo",
-    image: asset + "card-serum.png",
-    accent: "border-cyan-300/30",
-    chip: "text-cyan-300",
-  },
-  {
-    slug: "gpt-image-2",
-    eyebrow: "AI Native",
-    badge: "OpenAI",
-    title: "GPT Image 2",
-    category: "AI native",
-    description: "Nativo de IA para ideias rápidas com qualidade impressionante.",
-    modes: "1 modo",
-    image: asset + "card-gpt-image-2.png",
-    accent: "border-cyan-300/30",
-    chip: "text-cyan-300",
-  },
-  {
-    slug: "recraft-v3",
-    eyebrow: "Product Ads",
-    badge: "Design",
-    title: "Recraft V3",
-    category: "Made to convert",
-    description: "Perfeito para anúncios, produtos e composições comerciais.",
-    modes: "2 modos",
-    image: asset + "card-city-car.png",
-    accent: "border-[#D7FF00]/35",
-    chip: "text-[#D7FF00]",
-  },
-  {
-    slug: "ideogram-v3",
-    eyebrow: "Kling 1.6",
-    badge: "Text",
-    title: "Ideogram V3",
-    category: "Dynamic concept",
-    description: "Tipografia integrada e layouts com precisão e estilo.",
-    modes: "2 modos",
-    image: asset + "card-mountain.png",
-    accent: "border-amber-300/30",
-    chip: "text-amber-300",
-  },
-  {
-    slug: "stable-diffusion-3-5",
-    eyebrow: "Wan 2.6",
-    badge: "Open source",
-    title: "Stable Diffusion 3.5",
-    category: "Portrait",
-    description: "Modelo open source para liberdade total de criação.",
-    modes: "2 modos",
-    image: asset + "card-ugc.png",
-    accent: "border-violet-300/30",
-    chip: "text-violet-300",
-  },
-  {
-    slug: "auraflow",
-    eyebrow: "Seedance 2.0 Pro",
-    badge: "Pro",
-    title: "AuraFlow",
-    category: "Sci-fi",
-    description: "Ultra realista com foco em luz, reflexos e textura.",
-    modes: "1 modo",
-    image: asset + "card-car.png",
-    accent: "border-[#D7FF00]/35",
-    chip: "text-[#D7FF00]",
-  },
-  {
-    slug: "nano-banana-2",
-    eyebrow: "UGC Creatives",
-    badge: "Fast",
-    title: "Nano Banana 2",
-    category: "Social",
-    description: "Criativo, leve e rápido para conteúdos únicos.",
-    modes: "1 modo",
-    image: asset + "card-ugc.png",
-    accent: "border-fuchsia-300/30",
-    chip: "text-fuchsia-300",
-  },
-  {
-    slug: "hidream-i1",
-    eyebrow: "Veo 3.1",
-    badge: "HD",
-    title: "HiDream I1",
-    category: "Product spotlight",
-    description: "Foco em produtos e objetos com acabamento profissional.",
-    modes: "2 modos",
-    image: asset + "card-headphones.png",
-    accent: "border-[#D7FF00]/35",
-    chip: "text-[#D7FF00]",
-  },
-  {
-    slug: "sana",
-    eyebrow: "Cinematic Videos",
-    badge: "NVIDIA",
-    title: "SANA",
-    category: "Experimental",
-    description: "Uma opção forte para renders de alto estilo e moods visuais.",
-    modes: "1 modo",
-    image: asset + "card-motorbike.png",
-    accent: "border-cyan-300/30",
-    chip: "text-cyan-300",
-  },
-  {
-    slug: "kolors",
-    eyebrow: "Branding",
-    badge: "Colors",
-    title: "KOLORS",
-    category: "Branding",
-    description: "Cores vibrantes e paletas únicas para identidades visuais.",
-    modes: "2 modos",
-    image: asset + "card-kolors.png",
-    accent: "border-orange-300/30",
-    chip: "text-orange-300",
-  },
+const visuals = [
+  "card-car.png",
+  "card-portrait.png",
+  "card-astronaut.png",
+  "card-serum.png",
+  "card-gpt-image-2.png",
+  "card-city-car.png",
+  "card-mountain.png",
+  "card-ugc.png",
+  "card-headphones.png",
+  "card-motorbike.png",
+  "card-kolors.png",
 ];
 
 const bannerImages = [
@@ -199,16 +25,32 @@ const bannerImages = [
   asset + "card-portrait.png",
 ];
 
-function ModelCard({ item }) {
+function visualFor(index) {
+  return asset + visuals[index % visuals.length];
+}
+
+function chipFor(index) {
+  return ["text-[#D7FF00]", "text-fuchsia-300", "text-cyan-300", "text-amber-300", "text-violet-300"][index % 5];
+}
+
+function borderFor(index) {
+  return ["border-[#D7FF00]/35", "border-fuchsia-300/30", "border-cyan-300/30", "border-amber-300/30", "border-violet-300/30"][index % 5];
+}
+
+function ModelCard({ item, index }) {
+  const [key, model] = item;
+  const modeCount = Object.keys(model?.modes || {}).length;
+  const chip = chipFor(index);
+
   return (
     <Link
-      href={`/dashboard/models/${item.slug}`}
-      className={`group relative overflow-hidden rounded-[1.45rem] border ${item.accent} bg-[#080808] no-underline shadow-[0_24px_80px_rgba(0,0,0,.38)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_0_80px_rgba(215,255,0,.12)]`}
+      href={`/dashboard/models/${key}`}
+      className={`group relative overflow-hidden rounded-[1.45rem] border ${borderFor(index)} bg-[#080808] no-underline shadow-[0_24px_80px_rgba(0,0,0,.38)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_0_80px_rgba(215,255,0,.12)]`}
     >
       <div className="relative h-full min-h-[330px] overflow-hidden rounded-[1.35rem]">
         <Image
-          src={item.image}
-          alt={item.title}
+          src={visualFor(index)}
+          alt={model.label}
           width={1086}
           height={1448}
           className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
@@ -220,26 +62,26 @@ function ModelCard({ item }) {
         <div className="relative flex min-h-[330px] flex-col justify-between p-5">
           <div className="flex items-start justify-between gap-3">
             <p className="max-w-[65%] text-[10px] font-black uppercase tracking-[0.2em] text-white/62">
-              {item.eyebrow}
+              Image Model
             </p>
-            <span className={`rounded-full border border-white/10 bg-black/55 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] backdrop-blur ${item.chip}`}>
-              {item.badge}
+            <span className={`rounded-full border border-white/10 bg-black/55 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] backdrop-blur ${chip}`}>
+              {modeCount} modo{modeCount !== 1 ? "s" : ""}
             </span>
           </div>
 
           <div>
-            <p className={`text-[11px] font-black uppercase tracking-[0.18em] ${item.chip}`}>
-              {item.category}
+            <p className={`text-[11px] font-black uppercase tracking-[0.18em] ${chip}`}>
+              Modelo de imagem
             </p>
             <h3 className="mt-2 text-2xl font-black leading-[0.95] tracking-[-0.055em] text-white md:text-3xl">
-              {item.title}
+              {model.label}
             </h3>
             <p className="mt-3 text-sm leading-6 text-white/63">
-              {item.description}
+              {model.description || "Crie imagens com IA usando este modelo."}
             </p>
 
             <div className="mt-5 flex items-center justify-between gap-3 text-[11px] font-black uppercase tracking-[0.12em]">
-              <span className="text-white/45">{item.modes}</span>
+              <span className="text-white/45">{key}</span>
               <span className="text-[#D7FF00]">Abrir modelo →</span>
             </div>
           </div>
@@ -250,6 +92,8 @@ function ModelCard({ item }) {
 }
 
 export default function DashboardModelsPage() {
+  const imageModels = Object.entries(falModels.image || {});
+
   return (
     <main className="min-h-screen bg-[#020303] text-white">
       <div className="mx-auto max-w-[1600px] px-4 py-5 md:px-6 md:py-8">
@@ -280,35 +124,8 @@ export default function DashboardModelsPage() {
               Escolha o modelo ideal para cada imagem.
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-white/50 md:text-base">
-              Explore nossa biblioteca de modelos e encontre o estilo, a tecnologia e o desempenho ideais para cada criação.
+              Cada card usa a chave real do modelo. Clique, escolha o modo e gere com resolução, proporção e quantidade.
             </p>
-          </div>
-
-          <div className="mt-6 flex flex-wrap gap-2">
-            {filters.map((filter, index) => (
-              <span
-                key={filter}
-                className={
-                  index === 0
-                    ? "rounded-full bg-[#D7FF00] px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-black"
-                    : "rounded-full border border-white/12 bg-white/[.03] px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-white/55"
-                }
-              >
-                {filter}
-              </span>
-            ))}
-          </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            {stats.map((item) => (
-              <div key={item.title} className="rounded-[1.2rem] border border-white/10 bg-black/30 p-5">
-                <div className="mb-4 grid h-12 w-12 place-items-center rounded-full bg-[#D7FF00]/10 text-2xl text-[#D7FF00]">
-                  {item.icon}
-                </div>
-                <h3 className="text-base font-black text-white">{item.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-white/45">{item.copy}</p>
-              </div>
-            ))}
           </div>
         </section>
 
@@ -316,15 +133,21 @@ export default function DashboardModelsPage() {
           <div className="mb-5">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">Model library</p>
             <h2 className="mt-2 text-3xl font-black uppercase leading-[0.9] tracking-[-0.06em] md:text-5xl">
-              13 modelos. Mais impacto visual.
+              {imageModels.length} modelos conectados.
             </h2>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {models.map((item) => (
-              <ModelCard key={item.slug} item={item} />
-            ))}
-          </div>
+          {imageModels.length ? (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {imageModels.map((item, index) => (
+                <ModelCard key={item[0]} item={item} index={index} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-3xl border border-white/10 bg-black/30 p-8 text-white/45">
+              Nenhum modelo de imagem encontrado em falModels.image.
+            </div>
+          )}
         </section>
       </div>
     </main>

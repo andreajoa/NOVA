@@ -6,17 +6,23 @@ import { useRouter } from "next/navigation";
 import { falModels } from "@/lib/falModels";
 
 const logoSrc = "/nova/logo-nova.jpeg";
-
 const IMAGE_RESOLUTIONS = ["1K", "2K", "4K"];
 const VIDEO_RESOLUTIONS = ["720p", "1080p", "4K"];
 const IMAGE_RATIOS = ["1:1", "9:16", "16:9", "4:5"];
 const VIDEO_RATIOS = ["9:16", "16:9", "1:1"];
-const IMAGE_COUNTS = [1, 2, 4];
-const VIDEO_SECONDS = [5, 10, 15];
 
-function firstModeKey(model) {
-  return Object.keys(model?.modes || {})[0] || "";
-}
+const VIDEO_DURATION_RULES = {
+  seedance: [5, 10],
+  kling: [5, 10],
+  veo: [5, 8],
+  wan: [5],
+  pixverse: [5, 8],
+  ltx: [5, 10],
+  happyhorse: [5, 10],
+  lyra: [5],
+  lucy: [5],
+  "kling-avatar": [5, 10],
+};
 
 function getModelType(modelKey) {
   if (falModels.image?.[modelKey]) return "image";
@@ -34,6 +40,12 @@ function getEntries(forceType) {
   return [...Object.entries(falModels.image || {}), ...Object.entries(falModels.video || {})];
 }
 
+function bestModeKey(model) {
+  const entries = Object.entries(model?.modes || {});
+  if (!entries.length) return "";
+  return entries[0][0];
+}
+
 function resolveInitialModel(initialModelKey, forceType) {
   const entries = getEntries(forceType);
   const fallback = entries[0]?.[0] || "";
@@ -44,6 +56,17 @@ function resolveInitialModel(initialModelKey, forceType) {
   if (forceType && type !== forceType) return fallback;
 
   return initialModelKey;
+}
+
+function durationOptionsFor(modelKey, model) {
+  const key = String(modelKey || "").toLowerCase();
+  const label = String(model?.label || "").toLowerCase();
+
+  for (const [needle, durations] of Object.entries(VIDEO_DURATION_RULES)) {
+    if (key.includes(needle) || label.includes(needle)) return durations;
+  }
+
+  return [5, 10];
 }
 
 function imageSizeFrom(aspectRatio, resolution) {
@@ -58,10 +81,6 @@ function collectUrls(data) {
   const urls = [];
 
   if (data?.data?.url) urls.push(data.data.url);
-
-  if (Array.isArray(data?.data?.urls)) {
-    data.data.urls.forEach((url) => url && urls.push(url));
-  }
 
   if (Array.isArray(raw.images)) {
     raw.images.forEach((item) => {
@@ -84,7 +103,7 @@ function collectUrls(data) {
   return [...new Set(urls)].filter(Boolean);
 }
 
-function OptionButton({ active, children, onClick, className = "" }) {
+function OptionButton({ active, children, onClick }) {
   return (
     <button
       type="button"
@@ -93,8 +112,7 @@ function OptionButton({ active, children, onClick, className = "" }) {
         "rounded-xl border px-4 py-3 text-xs font-black uppercase tracking-[0.12em] transition " +
         (active
           ? "border-[#D7FF00] bg-[#D7FF00] text-black shadow-[0_0_35px_rgba(215,255,0,.18)] "
-          : "border-white/10 bg-white/[.035] text-white/55 hover:border-[#D7FF00]/45 hover:text-[#D7FF00] ") +
-        className
+          : "border-white/10 bg-white/[.035] text-white/55 hover:border-[#D7FF00]/45 hover:text-[#D7FF00] ")
       }
     >
       {children}
@@ -123,27 +141,40 @@ function SelectBox({ label, value, onChange, options }) {
   );
 }
 
+async function uploadReference(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch("/api/upload", {
+    method: "POST",
+    body: formData,
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error || "Upload failed");
+  }
+
+  const url = data?.url || data?.publicUrl || data?.fileUrl || data?.location;
+
+  if (!url) {
+    throw new Error("Upload completed, but no public URL was returned.");
+  }
+
+  return url;
+}
+
 function PromoBanner() {
   return (
-    <Link
-      href="/pricing"
-      className="group relative block overflow-hidden rounded-[1.35rem] border border-[#D7FF00]/35 bg-[#D7FF00]/10 p-[1px] no-underline shadow-[0_0_60px_rgba(215,255,0,.10)]"
-    >
+    <Link href="/pricing" className="group relative block overflow-hidden rounded-[1.35rem] border border-[#D7FF00]/35 bg-[#D7FF00]/10 p-[1px] no-underline shadow-[0_0_60px_rgba(215,255,0,.10)]">
       <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-[#D7FF00]/30 via-fuchsia-500/25 to-cyan-400/25 opacity-80" />
       <div className="relative flex flex-col gap-4 rounded-[1.28rem] bg-black/72 px-5 py-4 backdrop-blur md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-4">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#D7FF00] text-2xl text-black">♕</div>
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-[#D7FF00]">
-              Go Unlimited
-            </p>
-            <p className="mt-1 text-sm leading-6 text-white/60">
-              Desbloqueie mais qualidade, mais créditos, modelos premium e gerações mais rápidas.
-            </p>
-          </div>
+        <div>
+          <p className="text-sm font-black uppercase tracking-[0.18em] text-[#D7FF00]">Go Unlimited</p>
+          <p className="mt-1 text-sm leading-6 text-white/60">Mais qualidade, mais créditos, modelos premium e gerações mais rápidas.</p>
         </div>
-
-        <div className="inline-flex items-center justify-center rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-black transition group-hover:scale-[1.02]">
+        <div className="inline-flex items-center justify-center rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-black">
           Ver planos →
         </div>
       </div>
@@ -155,14 +186,13 @@ function FloatingLogo() {
   return (
     <div className="relative grid place-items-center py-4 md:py-7">
       <div className="absolute h-48 w-48 rounded-full bg-[#D7FF00]/12 blur-3xl md:h-64 md:w-64" />
-      <div className="absolute h-36 w-72 rounded-full border border-[#D7FF00]/20 shadow-[0_0_60px_rgba(215,255,0,.12)] md:h-44 md:w-96" />
       <img
         src={logoSrc}
         alt="NOVA"
         className="relative h-28 w-auto rounded-3xl object-contain shadow-[0_0_70px_rgba(215,255,0,.18)] md:h-40"
         style={{ animation: "novaFloat 4.8s ease-in-out infinite" }}
       />
-      <style jsx global>{`
+      <style>{`
         @keyframes novaFloat {
           0%, 100% { transform: translateY(0) scale(1); filter: drop-shadow(0 0 16px rgba(215,255,0,.28)); }
           50% { transform: translateY(-10px) scale(1.02); filter: drop-shadow(0 0 32px rgba(215,255,0,.42)); }
@@ -185,7 +215,7 @@ export default function NovaGenerationStudio({
   const resolvedInitialMode =
     initialModeKey && initialModel?.modes?.[initialModeKey]
       ? initialModeKey
-      : firstModeKey(initialModel);
+      : bestModeKey(initialModel);
 
   const [modelKey, setModelKey] = useState(resolvedInitialModel);
   const [modeKey, setModeKey] = useState(resolvedInitialMode);
@@ -200,14 +230,13 @@ export default function NovaGenerationStudio({
   const modeEntries = Object.entries(model?.modes || {});
   const modelEntries = getEntries(forceType);
 
+  const durationOptions = useMemo(() => durationOptionsFor(modelKey, model), [modelKey, model]);
   const [imageResolution, setImageResolution] = useState("2K");
   const [videoResolution, setVideoResolution] = useState("1080p");
   const [imageRatio, setImageRatio] = useState("1:1");
   const [videoRatio, setVideoRatio] = useState("16:9");
   const [imageCount, setImageCount] = useState(2);
-  const [seconds, setSeconds] = useState(5);
-  const [creativity, setCreativity] = useState("balanced");
-
+  const [seconds, setSeconds] = useState(durationOptions[0] || 5);
   const [asset, setAsset] = useState(null);
   const [assetPreview, setAssetPreview] = useState("");
   const [loading, setLoading] = useState(false);
@@ -222,9 +251,15 @@ export default function NovaGenerationStudio({
     if (queryPrompt) setPrompt(queryPrompt);
   }, []);
 
+  useEffect(() => {
+    if (!durationOptions.includes(seconds)) {
+      setSeconds(durationOptions[0] || 5);
+    }
+  }, [durationOptions, seconds]);
+
   function selectModel(nextModelKey) {
     const nextModel = getModel(nextModelKey);
-    const nextModeKey = firstModeKey(nextModel);
+    const nextModeKey = bestModeKey(nextModel);
     setModelKey(nextModelKey);
     setModeKey(nextModeKey);
     setResult(null);
@@ -252,40 +287,6 @@ export default function NovaGenerationStudio({
     if (!file) return;
     setAsset(file);
     setAssetPreview(URL.createObjectURL(file));
-  }
-
-  function improvePrompt() {
-    const addon = isImage
-      ? " cinematic lighting, premium commercial composition, ultra detailed, clean background, high-end brand aesthetic"
-      : " cinematic camera movement, premium lighting, smooth motion, realistic details, high-impact product ad style";
-    setPrompt((current) => {
-      const base = current.trim();
-      return base ? base + "," + addon : addon.replace(/^,\s*/, "");
-    });
-  }
-
-  async function uploadReference(file) {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const res = await fetch("/api/upload", {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      throw new Error(data?.message || data?.error || "Upload failed");
-    }
-
-    const url = data?.url || data?.publicUrl || data?.fileUrl || data?.location;
-
-    if (!url) {
-      throw new Error("Upload completed, but no public URL was returned.");
-    }
-
-    return url;
   }
 
   async function handleGenerate() {
@@ -337,11 +338,7 @@ export default function NovaGenerationStudio({
 
       const data = await res.json().catch(() => ({}));
 
-      if (
-        res.status === 402 ||
-        data?.code === "INSUFFICIENT_CREDITS" ||
-        data?.code === "IMAGE_TRIAL_LIMIT_REACHED"
-      ) {
+      if (res.status === 402 || data?.code === "INSUFFICIENT_CREDITS" || data?.code === "IMAGE_TRIAL_LIMIT_REACHED") {
         setUpgradeOffer(data);
         return;
       }
@@ -350,13 +347,7 @@ export default function NovaGenerationStudio({
         throw new Error(data?.message || data?.error || "Generation failed");
       }
 
-      const urls = collectUrls(data);
-
-      setResult({
-        ...data,
-        urls,
-      });
-
+      setResult({ ...data, urls: collectUrls(data) });
       window.dispatchEvent(new Event("nova:credits-refresh"));
     } catch (err) {
       setError(err?.message || "Generation failed");
@@ -370,7 +361,7 @@ export default function NovaGenerationStudio({
     return (
       <main className="min-h-screen bg-[#020303] p-6 text-white">
         <div className="rounded-3xl border border-white/10 bg-white/[.03] p-8">
-          Model or mode not found.
+          Modelo ou modo não encontrado.
         </div>
       </main>
     );
@@ -382,61 +373,23 @@ export default function NovaGenerationStudio({
   return (
     <main className="min-h-screen overflow-hidden bg-[#020303] text-white">
       <div className="mx-auto max-w-[1500px] px-4 py-5 md:px-6 md:py-8">
-        <div className="mb-5 text-sm text-white/28">
-          <button
-            type="button"
-            onClick={() => router.push("/dashboard/models")}
-            className="border-0 bg-transparent p-0 text-white/35 transition hover:text-white"
-          >
-            Modelos
-          </button>
-          <span className="mx-2">›</span>
-          <span className="text-white/55">{model.label}</span>
-          <span className="mx-2">›</span>
-          <span className="text-[#D7FF00]">{modeData.label}</span>
-        </div>
-
         <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#060606] p-5 shadow-[0_0_100px_rgba(215,255,0,.06)] md:p-8">
           <div className="absolute -left-20 top-16 h-72 w-72 rounded-full bg-[#D7FF00]/12 blur-3xl" />
           <div className="absolute right-0 top-0 h-80 w-80 rounded-full bg-fuchsia-500/10 blur-3xl" />
-          <div className="absolute bottom-0 right-1/3 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" />
-
           <div className="relative grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.24em] text-[#D7FF00]">
                 {isImage ? "Geração de imagens" : "Geração de vídeo"}
               </p>
-
               <h1 className="mt-4 text-4xl font-black uppercase leading-[0.9] tracking-[-0.08em] md:text-6xl">
                 {isImage ? "Crie imagens com IA sem fricção." : "Transforme texto em vídeo com IA."}
               </h1>
-
               <p className="mt-4 max-w-2xl text-sm leading-7 text-white/52 md:text-base">
                 {isImage
                   ? "Escolha modelo, resolução, formato e quantidade. Cada imagem gerada cria uma variação única a partir do mesmo prompt."
-                  : "Escolha modelo, duração, formato, qualidade e movimento. Gere vídeos prontos para anúncios, redes sociais e campanhas."}
+                  : "Escolha modelo, duração compatível, formato e qualidade. Gere vídeos prontos para anúncios e redes sociais."}
               </p>
-
-              <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-white/[.035] p-4">
-                  <p className="text-xl font-black text-[#D7FF00]">{model.label}</p>
-                  <p className="mt-1 text-xs leading-5 text-white/42">Modelo selecionado</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[.035] p-4">
-                  <p className="text-xl font-black text-[#D7FF00]">{modeData.label}</p>
-                  <p className="mt-1 text-xs leading-5 text-white/42">Modo ativo</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[.035] p-4">
-                  <p className="text-xl font-black text-[#D7FF00]">
-                    {isImage ? `${imageCount} saída${imageCount > 1 ? "s" : ""}` : `${seconds}s`}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-white/42">
-                    {isImage ? "Variações únicas" : "Duração do vídeo"}
-                  </p>
-                </div>
-              </div>
             </div>
-
             <FloatingLogo />
           </div>
         </section>
@@ -450,17 +403,14 @@ export default function NovaGenerationStudio({
             <div>
               <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">
-                    Prompt
-                  </p>
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">Prompt</p>
                   <h2 className="mt-2 text-2xl font-black uppercase tracking-[-0.05em] text-white md:text-3xl">
                     Descreva o que você quer criar
                   </h2>
                 </div>
-
                 <button
                   type="button"
-                  onClick={improvePrompt}
+                  onClick={() => setPrompt((p) => p ? p + ", cinematic lighting, premium commercial composition, ultra detailed" : "cinematic lighting, premium commercial composition, ultra detailed")}
                   className="inline-flex items-center justify-center rounded-xl border border-[#D7FF00]/25 bg-[#D7FF00]/10 px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#D7FF00] transition hover:bg-[#D7FF00] hover:text-black"
                 >
                   ✨ Aprimorar prompt
@@ -471,7 +421,7 @@ export default function NovaGenerationStudio({
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
                 placeholder={isImage ? "Ex: perfume de luxo em cenário escuro com luz verde neon..." : "Ex: câmera orbitando um produto premium com luz cinematográfica..."}
-                className="min-h-[170px] w-full resize-none rounded-3xl border border-white/12 bg-white/[.025] px-5 py-5 text-sm leading-7 text-white outline-none transition placeholder:text-white/22 focus:border-[#D7FF00]/45 md:min-h-[210px]"
+                className="min-h-[190px] w-full resize-none rounded-3xl border border-white/12 bg-white/[.025] px-5 py-5 text-sm leading-7 text-white outline-none transition placeholder:text-white/22 focus:border-[#D7FF00]/45"
               />
 
               <div className="mt-3 flex flex-wrap gap-2">
@@ -488,10 +438,7 @@ export default function NovaGenerationStudio({
                   <input className="hidden" type="file" accept="image/*,video/*" onChange={handleAssetChange} />
                 </label>
 
-                <Link
-                  href="/explore"
-                  className="rounded-xl border border-white/10 bg-white/[.035] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-white/55 no-underline transition hover:border-[#D7FF00]/35 hover:text-[#D7FF00]"
-                >
+                <Link href="/explore" className="rounded-xl border border-white/10 bg-white/[.035] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-white/55 no-underline transition hover:border-[#D7FF00]/35 hover:text-[#D7FF00]">
                   Explorar prompts
                 </Link>
               </div>
@@ -531,19 +478,8 @@ export default function NovaGenerationStudio({
 
             <aside className="rounded-[1.5rem] border border-white/10 bg-black/35 p-4">
               <div className="grid gap-4">
-                <SelectBox
-                  label="Modelo"
-                  value={modelKey}
-                  onChange={selectModel}
-                  options={modelEntries}
-                />
-
-                <SelectBox
-                  label="Modo"
-                  value={modeKey}
-                  onChange={selectMode}
-                  options={modeEntries}
-                />
+                <SelectBox label="Modelo" value={modelKey} onChange={selectModel} options={modelEntries} />
+                <SelectBox label="Modo" value={modeKey} onChange={selectMode} options={modeEntries} />
 
                 <div>
                   <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">
@@ -551,11 +487,7 @@ export default function NovaGenerationStudio({
                   </p>
                   <div className="grid grid-cols-3 gap-2">
                     {(isImage ? IMAGE_RESOLUTIONS : VIDEO_RESOLUTIONS).map((item) => (
-                      <OptionButton
-                        key={item}
-                        active={isImage ? imageResolution === item : videoResolution === item}
-                        onClick={() => (isImage ? setImageResolution(item) : setVideoResolution(item))}
-                      >
+                      <OptionButton key={item} active={isImage ? imageResolution === item : videoResolution === item} onClick={() => isImage ? setImageResolution(item) : setVideoResolution(item)}>
                         {item}
                       </OptionButton>
                     ))}
@@ -563,16 +495,10 @@ export default function NovaGenerationStudio({
                 </div>
 
                 <div>
-                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">
-                    Proporção
-                  </p>
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Proporção</p>
                   <div className="grid grid-cols-4 gap-2">
                     {(isImage ? IMAGE_RATIOS : VIDEO_RATIOS).map((item) => (
-                      <OptionButton
-                        key={item}
-                        active={isImage ? imageRatio === item : videoRatio === item}
-                        onClick={() => (isImage ? setImageRatio(item) : setVideoRatio(item))}
-                      >
+                      <OptionButton key={item} active={isImage ? imageRatio === item : videoRatio === item} onClick={() => isImage ? setImageRatio(item) : setVideoRatio(item)}>
                         {item}
                       </OptionButton>
                     ))}
@@ -581,16 +507,10 @@ export default function NovaGenerationStudio({
 
                 {isImage ? (
                   <div>
-                    <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">
-                      Quantidade
-                    </p>
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Quantidade</p>
                     <div className="grid grid-cols-3 gap-2">
-                      {IMAGE_COUNTS.map((item) => (
-                        <OptionButton
-                          key={item}
-                          active={imageCount === item}
-                          onClick={() => setImageCount(item)}
-                        >
+                      {[1, 2, 4].map((item) => (
+                        <OptionButton key={item} active={imageCount === item} onClick={() => setImageCount(item)}>
                           {item}
                         </OptionButton>
                       ))}
@@ -598,38 +518,19 @@ export default function NovaGenerationStudio({
                   </div>
                 ) : (
                   <div>
-                    <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">
-                      Duração
-                    </p>
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Duração suportada</p>
                     <div className="grid grid-cols-3 gap-2">
-                      {VIDEO_SECONDS.map((item) => (
-                        <OptionButton
-                          key={item}
-                          active={seconds === item}
-                          onClick={() => setSeconds(item)}
-                        >
+                      {durationOptions.map((item) => (
+                        <OptionButton key={item} active={seconds === item} onClick={() => setSeconds(item)}>
                           {item}s
                         </OptionButton>
                       ))}
                     </div>
+                    <p className="mt-2 text-xs leading-5 text-white/35">
+                      Este modelo suporta: {durationOptions.map((n) => `${n}s`).join(", ")}.
+                    </p>
                   </div>
                 )}
-
-                <label className="block">
-                  <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.18em] text-white/35">
-                    Estilo / criatividade
-                  </span>
-                  <select
-                    value={creativity}
-                    onChange={(event) => setCreativity(event.target.value)}
-                    className="h-12 w-full rounded-xl border border-white/10 bg-black/45 px-4 text-sm font-bold text-white outline-none transition focus:border-[#D7FF00]/50"
-                  >
-                    <option value="balanced">Equilibrado</option>
-                    <option value="realistic">Mais realista</option>
-                    <option value="creative">Mais criativo</option>
-                    <option value="cinematic">Cinemático</option>
-                  </select>
-                </label>
 
                 <div className="rounded-2xl border border-white/10 bg-white/[.025] p-4">
                   <p className="text-xs leading-6 text-white/45">
@@ -637,11 +538,7 @@ export default function NovaGenerationStudio({
                       ? "Cada imagem gerada será uma variação única. Mesmo prompt, resultados diferentes."
                       : `Vídeo de ${seconds}s usa aproximadamente ${seconds * 24} créditos.`}
                   </p>
-                  {needsImage && (
-                    <p className="mt-2 text-xs leading-6 text-[#D7FF00]/70">
-                      Este modo funciona melhor com imagem ou vídeo de referência.
-                    </p>
-                  )}
+                  {needsImage && <p className="mt-2 text-xs leading-6 text-[#D7FF00]/70">Este modo funciona melhor com referência.</p>}
                 </div>
 
                 <button
@@ -650,11 +547,7 @@ export default function NovaGenerationStudio({
                   disabled={loading || !prompt.trim()}
                   className="min-h-16 rounded-2xl bg-[#D7FF00] px-6 py-4 text-sm font-black uppercase tracking-[0.14em] text-black transition hover:scale-[1.01] hover:bg-[#e5ff2f] disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  {loading
-                    ? statusText || "Gerando..."
-                    : isImage
-                      ? `Gerar imagens ✨ ${imageCount}`
-                      : `Gerar vídeo ✨ ${seconds}s`}
+                  {loading ? statusText || "Gerando..." : isImage ? `Gerar imagens ✨ ${imageCount}` : `Gerar vídeo ✨ ${seconds}s`}
                 </button>
               </div>
             </aside>
@@ -663,107 +556,40 @@ export default function NovaGenerationStudio({
 
         {upgradeOffer && (
           <section className="mt-5 rounded-[2rem] border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-5 md:p-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#D7FF00]">Upgrade necessário</p>
-                <h3 className="mt-2 text-2xl font-black uppercase tracking-[-0.04em] text-white">
-                  {upgradeOffer?.message || "Você precisa de mais créditos para continuar."}
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-white/50">
-                  Escolha um plano para liberar mais gerações, mais qualidade e modelos premium.
-                </p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[360px]">
-                <Link
-                  href={upgradeOffer?.plans?.annual?.href || "/checkout/plan?plan=basic&billing=annual"}
-                  className="rounded-2xl bg-[#D7FF00] px-5 py-4 text-black no-underline"
-                >
-                  <p className="text-[10px] font-black uppercase tracking-[0.16em]">Melhor valor</p>
-                  <p className="mt-1 text-2xl font-black">{upgradeOffer?.plans?.annual?.price || "$5/mo"}</p>
-                </Link>
-                <Link
-                  href={upgradeOffer?.plans?.monthly?.href || "/checkout/plan?plan=basic&billing=monthly"}
-                  className="rounded-2xl border border-white/10 bg-white/[.04] px-5 py-4 text-white no-underline"
-                >
-                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Flexível</p>
-                  <p className="mt-1 text-2xl font-black">{upgradeOffer?.plans?.monthly?.price || "$7/mo"}</p>
-                </Link>
-              </div>
-            </div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#D7FF00]">Upgrade necessário</p>
+            <h3 className="mt-2 text-2xl font-black uppercase tracking-[-0.04em] text-white">
+              {upgradeOffer?.message || "Você precisa de mais créditos para continuar."}
+            </h3>
+            <Link href="/pricing" className="mt-5 inline-flex rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-black no-underline">
+              Ver planos →
+            </Link>
           </section>
         )}
 
-        {error && !upgradeOffer && (
-          <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-200">
-            {error}
-          </div>
-        )}
+        {error && !upgradeOffer && <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-200">{error}</div>}
 
         {result && (
           <section className="mt-5 rounded-[2rem] border border-white/10 bg-[#070707] p-5 md:p-6">
-            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">
-                  Resultado gerado
-                </p>
-                <h2 className="mt-2 text-3xl font-black uppercase tracking-[-0.06em] text-white">
-                  {isImage ? "Suas variações estão prontas." : "Seu vídeo está pronto."}
-                </h2>
-                <p className="mt-2 text-sm text-white/45">
-                  {result?.billing?.imageUnlimited
-                    ? "Imagem ilimitada — créditos de vídeo não utilizados."
-                    : result?.billing?.creditsCharged
-                      ? `${result.billing.creditsCharged} créditos usados.`
-                      : ""}
-                </p>
-              </div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">Resultado gerado</p>
+            <h2 className="mt-2 text-3xl font-black uppercase tracking-[-0.06em] text-white">
+              {isImage ? "Suas variações estão prontas." : "Seu vídeo está pronto."}
+            </h2>
 
-              <button
-                type="button"
-                onClick={handleGenerate}
-                disabled={loading || !prompt.trim()}
-                className="rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#D7FF00] transition hover:bg-[#D7FF00] hover:text-black disabled:opacity-45"
-              >
-                Gerar novamente →
-              </button>
-            </div>
-
-            {resultUrls.length > 0 ? (
-              <div className={isImage ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-4" : "grid gap-4"}>
-                {resultUrls.map((url, index) => (
-                  <div key={url + index} className="overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-2">
-                    {isImage ? (
-                      <img src={url} alt={`Generated ${index + 1}`} className="w-full rounded-xl object-cover" />
-                    ) : (
-                      <video src={url} controls className="w-full rounded-xl" />
-                    )}
-
-                    <div className="mt-2 flex gap-2">
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-center text-[11px] font-black uppercase tracking-[0.12em] text-white/60 no-underline hover:text-white"
-                      >
-                        Abrir
-                      </a>
-                      <a
-                        href={url}
-                        download
-                        className="flex-1 rounded-xl bg-[#D7FF00] px-3 py-2 text-center text-[11px] font-black uppercase tracking-[0.12em] text-black no-underline"
-                      >
-                        Baixar
-                      </a>
-                    </div>
+            <div className={isImage ? "mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" : "mt-5 grid gap-4"}>
+              {resultUrls.map((url, index) => (
+                <div key={url + index} className="overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-2">
+                  {isImage ? <img src={url} alt={`Generated ${index + 1}`} className="w-full rounded-xl object-cover" /> : <video src={url} controls className="w-full rounded-xl" />}
+                  <div className="mt-2 flex gap-2">
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-center text-[11px] font-black uppercase tracking-[0.12em] text-white/60 no-underline hover:text-white">
+                      Abrir
+                    </a>
+                    <a href={url} download className="flex-1 rounded-xl bg-[#D7FF00] px-3 py-2 text-center text-[11px] font-black uppercase tracking-[0.12em] text-black no-underline">
+                      Baixar
+                    </a>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <pre className="overflow-auto rounded-2xl border border-white/10 bg-black/50 p-4 text-xs text-white/45">
-                {JSON.stringify(result?.data?.raw || result, null, 2)}
-              </pre>
-            )}
+                </div>
+              ))}
+            </div>
           </section>
         )}
       </div>
