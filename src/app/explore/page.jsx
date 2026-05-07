@@ -12,18 +12,16 @@ const categories = [
   { id: "product", pt: "Product Ads", en: "Product Ads" },
   { id: "ugc", pt: "UGC Creatives", en: "UGC Creatives" },
   { id: "cinematic", pt: "Cinemático", en: "Cinematic" },
-  { id: "beauty",
-    video: BASE_VIDEO + "6.mp4",, pt: "Beauty", en: "Beauty" },
+  { id: "beauty", pt: "Beauty", en: "Beauty" },
   { id: "food", pt: "Food", en: "Food" },
   { id: "tech", pt: "Tech", en: "Tech" },
-  { id: "interior",
-    video: BASE_VIDEO + "4.mp4",, pt: "Interior", en: "Interior" },
+  { id: "interior", pt: "Interior", en: "Interior" },
 ];
 
 const cards = [
   {
     id: "luxury-watch",
-    video: BASE_VIDEO + "1.mp4",,
+    video: BASE_VIDEO + "1.mp4",
     category: "product",
     image: asset + "card-watch.png",
     time: "00:07",
@@ -37,7 +35,7 @@ const cards = [
   },
   {
     id: "gaming-chair",
-    video: BASE_VIDEO + "2.mp4",,
+    video: BASE_VIDEO + "2.mp4",
     category: "tech",
     image: asset + "card-gaming-chair.png",
     time: "00:08",
@@ -51,7 +49,7 @@ const cards = [
   },
   {
     id: "coffee",
-    video: BASE_VIDEO + "3.mp4",,
+    video: BASE_VIDEO + "3.mp4",
     category: "food",
     image: asset + "card-coffee.png",
     time: "00:06",
@@ -65,7 +63,7 @@ const cards = [
   },
   {
     id: "interior",
-    video: BASE_VIDEO + "4.mp4",,
+    video: BASE_VIDEO + "4.mp4",
     category: "interior",
     image: asset + "card-interior.png",
     time: "00:06",
@@ -79,7 +77,7 @@ const cards = [
   },
   {
     id: "citrus-drink",
-    video: BASE_VIDEO + "5.mp4",,
+    video: BASE_VIDEO + "5.mp4",
     category: "product",
     image: asset + "card-drink.png",
     time: "00:07",
@@ -93,7 +91,7 @@ const cards = [
   },
   {
     id: "beauty",
-    video: BASE_VIDEO + "6.mp4",,
+    video: BASE_VIDEO + "6.mp4",
     category: "beauty",
     image: asset + "card-beauty.png",
     time: "00:07",
@@ -107,7 +105,7 @@ const cards = [
   },
   {
     id: "dessert",
-    video: BASE_VIDEO + "7.mp4",,
+    video: BASE_VIDEO + "7.mp4",
     category: "food",
     image: asset + "card-dessert.png",
     time: "00:06",
@@ -121,7 +119,7 @@ const cards = [
   },
   {
     id: "cosmic-gallery",
-    video: BASE_VIDEO + "8.mp4",,
+    video: BASE_VIDEO + "8.mp4",
     category: "cinematic",
     image: asset + "explore-gallery.png",
     time: "00:10",
