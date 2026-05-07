@@ -112,6 +112,7 @@ export async function POST(req) {
     try {
       const falInput = {
         prompt,
+        ...(body.negative_prompt && { negative_prompt: body.negative_prompt }),
         ...(body.image_url    && { image_url:    body.image_url    }),
         ...(body.duration     && { duration:     seconds            }),
         ...(body.aspect_ratio && { aspect_ratio: body.aspect_ratio }),

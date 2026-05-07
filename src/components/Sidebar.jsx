@@ -33,7 +33,7 @@ export default function Sidebar() {
       <aside className="hidden h-full w-[260px] shrink-0 flex-col border-r border-white/10 bg-[#050505] lg:flex">
         <div className="flex h-24 items-center border-b border-white/10 px-7">
           <Link href="/dashboard" className="no-underline">
-            <img src="/nova/logo-nova.jpeg" alt="NOVA" className="h-9 w-auto object-contain" />
+            <img src="/nova/logo-nova.jpeg" alt="NOVA" className="hidden" />
           </Link>
         </div>
 
