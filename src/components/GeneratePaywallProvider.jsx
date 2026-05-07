@@ -104,6 +104,7 @@ export default function GeneratePaywallProvider({ children = null } = {}) {
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 <Link
                   href={paywall?.plans?.annual?.href || "/pricing"}
+                  onClick={() => setPaywall(null)}
                   className="rounded-2xl bg-[#D7FF00] px-5 py-4 text-black no-underline transition hover:scale-[1.02]"
                 >
                   <p className="text-[10px] font-black uppercase tracking-[0.16em]">
@@ -119,6 +120,7 @@ export default function GeneratePaywallProvider({ children = null } = {}) {
 
                 <Link
                   href={paywall?.plans?.monthly?.href || "/pricing"}
+                  onClick={() => setPaywall(null)}
                   className="rounded-2xl border border-white/10 bg-white/[.04] px-5 py-4 text-white no-underline transition hover:bg-white/[.08]"
                 >
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">
@@ -136,6 +138,7 @@ export default function GeneratePaywallProvider({ children = null } = {}) {
               <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <Link
                   href="/pricing"
+                  onClick={() => setPaywall(null)}
                   className="text-sm font-black uppercase tracking-[0.12em] text-[#D7FF00] no-underline hover:underline"
                 >
                   Ver todos os planos →
