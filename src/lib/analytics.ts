@@ -1,122 +1,134 @@
 declare global {
   interface Window {
     gtag?: (...args: unknown[]) => void
-    dataLayer?: unknown[]
   }
 }
 
+const GA_ID = "G-ES6ER30RY4"
+
 function gtag(...args: unknown[]) {
   if (typeof window === "undefined") return
-  window.dataLayer = window.dataLayer || []
-  window.dataLayer.push(args)
+  window.gtag?.(...args)
 }
 
 export function trackPageView(url: string) {
-  gtag("event", "page_view", { page_path: url })
+  gtag("event", "page_view", {
+    send_to: GA_ID,
+    page_path: url,
+    page_location: typeof window !== "undefined" ? window.location.href : url,
+    page_title: typeof document !== "undefined" ? document.title : undefined,
+  })
 }
 
-export function trackViewContent(data: {
-  content_name: string
-  content_category?: string
+export function trackViewItem(item: {
+  item_id: string
+  item_name: string
+  item_category?: string
   value?: number
-  currency?: string
 }) {
   gtag("event", "view_item", {
-    currency: data.currency ?? "USD",
-    value: data.value ?? 0,
-    items: [{ item_name: data.content_name, item_category: data.content_category ?? "AI Video" }],
+    send_to: GA_ID,
+    currency: "USD",
+    value: item.value,
+    items: [item],
   })
 }
 
-export function trackViewItemList(items: { name: string; price: number }[]) {
+export function trackViewItemList(listName: string, items: unknown[] = []) {
   gtag("event", "view_item_list", {
-    item_list_name: "Pricing Plans",
-    items: items.map((i) => ({ item_name: i.name, price: i.price })),
+    send_to: GA_ID,
+    item_list_name: listName,
+    items,
   })
 }
 
-export function trackSelectItem(data: {
+export function trackSelectItem(item: {
+  item_id: string
   item_name: string
-  price: number
-  currency?: string
+  item_category?: string
+  value?: number
 }) {
   gtag("event", "select_item", {
-    items: [{ item_name: data.item_name, price: data.price, currency: data.currency ?? "USD" }],
+    send_to: GA_ID,
+    item_list_name: item.item_category,
+    items: [item],
   })
 }
 
-export function trackAddToCart(data: {
+export function trackAddToCart(item: {
+  item_id: string
   item_name: string
-  value: number
-  currency?: string
+  item_category?: string
+  price?: number
   quantity?: number
 }) {
   gtag("event", "add_to_cart", {
-    currency: data.currency ?? "USD",
-    value: data.value,
-    items: [{ item_name: data.item_name, price: data.value, quantity: data.quantity ?? 1 }],
+    send_to: GA_ID,
+    currency: "USD",
+    value: item.price,
+    items: [{ quantity: 1, ...item }],
   })
 }
 
-export function trackBeginCheckout(data: {
-  value: number
-  currency?: string
+export function trackBeginCheckout(params: {
   plan?: string
-  coupon?: string
+  billing?: string
+  pack?: string
+  value?: number
+  currency?: string
 }) {
   gtag("event", "begin_checkout", {
-    currency: data.currency ?? "USD",
-    value: data.value,
-    coupon: data.coupon ?? "",
-    items: [{ item_name: data.plan ?? "Nova Plan", item_category: "Subscription", price: data.value, quantity: 1 }],
+    send_to: GA_ID,
+    currency: params.currency || "USD",
+    value: params.value,
+    plan: params.plan,
+    billing: params.billing,
+    pack: params.pack,
   })
 }
 
-export function trackPurchase(data: {
-  transaction_id: string
-  value: number
+export function trackPurchase(params: {
+  transaction_id?: string
+  value?: number
   currency?: string
   plan?: string
-  coupon?: string
+  billing?: string
 }) {
   gtag("event", "purchase", {
-    transaction_id: data.transaction_id,
-    currency: data.currency ?? "USD",
-    value: data.value,
-    coupon: data.coupon ?? "",
-    items: [{ item_name: data.plan ?? "Nova Plan", item_category: "Subscription", price: data.value, quantity: 1 }],
-  })
-}
-
-export function trackApiCreditPurchase(data: {
-  pack: string
-  value: number
-  credits: number
-}) {
-  gtag("event", "purchase", {
-    transaction_id: `api_credits_${Date.now()}`,
-    currency: "USD",
-    value: data.value,
-    items: [{ item_name: `API Credits - ${data.pack}`, item_category: "API Credits", price: data.value, quantity: data.credits }],
+    send_to: GA_ID,
+    transaction_id: params.transaction_id,
+    value: params.value,
+    currency: params.currency || "USD",
+    plan: params.plan,
+    billing: params.billing,
   })
 }
 
 export function trackSignUp(method = "email") {
-  gtag("event", "sign_up", { method })
+  gtag("event", "sign_up", {
+    send_to: GA_ID,
+    method,
+  })
 }
 
 export function trackLogin(method = "email") {
-  gtag("event", "login", { method })
+  gtag("event", "login", {
+    send_to: GA_ID,
+    method,
+  })
 }
 
-export function trackGenerate(data: {
-  model: string
-  mode: string
-  type?: "video" | "image"
+export function trackGenerateContent(params: {
+  model?: string
+  mode?: string
+  type?: string
+  value?: number
 }) {
   gtag("event", "generate_content", {
-    model: data.model,
-    mode: data.mode,
-    content_type: data.type ?? "video",
+    send_to: GA_ID,
+    model: params.model,
+    mode: params.mode,
+    type: params.type,
+    value: params.value,
   })
 }
