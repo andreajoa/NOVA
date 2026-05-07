@@ -202,6 +202,36 @@ function FloatingLogo() {
   );
 }
 
+
+function shouldOpenUpgrade(res, data) {
+  const msg = String(data?.error || data?.message || "").toLowerCase();
+  return (
+    res.status === 402 ||
+    res.status === 403 ||
+    data?.code === "INSUFFICIENT_CREDITS" ||
+    data?.code === "IMAGE_TRIAL_LIMIT_REACHED" ||
+    msg.includes("forbidden") ||
+    msg.includes("insufficient") ||
+    msg.includes("saldo insuficiente")
+  );
+}
+
+function normalizeUpgrade(data) {
+  return {
+    ...data,
+    code: data?.code || "INSUFFICIENT_CREDITS",
+    error: data?.error || "INSUFFICIENT_CREDITS",
+    message:
+      data?.message && !String(data.message).toLowerCase().includes("forbidden")
+        ? data.message
+        : "Saldo insuficiente para gerar. Faça upgrade para continuar.",
+    plans: data?.plans || {
+      annual: { label: "Annual", price: "$5/mo", href: "/checkout/plan?plan=basic&billing=annual" },
+      monthly: { label: "Monthly", price: "$7/mo", href: "/checkout/plan?plan=basic&billing=monthly" },
+    },
+  };
+}
+
 export default function NovaGenerationStudio({
   initialModelKey = "",
   initialModeKey = "",
@@ -338,13 +368,17 @@ export default function NovaGenerationStudio({
 
       const data = await res.json().catch(() => ({}));
 
-      if (res.status === 402 || data?.code === "INSUFFICIENT_CREDITS" || data?.code === "IMAGE_TRIAL_LIMIT_REACHED") {
-        setUpgradeOffer(data);
+      if (shouldOpenUpgrade(res, data)) {
+        setUpgradeOffer(normalizeUpgrade(data));
         return;
       }
 
       if (!res.ok || !data?.success) {
-        throw new Error(data?.message || data?.error || "Generation failed");
+        throw new Error(
+        String(data?.message || data?.error || "").toLowerCase().includes("forbidden")
+          ? "Saldo insuficiente para gerar. Faça upgrade para continuar."
+          : data?.message || data?.error || "Não foi possível gerar agora. Tente novamente."
+      );
       }
 
       setResult({ ...data, urls: collectUrls(data) });

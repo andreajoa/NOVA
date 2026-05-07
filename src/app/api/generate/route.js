@@ -38,7 +38,7 @@ function dashboardPaywallPayload({ currentCredits, creditsRequired, seconds }) {
     success: false,
     code: "INSUFFICIENT_CREDITS",
     error: "INSUFFICIENT_CREDITS",
-    message: "You need more credits to generate this video.",
+    message: "Saldo insuficiente para gerar este vídeo. Faça upgrade para continuar.",
     currentCredits,
     creditsRequired,
     creditsMissing: Math.max(0, creditsRequired - currentCredits),
@@ -56,7 +56,7 @@ function imageTrialPaywallPayload({ imageGensUsed, imageMonthlyLimit }) {
     success: false,
     code: "IMAGE_TRIAL_LIMIT_REACHED",
     error: "IMAGE_TRIAL_LIMIT_REACHED",
-    message: `You used all ${imageMonthlyLimit} free image generations. Upgrade to get unlimited images.`,
+    message: `Saldo insuficiente para gerar imagem. Você usou ${imageMonthlyLimit} gerações grátis. Faça upgrade para continuar.`,
     imageGensUsed,
     imageMonthlyLimit,
     plans: {
@@ -82,6 +82,44 @@ function apiCreditsPayload({ currentBalance, creditsRequired, seconds }) {
       growth:  { label: "Growth",  price: "$25",  credits: 375,  href: "/checkout/api-credits?pack=growth"  },
       pro:     { label: "Pro",     price: "$50",  credits: 800,  href: "/checkout/api-credits?pack=pro"     },
       scale:   { label: "Scale",   price: "$100", credits: 1750, href: "/checkout/api-credits?pack=scale"   },
+    },
+  };
+}
+
+
+function isForbiddenOrBillingError(err) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  return (
+    msg.includes("forbidden") ||
+    msg.includes("permission") ||
+    msg.includes("billing") ||
+    msg.includes("payment") ||
+    msg.includes("quota") ||
+    msg.includes("credit") ||
+    msg.includes("insufficient") ||
+    msg.includes("402") ||
+    msg.includes("403")
+  );
+}
+
+function generationUpgradePayload({ isImage, seconds }) {
+  const creditsRequired = isImage ? 1 : seconds * VIDEO_CREDITS_PER_SECOND;
+
+  return {
+    success: false,
+    code: isImage ? "IMAGE_TRIAL_LIMIT_REACHED" : "INSUFFICIENT_CREDITS",
+    error: isImage ? "IMAGE_TRIAL_LIMIT_REACHED" : "INSUFFICIENT_CREDITS",
+    message: isImage
+      ? "Saldo insuficiente para gerar imagem. Faça upgrade para continuar."
+      : "Saldo insuficiente para gerar este vídeo. Faça upgrade para continuar.",
+    currentCredits: 0,
+    creditsRequired,
+    creditsMissing: creditsRequired,
+    seconds,
+    creditsPerSecond: VIDEO_CREDITS_PER_SECOND,
+    plans: {
+      annual:  { label: "Annual",  price: "$5/mo", href: "/checkout/plan?plan=basic&billing=annual"  },
+      monthly: { label: "Monthly", price: "$7/mo", href: "/checkout/plan?plan=basic&billing=monthly" },
     },
   };
 }
@@ -133,7 +171,14 @@ export async function POST(req) {
         billing: { creditsCharged: 0, remainingCredits: 999999, wallet: "admin" },
       });
     } catch (err) {
-      return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      if (isForbiddenOrBillingError(err)) {
+        return NextResponse.json(generationUpgradePayload({ isImage, seconds }), { status: 402 });
+      }
+
+      return NextResponse.json(
+        { success: false, error: "Não foi possível gerar agora. Tente novamente." },
+        { status: 500 }
+      );
     }
   }
 
@@ -226,6 +271,14 @@ export async function POST(req) {
     });
   } catch (err) {
     console.error("FAL generation error:", err.message);
-    return NextResponse.json({ success: false, error: err.message, detail: String(err) }, { status: 500 });
+
+    if (isForbiddenOrBillingError(err)) {
+      return NextResponse.json(generationUpgradePayload({ isImage, seconds }), { status: 402 });
+    }
+
+    return NextResponse.json(
+      { success: false, error: "Não foi possível gerar agora. Tente novamente." },
+      { status: 500 }
+    );
   }
 }
