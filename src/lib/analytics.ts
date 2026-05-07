@@ -4,7 +4,7 @@ declare global {
   }
 }
 
-const GA_ID = "G-ES6ER30RY4"
+const GA_ID = "G-6HMG9N40CR"
 
 function gtag(...args: unknown[]) {
   if (typeof window === "undefined") return

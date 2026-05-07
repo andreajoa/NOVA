@@ -4,8 +4,7 @@ import Script from "next/script";
 import { Suspense, useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
-const GA_ID = "G-ES6ER30RY4";
-const GT_ID = "GT-K4LNHL2B";
+const GA_ID = "G-6HMG9N40CR";
 
 declare global {
   interface Window {
@@ -22,7 +21,6 @@ function GoogleAnalyticsPageView() {
   useEffect(() => {
     if (!pathname || typeof window === "undefined") return;
 
-    // O primeiro page_view já é enviado no script inicial.
     if (!skippedInitial.current) {
       skippedInitial.current = true;
       return;
@@ -47,7 +45,7 @@ export default function GoogleAnalytics() {
     <>
       <Script
         id="google-tag-loader"
-        src={`https://www.googletagmanager.com/gtag/js?id=${GT_ID}`}
+        src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
         strategy="afterInteractive"
       />
 
@@ -58,10 +56,6 @@ export default function GoogleAnalytics() {
           window.gtag = window.gtag || gtag;
 
           gtag('js', new Date());
-
-          gtag('config', '${GT_ID}', {
-            send_page_view: false
-          });
 
           gtag('config', '${GA_ID}', {
             send_page_view: false
