@@ -41,7 +41,7 @@ export default function Footer() {
           </div>
           <div>
             <p className="mb-4 text-xs font-black uppercase tracking-widest text-white/30">{s.product}</p>
-            {[[s.studio,"/dashboard"],[s.models,"/dashboard/models"],[s.pricing,"/pricing"]].map(([label,href])=>(
+            {[[s.studio,"/dashboard"],[s.models,"/dashboard/models"],["Claude AI","/claude"],[s.pricing,"/pricing"]].map(([label,href])=>(
               <Link key={href} href={href} className="mb-3 block text-sm text-white/35 hover:text-white transition">{label}</Link>
             ))}
           </div>

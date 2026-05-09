@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/dashboard/generate", label: "Generate"   },
   { href: "/dashboard/models",   label: "Models"     },
   { href: "/pricing",            label: "Pricing"    },
+  { href: "/claude", label: "Claude AI" },
   { href: "/dashboard/brandkit", label: "Brand Kit"  },
   { href: "/dashboard/settings", label: "Settings"   },
 ];

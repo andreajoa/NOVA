@@ -40,6 +40,7 @@ const MENU_GROUPS = [
         items: [
           { label: "Home",                href: "/",                     path: "/"                      },
           { label: "Pricing",             href: "/pricing",              path: "/pricing"               },
+          { label: "Claude AI", href: "/claude", path: "/claude" },
           { label: "Product Ad Generator",href: "/product-ad-generator", path: "/product-ad-generator"  },
           { label: "Explorar",            href: "/explore",              path: "/explore"               },
         ],

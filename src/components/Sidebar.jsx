@@ -6,6 +6,7 @@ import CreditBalanceCard from "@/components/CreditBalanceCard";
 
 const items = [
   { href: "/dashboard",                   label: "Dashboard",    icon: "▦" },
+  { href: "/claude",                      label: "Claude AI",    icon: "◇" },
   { href: "/dashboard/models",            label: "Imagem",       icon: "⬛" },
   { href: "/dashboard/generate",          label: "Vídeo",        icon: "▶" },
   { href: "/dashboard/templates",         label: "UGC",          icon: "✦" },
@@ -18,6 +19,7 @@ const items = [
 
 const mobileItems = [
   { href: "/dashboard",          label: "Home",   icon: "▦" },
+  { href: "/claude",             label: "Claude", icon: "◇" },
   { href: "/dashboard/models",   label: "Imagem", icon: "⬛" },
   { href: "/dashboard/generate", label: "Vídeo",  icon: "▶" },
   { href: "/dashboard/templates",label: "UGC",    icon: "✦" },

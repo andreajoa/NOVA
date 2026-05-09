@@ -14,6 +14,7 @@ export default function Nav({ lang="en", setLang=()=>{} }) {
     {href:"/dashboard",label:t.dashboard},{href:"/generate",label:t.generate},
     {href:"/explore",label:t.explore},{href:"/originals",label:t.originals},
     {href:"/brandkit",label:t.brandkit},{href:"/pricing",label:t.pricing},
+    {href:"/claude",label:"Claude AI"},
     {href:"/settings",label:t.settings},{href:"/contact",label:t.contact},
   ];
   return (
