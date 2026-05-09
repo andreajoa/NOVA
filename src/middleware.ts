@@ -15,6 +15,8 @@ const isPublicRoute = createRouteMatcher([
   '/generate(.*)',
   '/product-ad-generator(.*)',
   '/brandkit(.*)',
+  '/claude(.*)',
+  '/api/claude(.*)',
   '/sitemap.xml',
   '/robots.txt',
   '/googlef88c1df448f5c76f.html',
