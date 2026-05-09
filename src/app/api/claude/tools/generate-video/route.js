@@ -17,6 +17,38 @@ function normalizeSeconds(value) {
   return Math.max(1, Math.min(30, Math.ceil(n)));
 }
 
+export async function GET() {
+  return NextResponse.json({
+    success: true,
+    tool: "nova_generate_video",
+    method: "POST",
+    endpoint: "/api/claude/tools/generate-video",
+    description: "Generate short AI videos using NOVA from Claude AI or any external client.",
+    requires: {
+      authorization: "Bearer YOUR_NOVA_API_KEY",
+      billing: "NOVA API credits required. Minimum purchase: $10.",
+      checkoutUrl: "/checkout/api-credits?pack=starter"
+    },
+    pricing: {
+      creditsPerSecond: VIDEO_CREDITS_PER_SECOND
+    },
+    example: {
+      headers: {
+        Authorization: "Bearer YOUR_NOVA_API_KEY",
+        "Content-Type": "application/json"
+      },
+      body: {
+        prompt: "Cinematic product reveal, black background, neon green glow, premium commercial movement",
+        model: "seedance",
+        mode: "text-to-video",
+        seconds: 5,
+        aspect_ratio: "16:9",
+        resolution: "1080p"
+      }
+    }
+  });
+}
+
 export async function POST(req) {
   const body = await req.json().catch(() => ({}));
 

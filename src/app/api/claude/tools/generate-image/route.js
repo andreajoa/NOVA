@@ -10,6 +10,34 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
+export async function GET() {
+  return NextResponse.json({
+    success: true,
+    tool: "nova_generate_image",
+    method: "POST",
+    endpoint: "/api/claude/tools/generate-image",
+    description: "Generate AI images using NOVA from Claude AI or any external client.",
+    requires: {
+      authorization: "Bearer YOUR_NOVA_API_KEY",
+      billing: "NOVA API credits required. Minimum purchase: $10.",
+      checkoutUrl: "/checkout/api-credits?pack=starter"
+    },
+    example: {
+      headers: {
+        Authorization: "Bearer YOUR_NOVA_API_KEY",
+        "Content-Type": "application/json"
+      },
+      body: {
+        prompt: "Premium neon green product ad on black background, cinematic lighting",
+        model: "flux-schnell",
+        mode: "text-to-image",
+        aspect_ratio: "1:1",
+        num_images: 1
+      }
+    }
+  });
+}
+
 export async function POST(req) {
   const body = await req.json().catch(() => ({}));
 
