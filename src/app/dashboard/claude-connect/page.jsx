@@ -7,35 +7,45 @@ const MCP_BASE_URL = "https://www.novvideos.online/api/claude/mcp";
 function extractApiKey(data) {
   if (!data) return "";
 
-  const direct =
-    data.apiKey ||
-    data.key ||
-    data.secret ||
-    data.token ||
-    data.value ||
-    data.plainTextKey ||
-    data.plaintextKey ||
-    data.rawKey ||
-    data.novaApiKey ||
-    "";
+  // IMPORTANT:
+  // /api/api-keys returns { key: publicMetadataObject, secret: "nv_live_sk_..." }.
+  // So secret must be checked BEFORE key, because key is an object.
+  const candidates = [
+    data.secret,
+    data.plainTextKey,
+    data.plaintextKey,
+    data.rawKey,
+    data.novaApiKey,
+    data.apiKey,
+    data.token,
+    data.value,
 
-  if (direct && typeof direct === "string") return direct;
+    data.data?.secret,
+    data.data?.plainTextKey,
+    data.data?.plaintextKey,
+    data.data?.rawKey,
+    data.data?.novaApiKey,
+    data.data?.apiKey,
+    data.data?.token,
+    data.data?.value,
 
-  const nested =
-    data.apiKey?.key ||
-    data.apiKey?.value ||
-    data.key?.key ||
-    data.key?.value ||
-    data.data?.apiKey ||
-    data.data?.key ||
-    data.data?.secret ||
-    data.data?.token ||
-    data.data?.value ||
-    data.data?.plainTextKey ||
-    data.data?.plaintextKey ||
-    "";
+    data.key?.secret,
+    data.key?.plainTextKey,
+    data.key?.plaintextKey,
+    data.key?.rawKey,
+    data.key?.apiKey,
+    data.key?.value,
 
-  if (nested && typeof nested === "string") return nested;
+    data.apiKey?.secret,
+    data.apiKey?.key,
+    data.apiKey?.value,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.startsWith("nv_live_sk_")) {
+      return candidate;
+    }
+  }
 
   const list =
     data.keys ||
@@ -47,20 +57,21 @@ function extractApiKey(data) {
     [];
 
   if (Array.isArray(list)) {
-    const firstUsable = list.find((item) =>
-      item?.apiKey || item?.key || item?.secret || item?.token || item?.value || item?.plainTextKey
-    );
+    for (const item of list) {
+      const value =
+        item?.secret ||
+        item?.plainTextKey ||
+        item?.plaintextKey ||
+        item?.rawKey ||
+        item?.apiKey ||
+        item?.key ||
+        item?.token ||
+        item?.value ||
+        "";
 
-    if (firstUsable) {
-      return (
-        firstUsable.apiKey ||
-        firstUsable.key ||
-        firstUsable.secret ||
-        firstUsable.token ||
-        firstUsable.value ||
-        firstUsable.plainTextKey ||
-        ""
-      );
+      if (typeof value === "string" && value.startsWith("nv_live_sk_")) {
+        return value;
+      }
     }
   }
 
@@ -139,7 +150,7 @@ export default function ClaudeConnectPage() {
         return;
       }
 
-      setStatus("API Key was created, but the secret was not returned. Open API Keys and create a new key, then copy it immediately.");
+      setStatus(`API Key response received, but secret was not found. Response fields: ${Object.keys(created || {}).join(", ")}`);
     } catch (err) {
       if (err?.name === "AbortError") {
         setStatus("Request timed out after 20 seconds. Click Reset and try again, or open API Keys page.");

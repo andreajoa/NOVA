@@ -24,7 +24,7 @@ export async function GET() {
     adminBypass,
     apiCreditBalance: wallet.balance,
     canCreateApiKey: true,
-    note: "API keys can be created without API credits. API credits are required only when generating from external tools like Claude AI.",
+    note: "API key creation does not require API credits. API credits are required only for external generation, except owner/admin bypass.",
   })
 }
 
@@ -52,6 +52,7 @@ export async function POST(request: Request) {
   const result = await createUserApiKey(userId, name)
 
   return NextResponse.json({
+    success: true,
     ...result,
     adminBypass: isAdmin,
     apiCreditBalance: wallet.balance,
