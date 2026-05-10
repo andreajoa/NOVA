@@ -50,6 +50,21 @@ export async function GET() {
         description:
           "Create a NOVA-ready campaign plan with prompts, scripts, content ideas and recommended generation routes.",
       },
+
+      {
+        name: "nova_create_landing_page_design",
+        method: "POST",
+        url: `${baseUrl}/api/claude/tools/create-landing-page`,
+        description:
+          "Create landing page designs for Shopify, Hydrogen/Oxygen, Next.js, React and HTML.",
+      },
+      {
+        name: "nova_export_landing_page_zip",
+        method: "POST",
+        url: `${baseUrl}/api/claude/tools/export-landing-page`,
+        description:
+          "Export a landing page ZIP for Shopify Theme, Hydrogen/Oxygen, Next.js, React or HTML.",
+      },
     ],
     important:
       "Claude AI must support external tools/connectors/MCP in the user's plan/environment. NOVA execution requires a paid NOVA API credit balance.",

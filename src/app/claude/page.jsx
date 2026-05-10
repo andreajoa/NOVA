@@ -13,6 +13,8 @@ Available tools:
 - nova_generate_image
 - nova_generate_video
 - nova_create_campaign
+- nova_create_landing_page_design
+- nova_export_landing_page_zip
 
 Authentication for generation:
 Authorization: Bearer YOUR_NOVA_API_KEY
@@ -31,7 +33,7 @@ Rules:
 - Use my NOVA API key only for NOVA generation.
 - If NOVA returns NOVA_API_CREDITS_REQUIRED, tell me I need to buy API credits with the minimum $10 starter pack.
 - Connect to this Remote MCP URL: https://www.novvideos.online/api/claude/mcp
-- Available NOVA tools: nova_generate_image, nova_generate_video, nova_create_campaign
+- Available NOVA tools: nova_generate_image, nova_generate_video, nova_create_campaign, nova_create_landing_page_design, nova_export_landing_page_zip
 - To generate, NOVA requires my NOVA API Key and paid API credits.
 - If NOVA returns NOVA_API_KEY_REQUIRED or NOVA_API_CREDITS_REQUIRED, tell me to buy NOVA API credits with the minimum $10 starter pack.`;
 

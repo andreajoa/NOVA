@@ -125,7 +125,46 @@ const tools = [
       },
       required: ["product"],
     },
+  },,
+
+  {
+    name: "nova_create_landing_page_design",
+    title: "NOVA Create Landing Page Design",
+    description:
+      "Create a professional landing page layout, copy, sections, visual direction and export plan for Shopify, Hydrogen/Oxygen, Next.js, React or HTML. Requires NOVA API Key and API credits.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        product: { type: "string", description: "Product, offer or store to build the landing page for." },
+        platform: { type: "string", description: "Target platform: html, react, nextjs, hydrogen, shopify-theme.", default: "html" },
+        brandName: { type: "string", description: "Brand or store name.", default: "NOVA Brand" },
+        audience: { type: "string", description: "Target audience." },
+        goal: { type: "string", description: "Page goal.", default: "Generate desire and sales" },
+        style: { type: "string", description: "Visual style.", default: "black and neon green premium ecommerce" },
+        language: { type: "string", description: "Language, for example en or pt-BR.", default: "en" },
+        cta: { type: "string", description: "Primary CTA.", default: "Shop Now" }
+      },
+      required: ["product"]
+    }
   },
+  {
+    name: "nova_export_landing_page_zip",
+    title: "NOVA Export Landing Page ZIP",
+    description:
+      "Export a landing page as a downloadable ZIP for Shopify Theme, Hydrogen/Oxygen, Next.js, React or HTML. Requires NOVA API Key and API credits.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        platform: { type: "string", description: "Export target: html, react, nextjs, hydrogen, shopify-theme.", default: "html" },
+        product: { type: "string", description: "Product or offer." },
+        brandName: { type: "string", description: "Brand/store name." },
+        audience: { type: "string", description: "Target audience." },
+        style: { type: "string", description: "Visual direction." },
+        language: { type: "string", description: "Language.", default: "en" },
+        design: { type: "object", description: "Optional design object returned by nova_create_landing_page_design." }
+      }
+    }
+  }
 ];
 
 function json(data, status = 200, extraHeaders = {}) {
@@ -175,6 +214,8 @@ async function callNovaRestTool(req, toolName, args = {}) {
     nova_generate_image: "/api/claude/tools/generate-image",
     nova_generate_video: "/api/claude/tools/generate-video",
     nova_create_campaign: "/api/claude/tools/create-campaign",
+    nova_create_landing_page_design: "/api/claude/tools/create-landing-page",
+    nova_export_landing_page_zip: "/api/claude/tools/export-landing-page",
   };
 
   const path = endpointByTool[toolName];
