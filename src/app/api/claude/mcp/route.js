@@ -128,6 +128,29 @@ const endpointByTool = {
   nova_generate_complete_landing_page: "/api/claude/tools/generate-complete-landing-page",
 };
 
+
+function getNovaMcpApiKey(req) {
+  const authorization = getNovaMcpAuthorization(req);
+
+  if (authorization.toLowerCase().startsWith("bearer ")) {
+    return authorization.slice(7).trim();
+  }
+
+  if (authorization) return authorization.trim();
+
+  try {
+    const url = new URL(req.url);
+    return (
+      url.searchParams.get("apiKey") ||
+      url.searchParams.get("novaApiKey") ||
+      url.searchParams.get("key") ||
+      ""
+    ).trim();
+  } catch {
+    return "";
+  }
+}
+
 function getNovaMcpAuthorization(req) {
   const fromHeader =
     req?.headers?.get?.("authorization") ||
@@ -219,6 +242,8 @@ async function callTool(req, id, params) {
       headers: {
         "Content-Type": "application/json",
         ...(authorization ? { Authorization: authorization } : {}),
+        ...(getNovaMcpApiKey(req) ? { "x-nova-api-key": getNovaMcpApiKey(req) } : {}),
+        ...(getNovaMcpApiKey(req) ? { "x-api-key": getNovaMcpApiKey(req) } : {}),
       },
       body: JSON.stringify(args),
       cache: "no-store",

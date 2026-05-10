@@ -5,26 +5,44 @@ import { debitApiCredits } from "@/lib/db";
 import { falModels } from "@/lib/falModels";
 
 
-function getNovaApiAuthHeader(req) {
-  const fromHeader =
+
+
+
+function getNovaApiKeyFromRequest(req) {
+  const authorization =
     req?.headers?.get?.("authorization") ||
     req?.headers?.get?.("Authorization") ||
     "";
 
-  if (fromHeader) return fromHeader;
+  if (authorization.toLowerCase().startsWith("bearer ")) {
+    return authorization.slice(7).trim();
+  }
+
+  const headerKey =
+    req?.headers?.get?.("x-nova-api-key") ||
+    req?.headers?.get?.("x-api-key") ||
+    req?.headers?.get?.("X-NOVA-API-KEY") ||
+    req?.headers?.get?.("X-API-KEY") ||
+    "";
+
+  if (headerKey) return headerKey.trim();
 
   try {
     const url = new URL(req.url);
-    const apiKey =
+    return (
       url.searchParams.get("apiKey") ||
       url.searchParams.get("novaApiKey") ||
       url.searchParams.get("key") ||
-      "";
-
-    return apiKey ? `Bearer ${apiKey}` : "";
+      ""
+    ).trim();
   } catch {
     return "";
   }
+}
+
+function getNovaApiAuthHeader(req) {
+  const key = getNovaApiKeyFromRequest(req);
+  return key ? `Bearer ${key}` : "";
 }
 
 export const NOVA_API_CREDIT_MINIMUM_URL = "/checkout/api-credits?pack=starter";
