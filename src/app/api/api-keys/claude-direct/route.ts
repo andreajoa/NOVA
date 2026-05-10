@@ -6,7 +6,7 @@ import { isNovaAdminFromAuth } from "@/lib/novaAdminAccess"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-function escapeHtml(value: unknown) {
+function esc(value: unknown) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -15,30 +15,27 @@ function escapeHtml(value: unknown) {
     .replaceAll("'", "&#039;")
 }
 
-function html(body: string, status = 200) {
+function page(body: string, status = 200) {
   return new NextResponse(`<!doctype html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>NOVA Claude API Key</title>
-  <style>
-    body{margin:0;background:#000;color:#fff;font-family:Inter,Arial,sans-serif;padding:32px}
-    main{max-width:980px;margin:0 auto}
-    .card{border:1px solid rgba(217,255,0,.22);background:rgba(255,255,255,.035);border-radius:28px;padding:28px;margin:18px 0}
-    h1{font-size:42px;line-height:.95;letter-spacing:-.06em;text-transform:uppercase;margin:0 0 18px}
-    p{color:rgba(255,255,255,.68);line-height:1.7}
-    button,a{display:inline-flex;border:0;border-radius:18px;padding:16px 20px;background:#d9ff00;color:#000;font-weight:900;text-transform:uppercase;letter-spacing:.08em;text-decoration:none;cursor:pointer}
-    input,textarea{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.12);border-radius:18px;background:rgba(0,0,0,.55);color:#d9ff00;padding:16px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px}
-    textarea{min-height:110px}
-    .muted{font-size:13px;color:rgba(255,255,255,.48)}
-    .row{display:flex;gap:12px;flex-wrap:wrap}
-    code{color:#d9ff00;word-break:break-all}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>NOVA Claude API Key</title>
+<style>
+  body{margin:0;background:#000;color:#fff;font-family:Arial,sans-serif;padding:28px}
+  main{max-width:980px;margin:0 auto}
+  .card{border:1px solid rgba(217,255,0,.25);background:rgba(255,255,255,.04);border-radius:28px;padding:28px;margin:18px 0}
+  h1{font-size:40px;line-height:.95;letter-spacing:-.05em;text-transform:uppercase;margin:0 0 18px}
+  p{color:rgba(255,255,255,.68);line-height:1.7}
+  a,button{display:inline-flex;border:0;border-radius:18px;padding:16px 20px;background:#d9ff00;color:#000;font-weight:900;text-transform:uppercase;letter-spacing:.08em;text-decoration:none;cursor:pointer;margin:6px 8px 6px 0}
+  textarea{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.12);border-radius:18px;background:rgba(0,0,0,.65);color:#d9ff00;padding:16px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;min-height:110px}
+  code{color:#d9ff00;word-break:break-all}
+  .muted{font-size:13px;color:rgba(255,255,255,.48)}
+  pre{white-space:pre-wrap;background:#111;border-radius:18px;padding:16px;color:#ffb4b4;overflow:auto}
+</style>
 </head>
-<body>
-<main>${body}</main>
-</body>
+<body><main>${body}</main></body>
 </html>`, {
     status,
     headers: {
@@ -48,15 +45,17 @@ function html(body: string, status = 200) {
   })
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const authState = await auth()
   const { userId, sessionClaims } = authState
+  const url = new URL(request.url)
+  const shouldCreate = url.searchParams.get("create") === "1"
 
   if (!userId) {
-    return html(`
+    return page(`
       <div class="card">
         <h1>Login required</h1>
-        <p>You need to be logged into NOVA to create a Claude API Key.</p>
+        <p>Faça login na NOVA antes de gerar a API Key.</p>
         <a href="/sign-in">Sign in</a>
       </div>
     `, 401)
@@ -64,74 +63,67 @@ export async function GET() {
 
   const adminBypass = await isNovaAdminFromAuth(userId, sessionClaims)
 
-  return html(`
-    <div class="card">
-      <p class="muted">NOVA Claude Connect</p>
-      <h1>Create your Claude API Key directly</h1>
-      <p>This page bypasses the React button and creates the API Key directly using your current NOVA login session.</p>
-      <p>Admin bypass: <code>${adminBypass ? "true" : "false"}</code></p>
-
-      <form method="POST" action="/api/api-keys/claude-direct">
-        <input name="name" value="Claude AI Connector ${new Date().toISOString()}" />
-        <br /><br />
-        <button type="submit">Create Claude API Key</button>
-      </form>
-
-      <p class="muted">The full secret key is shown only once, immediately after creation.</p>
-    </div>
-  `)
-}
-
-export async function POST(request: Request) {
-  const authState = await auth()
-  const { userId, sessionClaims } = authState
-
-  if (!userId) {
-    return html(`
+  if (!shouldCreate) {
+    return page(`
       <div class="card">
-        <h1>Unauthorized</h1>
-        <p>Your NOVA login session was not found.</p>
-        <a href="/sign-in">Sign in again</a>
+        <p class="muted">NOVA Claude Connect</p>
+        <h1>Gerador direto de API Key</h1>
+        <p>Essa página não usa o botão React. Ela gera a API Key diretamente no servidor usando sua sessão logada da NOVA.</p>
+        <p>Admin bypass detectado: <code>${adminBypass ? "true" : "false"}</code></p>
+        <a href="/api/api-keys/claude-direct?create=1">Create Claude API Key Now</a>
+        <a href="/dashboard/claude-connect">Back to Claude Connect</a>
       </div>
-    `, 401)
+    `)
   }
 
   try {
-    const form = await request.formData().catch(() => null)
-    const name = String(form?.get("name") || `Claude AI Connector ${new Date().toISOString()}`).slice(0, 80)
+    const result = await createUserApiKey(
+      userId,
+      `Claude AI Connector ${new Date().toISOString()}`
+    )
 
-    const adminBypass = await isNovaAdminFromAuth(userId, sessionClaims)
-    const result = await createUserApiKey(userId, name)
     const secret = result.secret
-    const connectorUrl = `https://www.novvideos.online/api/claude/mcp?apiKey=${encodeURIComponent(secret)}`
 
-    return html(`
+    if (!secret || !secret.startsWith("nv_live_sk_")) {
+      return page(`
+        <div class="card">
+          <h1>API Key created but secret missing</h1>
+          <p>O banco criou a chave, mas o segredo completo não voltou.</p>
+          <pre>${esc(JSON.stringify(result, null, 2))}</pre>
+          <a href="/api/api-keys/claude-direct">Try again</a>
+        </div>
+      `, 500)
+    }
+
+    const connectorUrl =
+      "https://www.novvideos.online/api/claude/mcp?apiKey=" +
+      encodeURIComponent(secret)
+
+    return page(`
       <div class="card">
         <p class="muted">NOVA Claude Connect</p>
-        <h1>API Key created</h1>
-        <p>Admin bypass: <code>${adminBypass ? "true" : "false"}</code></p>
-        <p>Copy this now. NOVA will not show the full secret again after this page.</p>
+        <h1>API Key criada</h1>
+        <p>Admin bypass detectado: <code>${adminBypass ? "true" : "false"}</code></p>
+        <p>Copie agora. A NOVA só mostra a chave completa no momento da criação.</p>
 
         <h3>Full NOVA API Key</h3>
-        <textarea readonly onclick="this.select()">${escapeHtml(secret)}</textarea>
+        <textarea readonly onclick="this.select()">${esc(secret)}</textarea>
 
         <h3>Claude Connector URL</h3>
-        <textarea readonly onclick="this.select()">${escapeHtml(connectorUrl)}</textarea>
+        <textarea readonly onclick="this.select()">${esc(connectorUrl)}</textarea>
 
-        <div class="row">
-          <a href="/dashboard/claude-connect">Back to Claude Connect</a>
-          <a href="/dashboard/settings/api-keys">API Keys Settings</a>
-        </div>
+        <p class="muted">No Claude: Name = NOVA, URL = a URL acima, OAuth Client ID/Secret vazios.</p>
 
-        <p class="muted">In Claude: Name = NOVA, URL = the connector URL above, OAuth fields empty.</p>
+        <a href="/dashboard/settings/api-keys">API Keys Settings</a>
+        <a href="/api/api-keys/claude-direct">Create another</a>
       </div>
     `)
   } catch (err: any) {
-    return html(`
+    return page(`
       <div class="card">
         <h1>API Key creation failed</h1>
-        <p>Error:</p>
-        <pre>${escapeHtml(err?.message || String(err))}</pre>
+        <p>Erro real do servidor:</p>
+        <pre>${esc(err?.message || String(err))}</pre>
         <a href="/api/api-keys/claude-direct">Try again</a>
       </div>
     `, 500)
