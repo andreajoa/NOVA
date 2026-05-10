@@ -7,11 +7,9 @@ const MCP_BASE_URL = "https://www.novvideos.online/api/claude/mcp";
 function extractApiKey(data) {
   if (!data) return "";
 
-  // IMPORTANT:
-  // /api/api-keys returns { key: publicMetadataObject, secret: "nv_live_sk_..." }.
-  // So secret must be checked BEFORE key, because key is an object.
   const candidates = [
     data.secret,
+    data.data?.secret,
     data.plainTextKey,
     data.plaintextKey,
     data.rawKey,
@@ -19,59 +17,17 @@ function extractApiKey(data) {
     data.apiKey,
     data.token,
     data.value,
-
-    data.data?.secret,
-    data.data?.plainTextKey,
-    data.data?.plaintextKey,
-    data.data?.rawKey,
-    data.data?.novaApiKey,
-    data.data?.apiKey,
-    data.data?.token,
-    data.data?.value,
-
     data.key?.secret,
     data.key?.plainTextKey,
     data.key?.plaintextKey,
     data.key?.rawKey,
     data.key?.apiKey,
     data.key?.value,
-
-    data.apiKey?.secret,
-    data.apiKey?.key,
-    data.apiKey?.value,
   ];
 
   for (const candidate of candidates) {
     if (typeof candidate === "string" && candidate.startsWith("nv_live_sk_")) {
       return candidate;
-    }
-  }
-
-  const list =
-    data.keys ||
-    data.apiKeys ||
-    data.items ||
-    data.data?.keys ||
-    data.data?.apiKeys ||
-    data.data?.items ||
-    [];
-
-  if (Array.isArray(list)) {
-    for (const item of list) {
-      const value =
-        item?.secret ||
-        item?.plainTextKey ||
-        item?.plaintextKey ||
-        item?.rawKey ||
-        item?.apiKey ||
-        item?.key ||
-        item?.token ||
-        item?.value ||
-        "";
-
-      if (typeof value === "string" && value.startsWith("nv_live_sk_")) {
-        return value;
-      }
     }
   }
 
@@ -83,6 +39,7 @@ export default function ClaudeConnectPage() {
   const [status, setStatus] = useState("Ready");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState("");
+  const [debugResponse, setDebugResponse] = useState("");
 
   const connectorUrl = useMemo(() => {
     const clean = String(apiKey || "").trim();
@@ -106,65 +63,69 @@ export default function ClaudeConnectPage() {
   }
 
   async function createKey() {
-    if (loading) {
-      setStatus("Still working. If this stays here for more than 20 seconds, click Reset and try again.");
-      return;
-    }
-
     setLoading(true);
-    setStatus("Creating your Full NOVA API Key...");
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    setStatus("Creating your NOVA API Key...");
+    setDebugResponse("");
 
     try {
-      const createRes = await fetch("/api/api-keys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Claude AI Connector" }),
-        signal: controller.signal,
+      const getRes = await fetch("/api/api-keys", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
       });
 
-      const createdText = await createRes.text();
-      let created = {};
+      const getText = await getRes.text();
 
+      const postRes = await fetch("/api/api-keys", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Claude AI Connector " + new Date().toISOString(),
+        }),
+      });
+
+      const postText = await postRes.text();
+
+      setDebugResponse(
+        `GET STATUS: ${getRes.status}\nGET BODY: ${getText}\n\nPOST STATUS: ${postRes.status}\nPOST BODY: ${postText}`
+      );
+
+      let data = {};
       try {
-        created = createdText ? JSON.parse(createdText) : {};
-      } catch {
-        created = { raw: createdText };
-      }
+        data = JSON.parse(postText);
+      } catch {}
 
-      if (!createRes.ok) {
+      if (!postRes.ok) {
         setStatus(
-          `API Key creation failed (${createRes.status}). ` +
-          `${created?.message || created?.error || created?.code || createdText || "Unknown error"}`
+          `API Key creation failed (${postRes.status}). ` +
+          `${data?.message || data?.error || data?.code || postText || "Unknown error"}`
         );
         return;
       }
 
-      const createdKey = extractApiKey(created);
+      const secret = extractApiKey(data);
 
-      if (createdKey) {
-        saveManualKey(createdKey);
-        setStatus("API Key created. The full key is shown below. Copy it now — for security, NOVA will only show the full key at creation time.");
+      if (secret && secret.startsWith("nv_live_sk_")) {
+        saveManualKey(secret);
+        setStatus("API Key created. The full key and Claude connector URL are shown below. Copy them now.");
         return;
       }
 
-      setStatus(`API Key response received, but secret was not found. Response fields: ${Object.keys(created || {}).join(", ")}`);
+      setStatus(
+        `API Key response received, but the full secret was not found. Response fields: ${Object.keys(data || {}).join(", ")}`
+      );
     } catch (err) {
-      if (err?.name === "AbortError") {
-        setStatus("Request timed out after 20 seconds. Click Reset and try again, or open API Keys page.");
-      } else {
-        setStatus(err?.message || "Could not create API Key automatically. Paste your key manually.");
-      }
+      setStatus(err?.message || "Could not create API Key automatically.");
     } finally {
-      clearTimeout(timeout);
       setLoading(false);
     }
   }
 
   function resetCreateState() {
     setLoading(false);
+    setDebugResponse("");
     setStatus("Ready. You can try creating the API Key again.");
   }
 
@@ -247,6 +208,13 @@ export default function ClaudeConnectPage() {
             <p className="mt-4 rounded-2xl border border-white/10 bg-black/40 p-4 text-sm text-white/60">
               {status}
             </p>
+
+            {debugResponse ? (
+              <details className="mt-4 rounded-2xl border border-white/10 bg-black/50 p-4 text-xs text-white/50">
+                <summary className="cursor-pointer font-bold text-lime-300">API response debug</summary>
+                <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words">{debugResponse}</pre>
+              </details>
+            ) : null}
 
             <label className="mt-5 block">
               <span className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-white/45">
