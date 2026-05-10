@@ -277,7 +277,6 @@ async function callNovaRestTool(req, toolName, args = {}) {
     method: "POST",
     headers: {
           "Content-Type": "application/json",
-          ...(getNovaMcpAuthorization(req) ? { Authorization: getNovaMcpAuthorization(req) } : {}),
       ...(authHeader(req) ? { Authorization: authHeader(req) } : {}),
     },
     body: JSON.stringify(args || {}),
