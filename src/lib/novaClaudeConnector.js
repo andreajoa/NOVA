@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { validateApiKeyFromRequest } from "@/lib/apiKeys";
 import { debitApiCredits } from "@/lib/db";
+import { isNovaAdminUser, novaAdminBypassResult } from "@/lib/novaAdminAccess";
 import { falModels } from "@/lib/falModels";
 
 
@@ -127,6 +128,15 @@ export async function requireNovaApiCredits(req, amount) {
         { status: 401 }
       ),
     };
+  }
+
+  if (await isNovaAdminUser(identity.userId)) {
+    return novaAdminBypassResult({
+      identity: {
+        ...identity,
+        novaAdminBypass: true,
+      },
+    });
   }
 
   const debit = await debitApiCredits({

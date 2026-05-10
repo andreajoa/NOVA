@@ -1,3 +1,4 @@
+import { isNovaAdminUser, novaAdminBypassResult } from "@/lib/novaAdminAccess"
 type D1Response = {
   success?: boolean
   errors?: unknown[]
@@ -368,6 +369,10 @@ export async function debitApiCredits(data: {
   apiKeyId?: string
   reason?: string
 }) {
+  if (await isNovaAdminUser(data.userId)) {
+    return novaAdminBypassResult({ userId: data.userId })
+  }
+
   const wallet = await ensureApiCreditWallet(data.userId)
 
   if (wallet.balance < data.amount) {
