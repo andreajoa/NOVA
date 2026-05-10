@@ -4,6 +4,29 @@ import { validateApiKeyFromRequest } from "@/lib/apiKeys";
 import { debitApiCredits } from "@/lib/db";
 import { falModels } from "@/lib/falModels";
 
+
+function getNovaApiAuthHeader(req) {
+  const fromHeader =
+    req?.headers?.get?.("authorization") ||
+    req?.headers?.get?.("Authorization") ||
+    "";
+
+  if (fromHeader) return fromHeader;
+
+  try {
+    const url = new URL(req.url);
+    const apiKey =
+      url.searchParams.get("apiKey") ||
+      url.searchParams.get("novaApiKey") ||
+      url.searchParams.get("key") ||
+      "";
+
+    return apiKey ? `Bearer ${apiKey}` : "";
+  } catch {
+    return "";
+  }
+}
+
 export const NOVA_API_CREDIT_MINIMUM_URL = "/checkout/api-credits?pack=starter";
 export const NOVA_API_CREDIT_MINIMUM_PRICE = "$10";
 export const VIDEO_CREDITS_PER_SECOND = 24;

@@ -224,7 +224,7 @@ function getOrigin(req) {
 }
 
 function authHeader(req) {
-  return req.headers.get("authorization") || "";
+  return getNovaMcpAuthorization(req) || "";
 }
 
 async function callNovaRestTool(req, toolName, args = {}) {
@@ -399,7 +399,7 @@ export async function GET(req) {
       "Remote MCP endpoint for connecting Claude AI to NOVA. It exposes NOVA image, video and campaign tools.",
     connection: {
       claudeConnectorUrl: `${getOrigin(req)}/api/claude/mcp`,
-      authorization: "Optional to connect; required to generate. Use: Authorization: Bearer YOUR_NOVA_API_KEY",
+      authorization: "Optional to connect; required to generate. Use Authorization: Bearer YOUR_NOVA_API_KEY, or connect Claude with /api/claude/mcp?apiKey=YOUR_NOVA_API_KEY",
       billing:
         "Generation requires NOVA API credits. Minimum API credit purchase: $10.",
       checkoutUrl: `${getOrigin(req)}/checkout/api-credits?pack=starter`,

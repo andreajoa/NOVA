@@ -90,6 +90,67 @@ export default function ClaudeConnectorPage() {
           </div>
         </div>
 
+
+        <section className="mt-8 rounded-[2rem] border border-lime-300/20 bg-white/[0.035] p-6 md:p-8">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-lime-300">
+            How to connect NOVA to Claude AI
+          </p>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-3xl border border-white/10 bg-black/40 p-5">
+              <h2 className="text-xl font-black tracking-[-0.04em]">
+                Connect only
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-white/60">
+                Use this URL if you only want Claude to connect and list NOVA tools. Generation will still ask for API credits.
+              </p>
+              <div className="mt-4 space-y-3 rounded-2xl bg-black/60 p-4 text-sm">
+                <p><b className="text-lime-300">Name:</b> NOVA</p>
+                <p className="break-all"><b className="text-lime-300">URL:</b> https://www.novvideos.online/api/claude/mcp</p>
+                <p><b className="text-lime-300">OAuth Client ID:</b> leave empty</p>
+                <p><b className="text-lime-300">OAuth Client Secret:</b> leave empty</p>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-lime-300/20 bg-lime-300/10 p-5">
+              <h2 className="text-xl font-black tracking-[-0.04em]">
+                Connect and generate
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-white/70">
+                Claude currently does not show a separate field for NOVA API Key. To generate from Claude, add your NOVA API Key to the connector URL.
+              </p>
+              <div className="mt-4 space-y-3 rounded-2xl bg-black/60 p-4 text-sm">
+                <p><b className="text-lime-300">Name:</b> NOVA</p>
+                <p className="break-all"><b className="text-lime-300">URL:</b> https://www.novvideos.online/api/claude/mcp?apiKey=SUA_NOVA_API_KEY</p>
+                <p><b className="text-lime-300">OAuth Client ID:</b> leave empty</p>
+                <p><b className="text-lime-300">OAuth Client Secret:</b> leave empty</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-3xl border border-white/10 bg-black/40 p-5">
+            <h3 className="text-lg font-black tracking-[-0.03em]">
+              Already connected without API Key?
+            </h3>
+            <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-7 text-white/60">
+              <li>Open Claude.ai.</li>
+              <li>Go to Settings / Customize.</li>
+              <li>Open Connectors.</li>
+              <li>Click NOVA.</li>
+              <li>Click Disconnect.</li>
+              <li>Add custom connector again.</li>
+              <li>Name it NOVA.</li>
+              <li>Use the URL with ?apiKey=SUA_NOVA_API_KEY.</li>
+              <li>Leave OAuth fields empty.</li>
+              <li>Click Add and set permissions to Always allow.</li>
+            </ol>
+          </div>
+
+          <p className="mt-5 text-xs leading-6 text-white/45">
+            Security note: for best practice, create a NOVA API Key specifically for Claude. You can revoke it later from NOVA API settings.
+          </p>
+        </section>
+
         <section className="mt-8 rounded-[2rem] border border-white/10 bg-white/[0.035] p-6 md:p-8">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-lime-300">
             What Claude can do with NOVA
