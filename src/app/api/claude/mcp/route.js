@@ -276,7 +276,8 @@ async function callNovaRestTool(req, toolName, args = {}) {
   const res = await fetch(`${origin}${path}`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+          "Content-Type": "application/json",
+          ...(getNovaMcpAuthorization(req) ? { Authorization: getNovaMcpAuthorization(req) } : {}),
       ...(authHeader(req) ? { Authorization: authHeader(req) } : {}),
     },
     body: JSON.stringify(args || {}),
