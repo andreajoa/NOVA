@@ -197,6 +197,14 @@ export default function ClaudeConnectPage() {
                 Buy API credits
               </a>
 
+
+              <a
+                href="/api/api-keys/claude-direct"
+                className="rounded-2xl border border-lime-300/40 bg-black/40 px-5 py-4 text-center text-sm font-black uppercase tracking-[0.12em] text-lime-300"
+              >
+                Direct API Key Generator
+              </a>
+
               <a
                 href="/dashboard/settings/api-keys"
                 className="rounded-2xl border border-white/10 px-5 py-4 text-center text-sm font-bold text-white/80"
