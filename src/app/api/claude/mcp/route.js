@@ -1,6 +1,3 @@
-import { NextResponse } from "next/server";
-
-
 function getNovaMcpAuthorization(req) {
   const fromHeader =
     req?.headers?.get?.("authorization") ||
