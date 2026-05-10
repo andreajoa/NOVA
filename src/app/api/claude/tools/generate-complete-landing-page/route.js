@@ -13,18 +13,26 @@ export const maxDuration = 300;
 export async function GET() {
   return NextResponse.json({
     success: true,
-    tool: "nova_export_landing_page_zip",
+    tool: "nova_generate_complete_landing_page",
     method: "POST",
-    endpoint: "/api/claude/tools/export-landing-page",
+    endpoint: "/api/claude/tools/generate-complete-landing-page",
     description:
-      "Export a complete NOVA landing page ZIP with 4 AI-generated images for Shopify Theme, Hydrogen/Oxygen, Next.js, React or HTML.",
+      "Generate a complete landing page with layout, copy, 4 AI-generated images and export ZIP.",
     pricing: landingPricingPublic(),
     requires: {
       authorization: "Bearer YOUR_NOVA_API_KEY",
       billing: `${LANDING_PAGE_WITH_IMAGES.novaCreditsRequired} NOVA API credits required.`,
       checkoutUrl: "/checkout/api-credits?pack=starter",
     },
-    platforms: ["html", "react", "nextjs", "hydrogen", "shopify-theme"],
+    example: {
+      product: "Luxury watch",
+      platform: "shopify-theme",
+      brandName: "Maison Nova",
+      audience: "Men and women 25-45 who buy premium watches",
+      style: "black and neon green luxury ecommerce",
+      language: "en",
+      cta: "Shop Now",
+    },
   });
 }
 
@@ -54,10 +62,10 @@ export async function POST(req) {
     return NextResponse.json(
       {
         success: false,
-        error: "LANDING_PAGE_EXPORT_FAILED",
+        error: "LANDING_PAGE_GENERATION_FAILED",
         message:
           err?.message ||
-          "Could not export the complete landing page package.",
+          "Could not generate the complete landing page package.",
       },
       { status: 500 }
     );

@@ -65,6 +65,14 @@ export async function GET() {
         description:
           "Export a landing page ZIP for Shopify Theme, Hydrogen/Oxygen, Next.js, React or HTML.",
       },
+
+      {
+        name: "nova_generate_complete_landing_page",
+        method: "POST",
+        url: `${baseUrl}/api/claude/tools/generate-complete-landing-page`,
+        description:
+          "Generate a complete landing page with layout, copy, 4 AI-generated images and export ZIP. Costs 24 NOVA API credits.",
+      },
     ],
     important:
       "Claude AI must support external tools/connectors/MCP in the user's plan/environment. NOVA execution requires a paid NOVA API credit balance.",

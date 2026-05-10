@@ -164,6 +164,26 @@ const tools = [
         design: { type: "object", description: "Optional design object returned by nova_create_landing_page_design." }
       }
     }
+  },
+
+  {
+    name: "nova_generate_complete_landing_page",
+    title: "NOVA Generate Complete Landing Page",
+    description:
+      "Generate a complete landing page with layout, copy, 4 AI-generated images and export ZIP for Shopify Theme, Hydrogen/Oxygen, Next.js, React or HTML. Costs 24 NOVA API credits.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        product: { type: "string", description: "Product, offer or store." },
+        platform: { type: "string", description: "html, react, nextjs, hydrogen, shopify-theme.", default: "html" },
+        brandName: { type: "string", description: "Brand or store name." },
+        audience: { type: "string", description: "Target audience." },
+        style: { type: "string", description: "Visual direction." },
+        language: { type: "string", description: "Language, for example en or pt-BR.", default: "en" },
+        cta: { type: "string", description: "Primary CTA.", default: "Shop Now" }
+      },
+      required: ["product"]
+    }
   }
 ];
 
@@ -216,6 +236,7 @@ async function callNovaRestTool(req, toolName, args = {}) {
     nova_create_campaign: "/api/claude/tools/create-campaign",
     nova_create_landing_page_design: "/api/claude/tools/create-landing-page",
     nova_export_landing_page_zip: "/api/claude/tools/export-landing-page",
+    nova_generate_complete_landing_page: "/api/claude/tools/generate-complete-landing-page",
   };
 
   const path = endpointByTool[toolName];
