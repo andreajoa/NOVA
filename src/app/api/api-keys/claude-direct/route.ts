@@ -28,7 +28,7 @@ function page(body: string, status = 200) {
   .card{border:1px solid rgba(217,255,0,.25);background:rgba(255,255,255,.04);border-radius:28px;padding:28px;margin:18px 0}
   h1{font-size:40px;line-height:.95;letter-spacing:-.05em;text-transform:uppercase;margin:0 0 18px}
   p{color:rgba(255,255,255,.68);line-height:1.7}
-  a,button{display:inline-flex;border:0;border-radius:18px;padding:16px 20px;background:#d9ff00;color:#000;font-weight:900;text-transform:uppercase;letter-spacing:.08em;text-decoration:none;cursor:pointer;margin:6px 8px 6px 0}
+  a{display:inline-flex;border-radius:18px;padding:16px 20px;background:#d9ff00;color:#000;font-weight:900;text-transform:uppercase;letter-spacing:.08em;text-decoration:none;margin:6px 8px 6px 0}
   textarea{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.12);border-radius:18px;background:rgba(0,0,0,.65);color:#d9ff00;padding:16px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;min-height:110px}
   code{color:#d9ff00;word-break:break-all}
   .muted{font-size:13px;color:rgba(255,255,255,.48)}
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
       <div class="card">
         <p class="muted">NOVA Claude Connect</p>
         <h1>Gerador direto de API Key</h1>
-        <p>Essa página não usa o botão React. Ela gera a API Key diretamente no servidor usando sua sessão logada da NOVA.</p>
+        <p>Essa página não depende do botão React. Ela gera a API Key diretamente no servidor usando sua sessão logada da NOVA.</p>
         <p>Admin bypass detectado: <code>${adminBypass ? "true" : "false"}</code></p>
         <a href="/api/api-keys/claude-direct?create=1">Create Claude API Key Now</a>
         <a href="/dashboard/claude-connect">Back to Claude Connect</a>
@@ -88,7 +88,6 @@ export async function GET(request: Request) {
       return page(`
         <div class="card">
           <h1>API Key created but secret missing</h1>
-          <p>O banco criou a chave, mas o segredo completo não voltou.</p>
           <pre>${esc(JSON.stringify(result, null, 2))}</pre>
           <a href="/api/api-keys/claude-direct">Try again</a>
         </div>

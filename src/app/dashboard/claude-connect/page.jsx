@@ -173,14 +173,12 @@ export default function ClaudeConnectPage() {
             </p>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={createKey}
-                aria-busy={loading}
-                className="rounded-2xl bg-lime-300 px-5 py-4 text-sm font-black uppercase tracking-[0.12em] text-black shadow-[0_0_30px_rgba(217,255,0,.18)]"
+              <a
+                href="/api/api-keys/claude-direct?create=1"
+                className="rounded-2xl bg-lime-300 px-5 py-4 text-center text-sm font-black uppercase tracking-[0.12em] text-black shadow-[0_0_30px_rgba(217,255,0,.25)]"
               >
-                {loading ? "Creating API Key..." : "Create / load API Key"}
-              </button>
+                Create API Key Now
+              </a>
 
               <button
                 type="button"
