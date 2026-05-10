@@ -89,13 +89,7 @@ export default function ApiKeysPage() {
 
     const name = newName.trim();
     if (!name || busy) return;
-
-    if (apiWallet.balance <= 0) {
-      setError("Add API credits before creating an API key.");
-      return;
-    }
-
-    setBusy(true);
+setBusy(true);
     setError("");
     setCopied(false);
 
@@ -170,7 +164,7 @@ export default function ApiKeysPage() {
             API Keys
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/45">
-            Create API keys for external NOVA usage. API credits are prepaid and separate from dashboard plan credits.
+            Create API keys for external NOVA usage. Creating a key is free; API credits are only used when generating from external tools like Claude AI.
           </p>
         </div>
 
@@ -251,7 +245,7 @@ export default function ApiKeysPage() {
         >
           <p className="mb-2 text-sm font-black text-white">Create a new API key</p>
           <p className="mb-4 text-xs text-white/35">
-            You need API credits before creating a key. Full key secrets are shown once.
+            Creating an API key is free. API credits are only required when generating through external tools like Claude AI. Full key secrets are shown once.
           </p>
 
           <div className="flex flex-col gap-3 md:flex-row">
@@ -317,7 +311,7 @@ export default function ApiKeysPage() {
           <div className="rounded-2xl border border-white/8 bg-[#0D0D0D] p-8 text-center">
             <p className="text-lg font-black text-white">No API keys yet</p>
             <p className="mt-2 text-sm text-white/40">
-              Add API credits, then create your first key to access NOVA from external apps and automations.
+              Create your first API key to connect NOVA with Claude AI, external apps and automations.
             </p>
           </div>
         ) : (
