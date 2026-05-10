@@ -112,7 +112,7 @@ export default function ClaudeConnectPage() {
     }
 
     setLoading(true);
-    setStatus("Creating your NOVA API Key...");
+    setStatus("Creating your Full NOVA API Key...");
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
@@ -146,7 +146,7 @@ export default function ClaudeConnectPage() {
 
       if (createdKey) {
         saveManualKey(createdKey);
-        setStatus("API Key created. Copy your Claude connector URL below.");
+        setStatus("API Key created. The full key is shown below. Copy it now — for security, NOVA will only show the full key at creation time.");
         return;
       }
 
@@ -177,12 +177,12 @@ export default function ClaudeConnectPage() {
           </p>
 
           <h1 className="mt-5 max-w-5xl text-4xl font-black uppercase leading-[0.88] tracking-[-0.07em] md:text-7xl">
-            Connect Claude AI to NOVA with a NOVA API Key.
+            Connect Claude AI to NOVA with a Full NOVA API Key.
           </h1>
 
           <p className="mt-6 max-w-3xl text-base leading-8 text-white/60 md:text-lg">
-            Claude does not show a separate NOVA API Key field. To generate through Claude,
-            use a personalized MCP URL that includes your NOVA API Key.
+            Claude does not show a separate Full NOVA API Key field. To generate through Claude,
+            use a personalized MCP URL that includes your Full NOVA API Key.
           </p>
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
@@ -208,7 +208,7 @@ export default function ClaudeConnectPage() {
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-6 md:p-8">
             <h2 className="text-2xl font-black tracking-[-0.04em]">Your Claude connector URL</h2>
             <p className="mt-3 text-sm leading-7 text-white/60">
-              Create or paste your NOVA API Key below. Creating an API Key is free. API credits are only required when generating from Claude AI; owner/admin accounts can generate without API credit debit.
+              Create or paste your Full NOVA API Key below. Creating an API Key is free. API credits are only required when generating from Claude AI; owner/admin accounts can generate without API credit debit.
             </p>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
@@ -250,15 +250,36 @@ export default function ClaudeConnectPage() {
 
             <label className="mt-5 block">
               <span className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-white/45">
-                NOVA API Key
+                Full NOVA API Key
               </span>
               <input
                 value={apiKey}
                 onChange={(e) => saveManualKey(e.target.value)}
-                placeholder="Paste your NOVA API Key here"
+                placeholder="Paste your Full NOVA API Key here"
                 className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-4 text-white outline-none focus:border-lime-300/60"
               />
             </label>
+
+            {apiKey ? (
+              <div className="mt-5 rounded-3xl border border-lime-300/20 bg-black/50 p-5">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-lime-300">
+                  Full API Key — shown only after creation
+                </p>
+                <code className="mt-3 block break-all rounded-2xl bg-black/70 p-4 text-sm text-lime-300">
+                  {apiKey}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => copy(apiKey, "apiKey")}
+                  className="mt-4 rounded-2xl border border-lime-300/30 px-5 py-4 text-sm font-black uppercase tracking-[0.12em] text-lime-300"
+                >
+                  {copied === "apiKey" ? "Copied!" : "Copy full API Key"}
+                </button>
+                <p className="mt-3 text-xs leading-6 text-white/45">
+                  Save this key now. For security, NOVA only shows the complete secret when it is created.
+                </p>
+              </div>
+            ) : null}
 
             <div className="mt-5 rounded-3xl border border-lime-300/20 bg-lime-300/10 p-5">
               <p className="text-xs font-black uppercase tracking-[0.18em] text-white/45">
