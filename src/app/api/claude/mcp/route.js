@@ -1,6 +1,7 @@
+import { NextResponse } from "next/server";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
 
 const MCP_PROTOCOL_VERSION = "2025-03-26";
 
@@ -150,7 +151,7 @@ function getNovaMcpAuthorization(req) {
 }
 
 function jsonRpc(id, result) {
-  return Response.json(
+  return NextResponse.json(
     {
       jsonrpc: "2.0",
       id,
@@ -161,7 +162,7 @@ function jsonRpc(id, result) {
 }
 
 function jsonRpcError(id, code, message, data) {
-  return Response.json(
+  return NextResponse.json(
     {
       jsonrpc: "2.0",
       id,
@@ -271,49 +272,74 @@ export async function OPTIONS() {
 }
 
 export async function GET(req) {
-  return Response.json(publicInfo(req), { headers: CORS_HEADERS });
+  try {
+    return NextResponse.json(publicInfo(req), { headers: CORS_HEADERS });
+  } catch (err) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "NOVA_MCP_GET_FAILED",
+        message: err?.message || "MCP GET failed.",
+      },
+      { status: 500, headers: CORS_HEADERS }
+    );
+  }
 }
 
 export async function POST(req) {
-  let body;
-
   try {
-    body = await req.json();
-  } catch {
-    return jsonRpcError(null, -32700, "Invalid JSON body");
-  }
+    let body;
 
-  const id = body?.id ?? null;
-  const method = body?.method;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonRpcError(null, -32700, "Invalid JSON body");
+    }
 
-  if (method === "initialize") {
-    return jsonRpc(id, {
-      protocolVersion: MCP_PROTOCOL_VERSION,
-      capabilities: {
-        tools: {},
-      },
-      serverInfo: {
-        name: "NOVA",
-        version: "1.0.0",
-      },
+    const id = body?.id ?? null;
+    const method = body?.method;
+
+    if (method === "initialize") {
+      return jsonRpc(id, {
+        protocolVersion: MCP_PROTOCOL_VERSION,
+        capabilities: {
+          tools: {},
+        },
+        serverInfo: {
+          name: "NOVA",
+          version: "1.0.0",
+        },
+      });
+    }
+
+    if (method === "notifications/initialized") {
+      return jsonRpc(id, {});
+    }
+
+    if (method === "tools/list") {
+      return jsonRpc(id, {
+        tools: tools.filter(Boolean),
+      });
+    }
+
+    if (method === "tools/call") {
+      return callTool(req, id, body?.params || {});
+    }
+
+    return jsonRpcError(id, -32601, "Method not found", {
+      method,
     });
+  } catch (err) {
+    return NextResponse.json(
+      {
+        jsonrpc: "2.0",
+        id: null,
+        error: {
+          code: -32603,
+          message: err?.message || "NOVA MCP runtime error.",
+        },
+      },
+      { status: 200, headers: CORS_HEADERS }
+    );
   }
-
-  if (method === "notifications/initialized") {
-    return jsonRpc(id, {});
-  }
-
-  if (method === "tools/list") {
-    return jsonRpc(id, {
-      tools: tools.filter(Boolean),
-    });
-  }
-
-  if (method === "tools/call") {
-    return callTool(req, id, body?.params || {});
-  }
-
-  return jsonRpcError(id, -32601, "Method not found", {
-    method,
-  });
 }
