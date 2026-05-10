@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { isNovaAdminUser, novaAdminBypassResult } from "@/lib/novaAdminAccess";
+import { isNovaAdminFromAuth, novaAdminBypassResult } from "@/lib/novaAdminAccess";
 import { generateCompleteLandingPackage } from "@/lib/novaCompleteLanding";
 import {
   LANDING_PAGE_WITH_IMAGES,
@@ -189,7 +189,7 @@ export async function POST(req) {
 
   const body = await req.json().catch(() => ({}));
 
-  const charge = (await isNovaAdminUser(session.userId))
+  const charge = (await isNovaAdminFromAuth(session.userId, session.sessionClaims))
     ? novaAdminBypassResult({
         identity: { userId: session.userId, novaAdminBypass: true },
       })

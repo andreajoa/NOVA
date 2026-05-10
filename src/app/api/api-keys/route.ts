@@ -2,31 +2,34 @@ import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { createUserApiKey, listUserApiKeys } from "@/lib/apiKeys"
 import { getApiCreditBalance } from "@/lib/db"
-import { isNovaAdminUser } from "@/lib/novaAdminAccess"
+import { isNovaAdminFromAuth } from "@/lib/novaAdminAccess"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function GET() {
-  const { userId } = await auth()
+  const authState = await auth()
+  const { userId, sessionClaims } = authState
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   const keys = await listUserApiKeys(userId)
+  const adminBypass = await isNovaAdminFromAuth(userId, sessionClaims)
 
-  return NextResponse.json({ keys })
+  return NextResponse.json({ keys, adminBypass })
 }
 
 export async function POST(request: Request) {
-  const { userId } = await auth()
+  const authState = await auth()
+  const { userId, sessionClaims } = authState
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const isAdmin = await isNovaAdminUser(userId)
+  const isAdmin = await isNovaAdminFromAuth(userId, sessionClaims)
 
   if (!isAdmin) {
     const wallet = await getApiCreditBalance(userId)
@@ -38,6 +41,7 @@ export async function POST(request: Request) {
           code: "API_CREDITS_REQUIRED",
           message: "Add API credits before creating an API key.",
           balance: wallet.balance,
+          adminBypass: false,
           packs: {
             starter: { label: "Starter", price: "$10", credits: 140, href: "/api/checkout/api-credits?pack=starter" },
             growth: { label: "Growth", price: "$25", credits: 375, href: "/api/checkout/api-credits?pack=growth" },
