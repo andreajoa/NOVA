@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 const platforms = [
   { value: "html", label: "HTML universal" },
@@ -22,25 +22,13 @@ const defaultForm = {
 
 export default function LandingPageStudio() {
   const [form, setForm] = useState(defaultForm);
-  const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [showPaywall, setShowPaywall] = useState(false);
-
-  useEffect(() => {
-    setApiKey(localStorage.getItem("nova_api_key") || "");
-  }, []);
-
   function update(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
-
-  function saveApiKey(value) {
-    setApiKey(value);
-    localStorage.setItem("nova_api_key", value);
-  }
-
   async function generate() {
     setLoading(true);
     setError(null);
@@ -48,11 +36,10 @@ export default function LandingPageStudio() {
     setShowPaywall(false);
 
     try {
-      const res = await fetch("/api/claude/tools/generate-complete-landing-page", {
+      const res = await fetch("/api/landing-page/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
         },
         body: JSON.stringify(form),
       });
@@ -93,7 +80,7 @@ export default function LandingPageStudio() {
           </h1>
           <p className="mt-5 max-w-3xl text-base leading-8 text-white/60 md:text-lg">
             Creates layout, copy, 4 AI-generated images and a downloadable ZIP for Shopify Theme,
-            Hydrogen/Oxygen, Next.js, React or HTML.
+            Hydrogen/Oxygen, Next.js, React or HTML. Inside NOVA, this uses internal NOVA credits.
           </p>
 
           <div className="mt-6 grid gap-4 rounded-3xl border border-lime-300/20 bg-lime-300/10 p-5 md:grid-cols-3">
@@ -139,17 +126,12 @@ export default function LandingPageStudio() {
               <Field label="CTA">
                 <input value={form.cta} onChange={(e) => update("cta", e.target.value)} className="input" />
               </Field>
+              <div className="rounded-2xl border border-lime-300/20 bg-lime-300/10 p-4 text-sm leading-7 text-white/70">
+                <b className="text-lime-300">Dentro da NOVA:</b> você não precisa colar API Key.
+                Esta página usa seus créditos internos da NOVA.
+              </div>
 
-              <Field label="NOVA API Key">
-                <input
-                  value={apiKey}
-                  onChange={(e) => saveApiKey(e.target.value)}
-                  placeholder="Paste your NOVA API key"
-                  className="input"
-                />
-              </Field>
-
-              <div className="md:col-span-2">
+<div className="md:col-span-2">
                 <Field label="Audience">
                   <textarea value={form.audience} onChange={(e) => update("audience", e.target.value)} className="input min-h-[90px]" />
                 </Field>
@@ -214,15 +196,14 @@ export default function LandingPageStudio() {
             <p className="text-xs font-black uppercase tracking-[0.22em] text-lime-300">Credits required</p>
             <h3 className="mt-3 text-3xl font-black tracking-[-0.05em]">Buy API credits to generate.</h3>
             <p className="mt-3 text-sm leading-7 text-white/60">
-              Complete landing page generation requires a NOVA API Key and 24 API credits.
-              Minimum API credit purchase: $10.
+              Complete landing page generation inside NOVA requires 24 internal NOVA credits. Buy credits or upgrade your plan to continue.
             </p>
             <div className="mt-5 grid gap-3">
-              <a href="/checkout/api-credits?pack=starter" className="rounded-2xl bg-lime-300 px-5 py-4 text-center text-sm font-black uppercase tracking-[0.12em] text-black">
-                Buy API Credits — $10
+              <a href="/pricing" className="rounded-2xl bg-lime-300 px-5 py-4 text-center text-sm font-black uppercase tracking-[0.12em] text-black">
+                Buy credits / Upgrade
               </a>
-              <a href="/dashboard/settings/api-keys" className="rounded-2xl border border-white/10 px-5 py-4 text-center text-sm font-bold text-white">
-                Create / copy API key
+              <a href="/dashboard/settings/billing" className="rounded-2xl border border-white/10 px-5 py-4 text-center text-sm font-bold text-white">
+                Billing settings
               </a>
               <button onClick={() => setShowPaywall(false)} className="rounded-2xl px-5 py-3 text-sm text-white/60">
                 Close
