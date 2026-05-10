@@ -19,6 +19,7 @@ const MENU_GROUPS = [
           { label: "Gerar Vídeo",   href: "/dashboard/generate",  path: "/dashboard/generate"  },
           { label: "UGC Produto",   href: "/dashboard/templates", path: "/dashboard/templates" },
           { href: "/dashboard/landing-page", label: "Landing Page", icon: "▣" },
+          { href: "/dashboard/claude-connect", label: "Claude Connect", icon: "⌁" },
         ],
       },
       {

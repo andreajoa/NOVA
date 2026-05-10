@@ -11,6 +11,7 @@ const items = [
   { href: "/dashboard/generate",          label: "Vídeo",        icon: "▶" },
   { href: "/dashboard/templates",         label: "UGC",          icon: "✦" },
   { href: "/dashboard/landing-page", label: "Landing Page", icon: "▣" },
+  { href: "/dashboard/claude-connect", label: "Claude Connect", icon: "⌁" },
   { href: "/dashboard/brandkit",          label: "Brand Kit",    icon: "◎" },
   { href: "/dashboard/projects",          label: "Projetos",     icon: "▣" },
   { href: "/dashboard/uploads",           label: "Uploads",      icon: "↑" },

@@ -1,5 +1,28 @@
 import { NextResponse } from "next/server";
 
+
+function getNovaMcpAuthorization(req) {
+  const fromHeader =
+    req?.headers?.get?.("authorization") ||
+    req?.headers?.get?.("Authorization") ||
+    "";
+
+  if (fromHeader) return fromHeader;
+
+  try {
+    const url = new URL(req.url);
+    const apiKey =
+      url.searchParams.get("apiKey") ||
+      url.searchParams.get("novaApiKey") ||
+      url.searchParams.get("key") ||
+      "";
+
+    return apiKey ? `Bearer ${apiKey}` : "";
+  } catch {
+    return "";
+  }
+}
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 180;

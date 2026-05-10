@@ -209,6 +209,26 @@ export default function ClaudeConnectorPage() {
           </div>
         </section>
       </section>
-    </main>
+    
+        <section className="mt-8 rounded-[2rem] border border-lime-300/20 bg-lime-300/10 p-6 md:p-8">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-lime-300">
+            Important: API Key for Claude AI
+          </p>
+          <h2 className="mt-3 text-3xl font-black tracking-[-0.05em]">
+            To generate from Claude, reconnect NOVA with your personalized API URL.
+          </h2>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-white/70">
+            Claude currently does not show a separate field for the NOVA API Key. After buying API credits,
+            open NOVA Claude Connect, copy your personalized MCP URL, disconnect NOVA in Claude, and add it again using that URL.
+          </p>
+          <a
+            href="/dashboard/claude-connect"
+            className="mt-5 inline-flex rounded-2xl bg-lime-300 px-5 py-4 text-sm font-black uppercase tracking-[0.12em] text-black"
+          >
+            Open NOVA Claude Connect
+          </a>
+        </section>
+
+</main>
   );
 }
