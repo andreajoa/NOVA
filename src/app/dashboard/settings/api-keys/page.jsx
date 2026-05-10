@@ -168,12 +168,21 @@ setBusy(true);
           </p>
         </div>
 
-        <button
-          onClick={() => setCreating((value) => !value)}
-          className="h-11 rounded-xl bg-[#D7FF00] px-5 text-xs font-black uppercase tracking-[.14em] text-black transition hover:bg-[#c8f000]"
-        >
-          + New Key
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <a
+            href="/api/api-keys/claude-direct"
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-[#D7FF00]/40 px-5 text-xs font-black uppercase tracking-[.14em] text-[#D7FF00] no-underline transition hover:bg-[#D7FF00]/10"
+          >
+            Claude API Key
+          </a>
+
+          <button
+            onClick={() => setCreating((value) => !value)}
+            className="h-11 rounded-xl bg-[#D7FF00] px-5 text-xs font-black uppercase tracking-[.14em] text-black transition hover:bg-[#c8f000]"
+          >
+            + New Key
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -238,6 +247,23 @@ setBusy(true);
         </div>
       </div>
 
+      <div className="mb-6 rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-black text-[#D7FF00]">Need a Claude connector key?</p>
+            <p className="mt-1 text-xs leading-5 text-white/50">
+              Use the direct generator. It creates the full API key and shows the exact Claude connector URL.
+            </p>
+          </div>
+          <a
+            href="/api/api-keys/claude-direct"
+            className="rounded-xl bg-[#D7FF00] px-5 py-3 text-center text-xs font-black uppercase tracking-[.14em] text-black no-underline transition hover:bg-[#c8f000]"
+          >
+            Generate Claude API Key
+          </a>
+        </div>
+      </div>
+
       {creating && (
         <form
           onSubmit={createKey}
@@ -259,8 +285,8 @@ setBusy(true);
 
             <button
               type="submit"
-              disabled={busy || apiWallet.balance <= 0}
-              className="h-11 rounded-xl bg-[#D7FF00] px-5 text-xs font-black uppercase tracking-[.14em] text-black transition hover:bg-[#c8f000] disabled:opacity-50"
+              disabled={busy}
+              className="h-11 rounded-xl bg-[#D7FF00] px-5 text-xs font-black uppercase tracking-[.14em] text-black transition hover:bg-[#c8f000]"
             >
               {busy ? "Creating..." : "Create"}
             </button>
@@ -328,7 +354,7 @@ setBusy(true);
                 <button
                   onClick={() => revokeKey(key.id)}
                   disabled={busy}
-                  className="w-fit rounded-lg border border-red-400/10 px-3 py-2 text-xs font-bold text-white/25 transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-300 disabled:opacity-50"
+                  className="w-fit rounded-lg border border-red-400/10 px-3 py-2 text-xs font-bold text-white/25 transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-300"
                 >
                   Revoke
                 </button>
