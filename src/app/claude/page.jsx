@@ -6,17 +6,23 @@ import { useRouter } from "next/navigation";
 
 const starterCheckout = "/checkout/api-credits?pack=starter";
 
-const toolExample = `POST https://www.novvideos.online/api/claude/mcp/generate-image
-Authorization: Bearer YOUR_NOVA_API_KEY
-Content-Type: application/json
+const toolExample = `Remote MCP Connector URL:
+https://www.novvideos.online/api/claude/mcp
 
-{
-  "prompt": "Premium neon green product ad on black background, cinematic lighting",
-  "model": "flux-pro",
-  "mode": "text-to-image",
-  "aspect_ratio": "1:1",
-  "num_images": 2
-}`;
+Available tools:
+- nova_generate_image
+- nova_generate_video
+- nova_create_campaign
+
+Authentication for generation:
+Authorization: Bearer YOUR_NOVA_API_KEY
+
+Billing:
+NOVA API credits required.
+Minimum purchase: $10.
+
+Example prompt inside Claude:
+"Use NOVA to generate a premium neon green product ad on a black background."`;
 
 const claudeInstruction = `You can use NOVA as my AI creative execution engine.
 
@@ -24,9 +30,10 @@ Rules:
 - Ask me before spending NOVA API credits.
 - Use my NOVA API key only for NOVA generation.
 - If NOVA returns NOVA_API_CREDITS_REQUIRED, tell me I need to buy API credits with the minimum $10 starter pack.
-- For images, call: https://www.novvideos.online/api/claude/mcp/generate-image
-- For videos, call: https://www.novvideos.online/api/claude/mcp/generate-video
-- For campaign prompts, call: https://www.novvideos.online/api/claude/mcp/create-campaign`;
+- Connect to this Remote MCP URL: https://www.novvideos.online/api/claude/mcp
+- Available NOVA tools: nova_generate_image, nova_generate_video, nova_create_campaign
+- To generate, NOVA requires my NOVA API Key and paid API credits.
+- If NOVA returns NOVA_API_KEY_REQUIRED or NOVA_API_CREDITS_REQUIRED, tell me to buy NOVA API credits with the minimum $10 starter pack.`;
 
 export default function ClaudeConnectorPage() {
   const router = useRouter();
