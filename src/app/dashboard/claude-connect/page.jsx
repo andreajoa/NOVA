@@ -166,7 +166,7 @@ export default function ClaudeConnectPage() {
           </p>
 
           <h1 className="mt-5 max-w-5xl text-4xl font-black uppercase leading-[0.88] tracking-[-0.07em] md:text-7xl">
-            Connect Claude AI to NOVA with API credits or owner/admin access.
+            Connect Claude AI to NOVA with a NOVA API Key.
           </h1>
 
           <p className="mt-6 max-w-3xl text-base leading-8 text-white/60 md:text-lg">
@@ -188,7 +188,7 @@ export default function ClaudeConnectPage() {
             <div className="rounded-3xl border border-white/10 bg-black/40 p-5">
               <p className="text-xs uppercase tracking-[0.18em] text-white/40">Minimum</p>
               <p className="mt-2 text-2xl font-black text-lime-300">$10</p>
-              <p className="mt-2 text-sm leading-7 text-white/55">Minimum API credit purchase for normal users. Owner/admin accounts can bypass this for testing.</p>
+              <p className="mt-2 text-sm leading-7 text-white/55">API credits are required only when generating from Claude AI. Creating an API Key does not require credits.</p>
             </div>
           </div>
         </div>
@@ -197,7 +197,7 @@ export default function ClaudeConnectPage() {
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-6 md:p-8">
             <h2 className="text-2xl font-black tracking-[-0.04em]">Your Claude connector URL</h2>
             <p className="mt-3 text-sm leading-7 text-white/60">
-              Create or paste your NOVA API Key below. Normal users need API credits first; owner/admin accounts can create and use API keys without credits.
+              Create or paste your NOVA API Key below. Creating an API Key is free. API credits are only required when generating from Claude AI; owner/admin accounts can generate without API credit debit.
             </p>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">

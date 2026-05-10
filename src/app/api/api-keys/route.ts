@@ -17,8 +17,15 @@ export async function GET() {
 
   const keys = await listUserApiKeys(userId)
   const adminBypass = await isNovaAdminFromAuth(userId, sessionClaims)
+  const wallet = await getApiCreditBalance(userId).catch(() => ({ balance: 0 }))
 
-  return NextResponse.json({ keys, adminBypass })
+  return NextResponse.json({
+    keys,
+    adminBypass,
+    apiCreditBalance: wallet.balance,
+    canCreateApiKey: true,
+    note: "API keys can be created without API credits. API credits are required only when generating from external tools like Claude AI.",
+  })
 }
 
 export async function POST(request: Request) {
@@ -27,31 +34,6 @@ export async function POST(request: Request) {
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const isAdmin = await isNovaAdminFromAuth(userId, sessionClaims)
-
-  if (!isAdmin) {
-    const wallet = await getApiCreditBalance(userId)
-
-    if (wallet.balance <= 0) {
-      return NextResponse.json(
-        {
-          error: "API_CREDITS_REQUIRED",
-          code: "API_CREDITS_REQUIRED",
-          message: "Add API credits before creating an API key.",
-          balance: wallet.balance,
-          adminBypass: false,
-          packs: {
-            starter: { label: "Starter", price: "$10", credits: 140, href: "/api/checkout/api-credits?pack=starter" },
-            growth: { label: "Growth", price: "$25", credits: 375, href: "/api/checkout/api-credits?pack=growth" },
-            pro: { label: "Pro", price: "$50", credits: 800, href: "/api/checkout/api-credits?pack=pro" },
-            scale: { label: "Scale", price: "$100", credits: 1750, href: "/api/checkout/api-credits?pack=scale" },
-          },
-        },
-        { status: 402 }
-      )
-    }
   }
 
   const body = await request.json().catch(() => ({}))
@@ -65,10 +47,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Key name is too long" }, { status: 400 })
   }
 
+  const isAdmin = await isNovaAdminFromAuth(userId, sessionClaims)
+  const wallet = await getApiCreditBalance(userId).catch(() => ({ balance: 0 }))
   const result = await createUserApiKey(userId, name)
 
   return NextResponse.json({
     ...result,
     adminBypass: isAdmin,
+    apiCreditBalance: wallet.balance,
+    canCreateApiKey: true,
+    requiresApiCreditsForGeneration: !isAdmin,
+    checkoutUrl: "/checkout/api-credits?pack=starter",
+    message: isAdmin
+      ? "API Key created. Owner/admin can use this key without API credit debit."
+      : "API Key created. Buy API credits before generating from Claude AI.",
   })
 }
