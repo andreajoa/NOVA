@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 const starterCheckout = "/checkout/api-credits?pack=starter";
 
-const toolExample = `POST https://www.novvideos.online/api/claude/tools/generate-image
+const toolExample = `POST https://www.novvideos.online/api/claude/mcp/generate-image
 Authorization: Bearer YOUR_NOVA_API_KEY
 Content-Type: application/json
 
@@ -24,9 +24,9 @@ Rules:
 - Ask me before spending NOVA API credits.
 - Use my NOVA API key only for NOVA generation.
 - If NOVA returns NOVA_API_CREDITS_REQUIRED, tell me I need to buy API credits with the minimum $10 starter pack.
-- For images, call: https://www.novvideos.online/api/claude/tools/generate-image
-- For videos, call: https://www.novvideos.online/api/claude/tools/generate-video
-- For campaign prompts, call: https://www.novvideos.online/api/claude/tools/create-campaign`;
+- For images, call: https://www.novvideos.online/api/claude/mcp/generate-image
+- For videos, call: https://www.novvideos.online/api/claude/mcp/generate-video
+- For campaign prompts, call: https://www.novvideos.online/api/claude/mcp/create-campaign`;
 
 export default function ClaudeConnectorPage() {
   const router = useRouter();

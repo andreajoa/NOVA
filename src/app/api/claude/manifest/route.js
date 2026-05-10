@@ -10,11 +10,16 @@ export async function GET() {
     name: "NOVA Claude Connector",
     description:
       "Connect Claude AI to NOVA to generate images, videos, product ads, UGC concepts and campaign prompts using NOVA API credits.",
+    mcpServer: {
+      url: `${baseUrl}/api/claude/mcp`,
+      transport: "streamable_http",
+      description: "Use this URL in Claude.ai custom connector settings.",
+    },
     auth: {
       type: "api_key",
       header: "Authorization",
       format: "Bearer YOUR_NOVA_API_KEY",
-      required: true,
+      required: "required_for_generation_not_for_listing_tools",
     },
     billing: {
       required: true,
