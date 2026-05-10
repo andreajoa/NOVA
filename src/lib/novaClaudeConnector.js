@@ -45,6 +45,22 @@ function getNovaApiAuthHeader(req) {
   return key ? `Bearer ${key}` : "";
 }
 
+function requestWithNormalizedNovaApiKey(req) {
+  const key = getNovaApiKeyFromRequest(req);
+
+  if (!key) return req;
+
+  const headers = new Headers(req.headers);
+  headers.set("Authorization", `Bearer ${key}`);
+  headers.set("x-nova-api-key", key);
+  headers.set("x-api-key", key);
+
+  return new Request(req.url, {
+    method: req.method || "GET",
+    headers,
+  });
+}
+
 export const NOVA_API_CREDIT_MINIMUM_URL = "/checkout/api-credits?pack=starter";
 export const NOVA_API_CREDIT_MINIMUM_PRICE = "$10";
 export const VIDEO_CREDITS_PER_SECOND = 24;
@@ -92,7 +108,8 @@ export function novaApiCreditsRequiredPayload({
 }
 
 export async function requireNovaApiCredits(req, amount) {
-  const identity = await validateApiKeyFromRequest(req);
+  const normalizedReq = requestWithNormalizedNovaApiKey(req);
+  const identity = await validateApiKeyFromRequest(normalizedReq);
 
   if (!identity?.userId) {
     return {
