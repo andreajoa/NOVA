@@ -12,6 +12,17 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.novvideos.online"),
+  icons: {
+    icon: [
+      { url: "/favicon.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon.ico", sizes: "256x256", type: "image/x-icon" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
   title: "Nova AI Video Studio",
   description: "AI video studio for brands that move fast.",
 };
