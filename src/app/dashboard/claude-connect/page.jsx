@@ -95,17 +95,42 @@ export default function ClaudeConnectPage() {
   }
 
   async function createKey() {
+    if (loading) {
+      setStatus("Still working. If this stays here for more than 20 seconds, click Reset and try again.");
+      return;
+    }
+
     setLoading(true);
-    setStatus("Creating or loading your NOVA API Key...");
+    setStatus("Creating your NOVA API Key...");
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
 
     try {
       const createRes = await fetch("/api/api-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: "Claude AI Connector" }),
+        signal: controller.signal,
       });
 
-      const created = await createRes.json().catch(() => ({}));
+      const createdText = await createRes.text();
+      let created = {};
+
+      try {
+        created = createdText ? JSON.parse(createdText) : {};
+      } catch {
+        created = { raw: createdText };
+      }
+
+      if (!createRes.ok) {
+        setStatus(
+          `API Key creation failed (${createRes.status}). ` +
+          `${created?.message || created?.error || created?.code || createdText || "Unknown error"}`
+        );
+        return;
+      }
+
       const createdKey = extractApiKey(created);
 
       if (createdKey) {
@@ -114,22 +139,22 @@ export default function ClaudeConnectPage() {
         return;
       }
 
-      const listRes = await fetch("/api/api-keys", { cache: "no-store" });
-      const listed = await listRes.json().catch(() => ({}));
-      const listedKey = extractApiKey(listed);
-
-      if (listedKey) {
-        saveManualKey(listedKey);
-        setStatus("API Key loaded. Copy your Claude connector URL below.");
-        return;
-      }
-
-      setStatus("Could not display the API Key automatically. Open API Keys, create one, then paste it here.");
+      setStatus("API Key was created, but the secret was not returned. Open API Keys and create a new key, then copy it immediately.");
     } catch (err) {
-      setStatus(err?.message || "Could not create API Key automatically. Paste your key manually.");
+      if (err?.name === "AbortError") {
+        setStatus("Request timed out after 20 seconds. Click Reset and try again, or open API Keys page.");
+      } else {
+        setStatus(err?.message || "Could not create API Key automatically. Paste your key manually.");
+      }
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
+  }
+
+  function resetCreateState() {
+    setLoading(false);
+    setStatus("Ready. You can try creating the API Key again.");
   }
 
   return (
@@ -177,11 +202,20 @@ export default function ClaudeConnectPage() {
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
               <button
+                type="button"
                 onClick={createKey}
-                disabled={loading}
-                className="rounded-2xl bg-lime-300 px-5 py-4 text-sm font-black uppercase tracking-[0.12em] text-black disabled:opacity-60"
+                aria-busy={loading}
+                className="rounded-2xl bg-lime-300 px-5 py-4 text-sm font-black uppercase tracking-[0.12em] text-black shadow-[0_0_30px_rgba(217,255,0,.18)]"
               >
-                {loading ? "Creating..." : "Create / load API Key"}
+                {loading ? "Creating API Key..." : "Create / load API Key"}
+              </button>
+
+              <button
+                type="button"
+                onClick={resetCreateState}
+                className="rounded-2xl border border-white/10 px-5 py-4 text-center text-sm font-bold text-white/80"
+              >
+                Reset
               </button>
 
               <a
