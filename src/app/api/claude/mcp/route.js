@@ -297,7 +297,7 @@ async function handleRpcMessage(req, message) {
 
   if (method === "tools/list") {
     return rpcResult(id, {
-      tools,
+      tools: tools.filter(Boolean),
     });
   }
 
@@ -383,7 +383,7 @@ export async function GET(req) {
         "Generation requires NOVA API credits. Minimum API credit purchase: $10.",
       checkoutUrl: `${getOrigin(req)}/checkout/api-credits?pack=starter`,
     },
-    tools: tools.map((tool) => ({
+    tools: tools.filter(Boolean).map((tool) => ({
       name: tool.name,
       title: tool.title,
       description: tool.description,
