@@ -3,6 +3,8 @@ import Footer from "@/components/Footer";
 import { useState } from "react";
 import Link from "next/link";
 
+import ProductAdVideoShowcase from "@/components/ProductAdVideoShowcase";
+
 const AD_TYPES = [
   { label: "Hyper Motion",       color: "#D7FF00" },
   { label: "UGC",                color: "#a78bfa" },
@@ -255,6 +257,7 @@ export default function ProductAdGenerator() {
         </div>
       </div>
       <Footer />
+          <ProductAdVideoShowcase />
     </main>
   );
 }
