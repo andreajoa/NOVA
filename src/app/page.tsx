@@ -1,6 +1,14 @@
 import Image from "next/image";
 import Link from "next/link";
 
+
+const R2_VIDEO_BASE = "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/videos-nova";
+
+const createdWithNovaVideos = Array.from({ length: 12 }, (_, index) => ({
+  id: index + 1,
+  src: `${R2_VIDEO_BASE}/${index + 1}.mp4`,
+}));
+
 const asset = "/nova/landing-v2/";
 
 const creativeCards = [
@@ -251,27 +259,29 @@ export default function Home() {
           </div>
 
           <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {creativeCards.map((card) => (
+            {createdWithNovaVideos.slice(0, 6).map((video, index) => (
               <article
-                key={card.category}
-                className={"group relative overflow-hidden rounded-[1.7rem] border bg-[#0A0A0A] shadow-[0_30px_100px_rgba(0,0,0,.35)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_0_90px_rgba(215,255,0,.12)] " + card.border}
+                key={video.id}
+                className="group overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#101010] md:rounded-[2rem]"
               >
-                <div className={"absolute inset-0 bg-gradient-to-br opacity-80 " + card.accent} />
-                <Image
-                  src={card.image}
-                  alt={card.title}
-                  width={1086}
-                  height={1448}
-                  className="aspect-[4/3] w-full object-cover opacity-90 transition duration-700 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-5 md:p-6">
-                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#D7FF00]">{card.category}</p>
-                  <h3 className="mt-2 max-w-sm text-2xl font-black leading-[0.95] tracking-[-0.05em] md:text-3xl">
-                    {card.title}
-                  </h3>
-                  <div className="mt-4 inline-flex rounded-full border border-white/15 bg-black/50 px-3 py-2 text-[11px] font-black uppercase tracking-[0.10em] text-white/80 backdrop-blur">
-                    ▶ Play demo
+                <div className="relative aspect-[3/4] overflow-hidden">
+                  <video
+                    src={video.src}
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload={index < 3 ? "auto" : "metadata"}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/8 to-transparent" />
+                  <div className="absolute bottom-5 left-5 right-5">
+                    <p className="text-[11px] font-black uppercase tracking-[.18em] text-[#D7FF00]">
+                      Created with NOVA
+                    </p>
+                    <p className="mt-2 text-xl font-black uppercase leading-none tracking-[-.05em] text-white md:text-2xl">
+                      Product video #{video.id}
+                    </p>
                   </div>
                 </div>
               </article>
