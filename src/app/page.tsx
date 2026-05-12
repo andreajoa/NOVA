@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 
 
+import HomeVideoHero from "@/components/HomeVideoHero";
+
 const R2_VIDEO_BASE = "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/videos";
 
 const createdWithNovaVideos = Array.from({ length: 12 }, (_, index) => ({
@@ -126,6 +128,8 @@ function GlowOrb({ className }: { className: string }) {
 export default function Home() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#030304] text-white">
+      <HomeVideoHero />
+
       <div className="relative isolate overflow-hidden border-b border-white/10 bg-[#050505]">
         <GlowOrb className="-left-24 top-20 h-80 w-80 bg-[#D7FF00]/15" />
         <GlowOrb className="right-0 top-24 h-96 w-96 bg-fuchsia-500/12" />
