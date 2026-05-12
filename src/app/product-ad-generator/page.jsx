@@ -149,7 +149,10 @@ export default function ProductAdGenerator() {
       </div>
 
       {/* TYPE FILTERS */}
-      <div className="max-w-6xl mx-auto px-6 mb-5">
+      
+      <ProductAdVideoShowcase />
+
+<div className="max-w-6xl mx-auto px-6 mb-5">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-black text-[#D7FF00] mr-2">✦ Generate across formats</span>
           <button onClick={() => setActiveType(null)}
@@ -257,7 +260,6 @@ export default function ProductAdGenerator() {
         </div>
       </div>
       <Footer />
-          <ProductAdVideoShowcase />
-    </main>
+</main>
   );
 }
