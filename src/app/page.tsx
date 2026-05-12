@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 
-const R2_VIDEO_BASE = "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/videos-nova";
+const R2_VIDEO_BASE = "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/videos";
 
 const createdWithNovaVideos = Array.from({ length: 12 }, (_, index) => ({
   id: index + 1,

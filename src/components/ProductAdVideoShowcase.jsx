@@ -1,7 +1,7 @@
 "use client";
 
 const R2_BASE =
-  "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/videos-nova";
+  "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/videos";
 
 const videos = Array.from({ length: 12 }, (_, index) => ({
   id: index + 1,
