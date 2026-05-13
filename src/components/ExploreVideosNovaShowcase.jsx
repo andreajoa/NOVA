@@ -1,28 +1,50 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 const R2_BASE =
-  "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/videos-nova";
+  "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/videos";
 
-const videos = Array.from({ length: 12 }, (_, index) => ({
-  id: index + 1,
-  src: `${R2_BASE}/${index + 1}.mp4`,
-  title: [
-    "Cinematic Product Ad",
-    "Luxury Motion",
-    "UGC Creative",
-    "Fashion Drop",
-    "Beauty Visual",
-    "Fast Promo",
-    "Lifestyle Scene",
-    "Product Reveal",
-    "Social Hook",
-    "Hero Creative",
-    "Brand Moment",
-    "Scroll Stopper",
-  ][index],
-}));
+const rawVideos = [
+  { id: 1, title: "Cinematic Product Ad" },
+  { id: 2, title: "Luxury Motion" },
+  { id: 3, title: "UGC Creative" },
+  { id: 4, title: "Fashion Drop" },
+  { id: 5, title: "Beauty Visual" },
+  { id: 6, title: "Fast Promo" },
+  { id: 7, title: "Lifestyle Scene" },
+  { id: 8, title: "Product Reveal" },
+  { id: 9, title: "Social Hook" },
+  { id: 10, title: "Hero Creative" },
+  { id: 11, title: "Brand Moment" },
+  { id: 12, title: "Scroll Stopper" },
+  { id: 13, title: "E-commerce Ad" },
+  { id: 14, title: "Creator Style" },
+  { id: 15, title: "Premium Product" },
+  { id: 16, title: "Visual Hook" },
+  { id: 17, title: "Ad Concept" },
+  { id: 18, title: "Brand Story" },
+  { id: 19, title: "Product Shot" },
+  { id: 20, title: "Social Proof" },
+  { id: 21, title: "Motion Design" },
+  { id: 22, title: "AI Commercial" },
+  { id: 23, title: "NOVA Creative" },
+];
+
+function getUniqueVideos() {
+  const seen = new Set();
+
+  return rawVideos
+    .filter((video) => {
+      if (seen.has(video.id)) return false;
+      seen.add(video.id);
+      return true;
+    })
+    .map((video) => ({
+      ...video,
+      src: `${R2_BASE}/${video.id}.mp4`,
+    }));
+}
 
 function ExploreVideoCard({ video, index }) {
   const videoRef = useRef(null);
@@ -39,10 +61,11 @@ function ExploreVideoCard({ video, index }) {
           el.pause();
         }
       },
-      { threshold: 0.25 }
+      { threshold: 0.22 }
     );
 
     observer.observe(el);
+
     return () => observer.disconnect();
   }, []);
 
@@ -74,9 +97,11 @@ function ExploreVideoCard({ video, index }) {
 }
 
 export default function ExploreVideosNovaShowcase() {
+  const videos = useMemo(() => getUniqueVideos(), []);
+
   return (
     <section
-      id="nova-explore-videos-nova-showcase"
+      id="nova-explore-videos-showcase"
       className="relative overflow-hidden bg-[#030303] px-4 py-14 text-white md:px-8 md:py-20"
     >
       <div className="pointer-events-none absolute left-0 top-20 h-80 w-80 rounded-full bg-[#D7FF00]/10 blur-3xl" />
@@ -92,7 +117,7 @@ export default function ExploreVideosNovaShowcase() {
               See what NOVA can create.
             </h2>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/50 md:text-base">
-              Real AI video examples in loop — product ads, UGC visuals and cinematic creatives generated for brands that move fast.
+              23 unique AI video examples in loop — product ads, UGC visuals and cinematic creatives generated for brands that move fast.
             </p>
           </div>
 

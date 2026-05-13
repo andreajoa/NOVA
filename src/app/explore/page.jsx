@@ -236,7 +236,7 @@ export default function ExplorePage() {
     <main className="min-h-screen overflow-hidden bg-[#020303] text-white">
       <ExploreVideosNovaShowcase />
 
-      <section className="relative border-b border-white/10 bg-[#050505]">
+<section className="relative border-b border-white/10 bg-[#050505]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_16%,rgba(215,255,0,.13),transparent_26%),radial-gradient(circle_at_82%_20%,rgba(217,70,239,.12),transparent_24%)]" />
 
         <div className="relative mx-auto grid max-w-[1600px] gap-6 px-4 py-8 md:px-6 md:py-10 xl:grid-cols-[0.75fr_1.25fr] xl:items-center">
