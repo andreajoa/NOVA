@@ -6,6 +6,8 @@ import { useMemo, useState } from "react";
 
 import ExploreVideosNovaShowcase from "@/components/ExploreVideosNovaShowcase";
 
+import MobileAutoPlayVideo from "@/components/MobileAutoPlayVideo";
+
 const asset = "/nova/explore-v1/";
 const BASE_VIDEO = "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/videos-explorar/";
 
@@ -152,15 +154,13 @@ function ExploreCard({ item, lang, onCopy, copied }) {
     <article className="group relative overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#090909] shadow-[0_24px_80px_rgba(0,0,0,.35)] transition duration-500 hover:-translate-y-1 hover:border-[#D7FF00]/45 hover:shadow-[0_0_80px_rgba(215,255,0,.12)]">
       <div className="relative aspect-[4/5] overflow-hidden">
         {item.video ? (
-          <video
-            src={item.video}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="h-full w-full object-cover"
-          />
-        ) : (
+          <MobileAutoPlayVideo
+                    src={item.video}
+                    className="h-full w-full object-cover"
+                    preload="metadata"
+                    pauseWhenOffscreen
+                    title="NOVA video"
+                  />) : (
           <Image
             src={item.image}
             alt={item.title[lang]}

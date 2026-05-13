@@ -7,8 +7,7 @@ export default function MobileAutoPlayVideo({
   className = "",
   preload = "metadata",
   pauseWhenOffscreen = false,
-  poster,
-  title,
+  title = "NOVA video",
 }) {
   const videoRef = useRef(null);
 
@@ -16,7 +15,9 @@ export default function MobileAutoPlayVideo({
     const video = videoRef.current;
     if (!video) return;
 
-    const prepareVideo = () => {
+    let timers = [];
+
+    const forcePlay = () => {
       video.muted = true;
       video.defaultMuted = true;
       video.loop = true;
@@ -35,41 +36,62 @@ export default function MobileAutoPlayVideo({
       }
     };
 
-    prepareVideo();
+    const schedulePlay = () => {
+      forcePlay();
+      timers.forEach(clearTimeout);
+      timers = [
+        setTimeout(forcePlay, 250),
+        setTimeout(forcePlay, 800),
+        setTimeout(forcePlay, 1600),
+      ];
+    };
 
-    let observer;
+    schedulePlay();
+
+    let observer = null;
 
     if (pauseWhenOffscreen && "IntersectionObserver" in window) {
       observer = new IntersectionObserver(
         ([entry]) => {
           if (entry.isIntersecting) {
-            prepareVideo();
+            schedulePlay();
           } else {
             video.pause();
           }
         },
-        { threshold: 0.18 }
+        { threshold: 0.12 }
       );
 
       observer.observe(video);
     }
 
-    const handleResume = () => {
-      if (!document.hidden) prepareVideo();
+    const resume = () => {
+      if (!document.hidden) schedulePlay();
     };
 
-    window.addEventListener("pageshow", handleResume);
-    document.addEventListener("visibilitychange", handleResume);
-    window.addEventListener("touchstart", prepareVideo, {
-      once: true,
-      passive: true,
-    });
+    video.addEventListener("loadedmetadata", schedulePlay);
+    video.addEventListener("loadeddata", schedulePlay);
+    video.addEventListener("canplay", schedulePlay);
+    video.addEventListener("playing", forcePlay);
+
+    window.addEventListener("pageshow", resume);
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("touchstart", schedulePlay, { passive: true });
+    window.addEventListener("click", schedulePlay, { passive: true });
 
     return () => {
+      timers.forEach(clearTimeout);
       if (observer) observer.disconnect();
-      window.removeEventListener("pageshow", handleResume);
-      document.removeEventListener("visibilitychange", handleResume);
-      window.removeEventListener("touchstart", prepareVideo);
+
+      video.removeEventListener("loadedmetadata", schedulePlay);
+      video.removeEventListener("loadeddata", schedulePlay);
+      video.removeEventListener("canplay", schedulePlay);
+      video.removeEventListener("playing", forcePlay);
+
+      window.removeEventListener("pageshow", resume);
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("touchstart", schedulePlay);
+      window.removeEventListener("click", schedulePlay);
     };
   }, [src, pauseWhenOffscreen]);
 
@@ -84,10 +106,14 @@ export default function MobileAutoPlayVideo({
       loop
       playsInline
       preload={preload}
-      poster={poster}
-      aria-label={title}
       controls={false}
       disablePictureInPicture
+      aria-label={title}
+      data-nova-mobile-video="true"
+      {...{
+        playsinline: "",
+        "webkit-playsinline": "",
+      }}
     />
   );
 }

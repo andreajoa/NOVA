@@ -53,7 +53,7 @@ function ExploreVideoCard({ video, index }) {
       <MobileAutoPlayVideo
         src={video.src}
         className="aspect-[9/16] w-full bg-black object-cover opacity-95 transition duration-700 group-hover:scale-[1.04] group-hover:opacity-100"
-        preload={index < 4 ? "auto" : "metadata"}
+        preload={index < 3 ? "auto" : "metadata"}
         pauseWhenOffscreen
         title={video.title}
       />

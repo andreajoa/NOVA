@@ -271,16 +271,13 @@ export default function Home() {
                 className="group overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#101010] md:rounded-[2rem]"
               >
                 <div className="relative aspect-[3/4] overflow-hidden">
-                  <video
+                  <MobileAutoPlayVideo
                     src={video.src}
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
                     preload={index < 3 ? "auto" : "metadata"}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/8 to-transparent" />
+                    pauseWhenOffscreen
+                    title="NOVA video"
+                  /><div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/8 to-transparent" />
                   <div className="absolute bottom-5 left-5 right-5">
                     <p className="text-[11px] font-black uppercase tracking-[.18em] text-[#D7FF00]">
                       Created with NOVA

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import MobileAutoPlayVideo from "@/components/MobileAutoPlayVideo";
 import { useEffect, useState } from "react";
+import MobileAutoPlayVideo from "@/components/MobileAutoPlayVideo";
 
 const HERO_VIDEO_URL =
   "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/Hero/1.mp4";
@@ -30,14 +30,11 @@ export default function HomeVideoHero() {
 
   return (
     <section className="relative min-h-[92svh] overflow-hidden bg-black text-white">
-      <video
-        className="absolute inset-0 h-full w-full object-cover"
+      <MobileAutoPlayVideo
         src={HERO_VIDEO_URL}
-        autoPlay
-        muted
-        loop
-        playsInline
+        className="absolute inset-0 h-full w-full object-cover"
         preload="auto"
+        title="NOVA AI video hero"
       />
 
       <div className="absolute inset-0 bg-black/68" />
