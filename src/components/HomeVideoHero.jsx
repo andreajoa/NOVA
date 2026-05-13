@@ -1,11 +1,31 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
-const HERO_VIDEO_URL = "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/Hero/1.mp4";
+const HERO_VIDEO_URL =
+  "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/Hero/1.mp4";
 
+const headlineTypeText = "Video Generation";
 
 export default function HomeVideoHero() {
+  const [typedHeadline, setTypedHeadline] = useState("");
+
+  useEffect(() => {
+    let timeout;
+
+    if (typedHeadline.length < headlineTypeText.length) {
+      timeout = setTimeout(() => {
+        setTypedHeadline(headlineTypeText.slice(0, typedHeadline.length + 1));
+      }, 85);
+    } else {
+      timeout = setTimeout(() => {
+        setTypedHeadline("");
+      }, 1800);
+    }
+
+    return () => clearTimeout(timeout);
+  }, [typedHeadline]);
 
   return (
     <section className="relative min-h-[92svh] overflow-hidden bg-black text-white">
@@ -19,7 +39,7 @@ export default function HomeVideoHero() {
         preload="auto"
       />
 
-      <div className="absolute inset-0 bg-black/65" />
+      <div className="absolute inset-0 bg-black/68" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_24%,rgba(215,255,0,0.22),transparent_34%),radial-gradient(circle_at_80%_70%,rgba(215,255,0,0.10),transparent_32%)]" />
       <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#050505] to-transparent" />
 
@@ -31,14 +51,15 @@ export default function HomeVideoHero() {
 
           <h1 className="max-w-6xl text-[clamp(3.15rem,10vw,10rem)] font-black uppercase leading-[0.84] tracking-[-0.095em]">
             <span className="block">The Future of</span>
-            <span className="block font-black text-[#D7FF00] drop-shadow-[0_0_38px_rgba(215,255,0,0.42)]">
-              Video Generation
+            <span className="block min-h-[0.95em] font-black text-[#D7FF00] drop-shadow-[0_0_38px_rgba(215,255,0,0.42)]">
+              {typedHeadline || "\u00A0"}
+              <span className="ml-2 inline-block animate-pulse text-white/80">|</span>
             </span>
             <span className="block">Starts Here</span>
           </h1>
 
           <p className="mt-6 max-w-2xl text-base leading-7 text-white/68 md:mt-8 md:text-xl md:leading-8">
-            Turn prompts, products and ideas into scroll-stopping AI videos for ads,
+            Turn prompts, products and ideas into scroll-stopping videos for ads,
             creators and e-commerce — in minutes.
           </p>
 
