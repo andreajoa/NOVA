@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
+import MobileAutoPlayVideo from "@/components/MobileAutoPlayVideo";
 
 const R2_BASE =
   "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/videos";
@@ -47,39 +48,14 @@ function getUniqueVideos() {
 }
 
 function ExploreVideoCard({ video, index }) {
-  const videoRef = useRef(null);
-
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          el.play().catch(() => {});
-        } else {
-          el.pause();
-        }
-      },
-      { threshold: 0.22 }
-    );
-
-    observer.observe(el);
-
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <article className="group relative overflow-hidden rounded-[1.6rem] border border-white/10 bg-black shadow-[0_30px_90px_rgba(0,0,0,.45)] transition duration-500 hover:-translate-y-1 hover:border-[#D7FF00]/50">
-      <video
-        ref={videoRef}
+      <MobileAutoPlayVideo
         src={video.src}
         className="aspect-[9/16] w-full bg-black object-cover opacity-95 transition duration-700 group-hover:scale-[1.04] group-hover:opacity-100"
-        autoPlay
-        muted
-        loop
-        playsInline
         preload={index < 4 ? "auto" : "metadata"}
+        pauseWhenOffscreen
+        title={video.title}
       />
 
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />

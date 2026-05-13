@@ -1,5 +1,7 @@
 "use client";
 
+import MobileAutoPlayVideo from "@/components/MobileAutoPlayVideo";
+
 const R2_BASE =
   "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/videos";
 

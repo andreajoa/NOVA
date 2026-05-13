@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import MobileAutoPlayVideo from "@/components/MobileAutoPlayVideo";
 import { useEffect, useState } from "react";
 
 const HERO_VIDEO_URL =
