@@ -1,41 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
 
 const HERO_VIDEO_URL = "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/Hero/1.mp4";
 
-const rotatingWords = [
-  "AI Videos",
-  "Product Ads",
-  "UGC Creatives",
-  "Viral Content",
-];
 
 export default function HomeVideoHero() {
-  const [wordIndex, setWordIndex] = useState(0);
-  const [typed, setTyped] = useState("");
-
-  const currentWord = rotatingWords[wordIndex];
-
-  useEffect(() => {
-    let timeout;
-
-    if (typed.length < currentWord.length) {
-      timeout = setTimeout(() => {
-        setTyped(currentWord.slice(0, typed.length + 1));
-      }, 70);
-    } else {
-      timeout = setTimeout(() => {
-        setTyped("");
-        setWordIndex((index) => (index + 1) % rotatingWords.length);
-      }, 1400);
-    }
-
-    return () => clearTimeout(timeout);
-  }, [typed, currentWord]);
-
-  const typedLabel = useMemo(() => typed || currentWord.slice(0, 1), [typed, currentWord]);
 
   return (
     <section className="relative min-h-[92svh] overflow-hidden bg-black text-white">
@@ -56,17 +26,15 @@ export default function HomeVideoHero() {
       <div className="relative z-10 mx-auto flex min-h-[92svh] max-w-[1500px] items-center px-4 py-28 md:px-8">
         <div className="max-w-6xl">
           <div className="mb-5 inline-flex rounded-full border border-[#D7FF00]/35 bg-black/45 px-4 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D7FF00] backdrop-blur-xl md:text-xs">
-            AI video generator for brands
+            The next era of AI video
           </div>
 
-          <h1 className="max-w-6xl text-[clamp(3.4rem,11vw,10.5rem)] font-black uppercase leading-[0.82] tracking-[-0.095em]">
-            Create
-            <br />
-            <span className="block font-black text-[#D7FF00] drop-shadow-[0_0_34px_rgba(215,255,0,0.36)]">
-              {typedLabel}
-              <span className="ml-1 inline-block animate-pulse text-white/80">|</span>
+          <h1 className="max-w-6xl text-[clamp(3.15rem,10vw,10rem)] font-black uppercase leading-[0.84] tracking-[-0.095em]">
+            <span className="block">The Future of</span>
+            <span className="block font-black text-[#D7FF00] drop-shadow-[0_0_38px_rgba(215,255,0,0.42)]">
+              Video Generation
             </span>
-            <span className="block">That Sell</span>
+            <span className="block">Starts Here</span>
           </h1>
 
           <p className="mt-6 max-w-2xl text-base leading-7 text-white/68 md:mt-8 md:text-xl md:leading-8">
