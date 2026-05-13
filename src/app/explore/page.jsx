@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import ExploreVideosNovaShowcase from "@/components/ExploreVideosNovaShowcase";
+
 const asset = "/nova/explore-v1/";
 const BASE_VIDEO = "https://pub-c1436a1811c64a27a4f69459e98ad02a.r2.dev/explore/videos-explorar/";
 
@@ -232,6 +234,8 @@ export default function ExplorePage() {
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#020303] text-white">
+      <ExploreVideosNovaShowcase />
+
       <section className="relative border-b border-white/10 bg-[#050505]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_16%,rgba(215,255,0,.13),transparent_26%),radial-gradient(circle_at_82%_20%,rgba(217,70,239,.12),transparent_24%)]" />
 
