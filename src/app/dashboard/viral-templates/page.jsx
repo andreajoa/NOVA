@@ -113,6 +113,16 @@ function buildFinalPrompt(template, hookText, extraPrompt) {
     .join("\n\n");
 }
 
+function templatePreviewSrc(template, extension = "png") {
+  return `/nova/template-previews/${template.id}.${extension}`;
+}
+
+function handleTemplatePreviewError(event, template) {
+  if (event.currentTarget.dataset.fallback === "true") return;
+  event.currentTarget.dataset.fallback = "true";
+  event.currentTarget.src = templatePreviewSrc(template, "svg");
+}
+
 function TemplateCard({ template, active, onClick }) {
   return (
     <button
@@ -125,6 +135,22 @@ function TemplateCard({ template, active, onClick }) {
           : "border-white/10 bg-white/[0.025] hover:border-[#D7FF00]/40 hover:bg-white/[0.04]",
       ].join(" ")}
     >
+      <div className="relative mb-4 overflow-hidden rounded-2xl border border-white/10 bg-black">
+        <img
+          src={templatePreviewSrc(template)}
+          onError={(event) => handleTemplatePreviewError(event, template)}
+          alt={`${template.name} template preview`}
+          className="aspect-video w-full object-cover transition duration-500 group-hover:scale-[1.035]"
+          loading="lazy"
+        />
+
+        <div className="absolute left-3 top-3 rounded-full border border-black/20 bg-[#D7FF00] px-3 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-black">
+          Example
+        </div>
+
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+      </div>
+
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#D7FF00]">
@@ -510,6 +536,15 @@ export default function ViralTemplateStudioPage() {
               </h2>
 
               <div className="mt-5 rounded-2xl border border-[#D7FF00]/20 bg-[#D7FF00]/10 p-4">
+                <div className="mb-4 overflow-hidden rounded-2xl border border-white/10 bg-black">
+                  <img
+                    src={templatePreviewSrc(selectedTemplate)}
+                    onError={(event) => handleTemplatePreviewError(event, selectedTemplate)}
+                    alt={`${selectedTemplate.name} template preview`}
+                    className="aspect-video w-full object-cover"
+                  />
+                </div>
+
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#D7FF00]">
                   Selected template
                 </p>

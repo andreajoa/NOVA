@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "viral-previews:placeholder": "node scripts/generate-viral-template-preview-placeholders.mjs",
+    "viral-previews:ai": "node scripts/generate-viral-template-ai-previews.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1041.0",
