@@ -17,6 +17,7 @@ const MENU_GROUPS = [
         items: [
           { label: "Gerar Imagem",  href: "/dashboard/models",    path: "/dashboard/models"    },
           { label: "Gerar Vídeo",   href: "/dashboard/generate",  path: "/dashboard/generate"  },
+          { label: "Character & Story Studio", href: "/dashboard/characters", path: "/dashboard/characters" },
           { label: "UGC Produto",   href: "/dashboard/templates", path: "/dashboard/templates" },
           { href: "/dashboard/landing-page", label: "Landing Page", icon: "▣" },
           { href: "/dashboard/claude-connect", label: "Claude Connect", icon: "⌁" },
@@ -45,6 +46,7 @@ const MENU_GROUPS = [
           { label: "Claude AI", href: "/claude", path: "/claude" },
           { label: "Characters", href: "/dashboard/characters", path: "/dashboard/characters" },
           { label: "Product Ad Generator",href: "/product-ad-generator", path: "/product-ad-generator"  },
+          { label: "Character Stories", href: "/dashboard/characters", path: "/dashboard/characters" },
           { label: "Explorar",            href: "/explore",              path: "/explore"               },
         ],
       },
