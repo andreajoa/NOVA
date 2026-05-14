@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import CreditBalanceCard from "@/components/CreditBalanceCard";
 
 const items = [
+  { href: "/dashboard/viral-templates",   label: "Templates",    icon: "✦" },
   { href: "/dashboard",                   label: "Dashboard",    icon: "▦" },
   { href: "/claude",                      label: "Claude AI",    icon: "◇" },
   { href: "/dashboard/models",            label: "Imagem",       icon: "⬛" },
