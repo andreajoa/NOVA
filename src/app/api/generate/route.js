@@ -188,6 +188,34 @@ function withGeneratedMediaUrls(payload, rawOutput = null) {
   };
 }
 
+
+function normalizeResolutionForEndpoint(endpoint, value) {
+  const raw = String(value || "").toLowerCase();
+  const ep = String(endpoint || "");
+
+  if (ep.includes("wan/v2.2-a14b") || ep.includes("hunyuan-video")) {
+    return ["480p", "580p", "720p"].includes(raw) ? raw : "480p";
+  }
+
+  if (ep.includes("seedance-2.0")) {
+    return ["480p", "720p", "1080p"].includes(raw) ? raw : "480p";
+  }
+
+  if (ep.includes("pixverse")) {
+    return ["360p", "540p", "720p", "1080p"].includes(raw) ? raw : "540p";
+  }
+
+  if (ep.includes("veo3.1")) {
+    return ["720p", "1080p", "4k"].includes(raw) ? raw : "720p";
+  }
+
+  if (ep.includes("happy-horse")) {
+    return ["720p", "1080p"].includes(raw) ? raw : "720p";
+  }
+
+  return undefined;
+}
+
 export async function POST(req) {
   const apiIdentity = await validateApiKeyFromRequest(req);
   let userId = apiIdentity?.userId || null;

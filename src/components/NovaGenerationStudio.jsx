@@ -8,6 +8,8 @@ import { falModels } from "@/lib/falModels";
 import { extractGeneratedMediaUrl, isVideoUrl } from "@/lib/generatedMediaUrl";
 
 
+import { getVideoResolutionOptions, normalizeVideoResolutionForModel } from "@/lib/videoResolutionOptions";
+
 const normalizeGenerationResponse = (data) => {
   const mediaUrl = extractGeneratedMediaUrl(data);
 
@@ -331,8 +333,13 @@ export default function NovaGenerationStudio({
   const modelEntries = getEntries(forceType);
 
   const durationOptions = useMemo(() => durationOptionsFor(modelKey, model), [modelKey, model]);
+  const videoResolutionOptions = useMemo(
+    () => getVideoResolutionOptions(modelKey, modeKey),
+    [modelKey, modeKey]
+  );
+  const shouldShowVideoResolution = !isImage && videoResolutionOptions.length > 0;
   const [imageResolution, setImageResolution] = useState("2K");
-  const [videoResolution, setVideoResolution] = useState("1080p");
+  const [videoResolution, setVideoResolution] = useState("720p");
   const [imageRatio, setImageRatio] = useState("1:1");
   const [videoRatio, setVideoRatio] = useState("16:9");
   const [imageCount, setImageCount] = useState(2);
@@ -356,6 +363,21 @@ export default function NovaGenerationStudio({
       setSeconds(durationOptions[0] || 5);
     }
   }, [durationOptions, seconds]);
+
+  useEffect(() => {
+    if (!shouldShowVideoResolution) return;
+
+    const nextResolution = normalizeVideoResolutionForModel(
+      modelKey,
+      modeKey,
+      videoResolution
+    );
+
+    if (nextResolution && nextResolution !== videoResolution) {
+      setVideoResolution(nextResolution);
+    }
+  }, [modelKey, modeKey, videoResolution, shouldShowVideoResolution]);
+
 
   function selectModel(nextModelKey) {
     const nextModel = getModel(nextModelKey);
@@ -424,7 +446,7 @@ export default function NovaGenerationStudio({
             }
           : {
               aspect_ratio: videoRatio,
-              resolution: videoResolution,
+              resolution: normalizeVideoResolutionForModel(modelKey, modeKey, videoResolution),
               duration: seconds,
               seconds,
             }),
@@ -586,6 +608,25 @@ export default function NovaGenerationStudio({
               <div className="grid gap-4">
                 <SelectBox label="Modelo" value={modelKey} onChange={selectModel} options={modelEntries} />
                 <SelectBox label="Modo" value={modeKey} onChange={selectMode} options={modeEntries} />
+
+                {shouldShowVideoResolution && (
+                  <div data-nova-video-resolution className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                    <p className="text-[11px] font-black uppercase tracking-[0.18em] text-white/45">
+                      Video resolution
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {videoResolutionOptions.map(([key, item]) => (
+                        <OptionButton
+                          key={key}
+                          active={videoResolution === key}
+                          onClick={() => setVideoResolution(key)}
+                        >
+                          {item.label || key}
+                        </OptionButton>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">
