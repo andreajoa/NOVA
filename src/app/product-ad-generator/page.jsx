@@ -1,265 +1,485 @@
 "use client";
-import Footer from "@/components/Footer";
-import { useState } from "react";
+
+import { useMemo, useState } from "react";
 import Link from "next/link";
 
-import ProductAdVideoShowcase from "@/components/ProductAdVideoShowcase";
+const SEEDANCE_FAST_TEXT = "bytedance/seedance-2.0/fast/text-to-video";
+const SEEDANCE_FAST_IMAGE = "bytedance/seedance-2.0/fast/image-to-video";
 
-const AD_TYPES = [
-  { label: "Hyper Motion",       color: "#D7FF00" },
-  { label: "UGC",                color: "#a78bfa" },
-  { label: "UGC Virtual Try On", color: "#f472b6" },
-  { label: "Unboxing",           color: "#60a5fa" },
-  { label: "TV Spot",            color: "#fb923c" },
-  { label: "Tutorial",           color: "#34d399" },
-  { label: "Pro Virtual Try On", color: "#e879f9" },
+const platforms = [
+  { key: "tiktok", label: "TikTok Ads", ratio: "9:16" },
+  { key: "facebook", label: "Facebook Ads", ratio: "1:1" },
+  { key: "youtube_shorts", label: "YouTube Shorts", ratio: "9:16" },
+  { key: "youtube_ads", label: "YouTube Ads", ratio: "16:9" },
 ];
 
-// Usando Unsplash source que funciona sem config extra
-const GRID_ITEMS = [
-  { type: "Hyper Motion",       seed: 101 },
-  { type: "Unboxing",           seed: 102 },
-  { type: "Hyper Motion",       seed: 103 },
-  { type: "UGC",                seed: 201 },
-  { type: "UGC",                seed: 202 },
-  { type: "UGC Virtual Try On", seed: 301 },
-  { type: "UGC",                seed: 203 },
-  { type: "UGC",                seed: 204 },
-  { type: "TV Spot",            seed: 401 },
-  { type: "Unboxing",           seed: 104 },
-  { type: "UGC Virtual Try On", seed: 302 },
-  { type: "Tutorial",           seed: 501 },
-  { type: "UGC",                seed: 205 },
-  { type: "Unboxing",           seed: 105 },
-  { type: "UGC Virtual Try On", seed: 303 },
-  { type: "Tutorial",           seed: 502 },
-  { type: "UGC",                seed: 206 },
-  { type: "Hyper Motion",       seed: 106 },
-  { type: "UGC",                seed: 207 },
-  { type: "Pro Virtual Try On", seed: 601 },
-  { type: "UGC Virtual Try On", seed: 304 },
-  { type: "Unboxing",           seed: 107 },
-  { type: "Hyper Motion",       seed: 108 },
-  { type: "UGC Virtual Try On", seed: 305 },
-];
+const durations = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+const resolutions = ["480p", "720p"];
 
-const TYPE_COLORS = {
-  "Hyper Motion":       "#D7FF00",
-  "UGC":                "#a78bfa",
-  "UGC Virtual Try On": "#f472b6",
-  "Unboxing":           "#60a5fa",
-  "TV Spot":            "#fb923c",
-  "Tutorial":           "#34d399",
-  "Pro Virtual Try On": "#e879f9",
-};
+function collectUrls(payload) {
+  const urls = [];
+  const seen = new Set();
 
-function scrapeFromUrl(url) {
-  try {
-    const u = new URL(url);
-    const host = u.hostname.replace("www.","");
-    const parts = u.pathname.split("/").filter(Boolean);
-    const name = parts[parts.length - 1]
-      ?.replace(/[-_]/g," ")
-      .replace(/\w/g, c => c.toUpperCase()) || host;
-    return { name, domain: host };
-  } catch {
-    return { name: "Your Product", domain: "" };
-  }
-}
+  function add(value) {
+    if (!value || typeof value !== "string") return;
+    const matches = value.match(/https?:\/\/[^\s"'<>\\]+/g) || [];
 
-export default function ProductAdGenerator() {
-  const [urlInput, setUrlInput] = useState("");
-  const [product, setProduct]   = useState(null);
-  const [loading, setLoading]   = useState(false);
-  const [activeType, setActiveType] = useState(null);
-  const [prompt, setPrompt]     = useState("");
-  const [hovered, setHovered]   = useState(null);
+    for (const raw of matches.length ? matches : [value]) {
+      const clean = String(raw)
+        .replace(/\\u0026/g, "&")
+        .replace(/&amp;/g, "&")
+        .replace(/[),.;\]]+$/g, "");
 
-  function handleGenerate() {
-    if (!urlInput.trim()) return;
-    setLoading(true);
-    setTimeout(() => {
-      setProduct(scrapeFromUrl(urlInput));
-      setLoading(false);
-    }, 1200);
+      if (/^https?:\/\//i.test(clean)) urls.push(clean);
+    }
   }
 
-  const filtered = activeType
-    ? GRID_ITEMS.filter(i => i.type === activeType)
-    : GRID_ITEMS;
+  function walk(value) {
+    if (value == null) return;
+
+    if (typeof value === "string") {
+      add(value);
+      return;
+    }
+
+    if (typeof value !== "object") return;
+    if (seen.has(value)) return;
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      value.forEach(walk);
+      return;
+    }
+
+    const priority = [
+      "video",
+      "url",
+      "video_url",
+      "videoUrl",
+      "mediaUrl",
+      "outputUrl",
+      "image",
+      "images",
+      "data",
+      "output",
+      "result",
+      "rawOutput",
+    ];
+
+    for (const key of priority) {
+      if (key in value) walk(value[key]);
+    }
+
+    for (const key of Object.keys(value)) {
+      if (!priority.includes(key)) walk(value[key]);
+    }
+  }
+
+  walk(payload);
+
+  const unique = [...new Set(urls)];
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white pt-[72px]">
+    unique.filter((url) => /\.(mp4|webm|mov)(\?|#|$)/i.test(url) || /video/i.test(url)) ||
+    unique
+  );
+}
 
-      {/* HERO */}
-      <div className="relative">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(215,255,0,0.07),transparent_60%)]" />
-        <div className="relative max-w-5xl mx-auto px-6 pt-16 pb-10 text-center">
+function buildProductAdPrompt({ analysis, platform, ratio, duration, resolution }) {
+  const bullets = analysis?.copy?.bullets?.slice(0, 7)?.join("\n- ") || "";
+  const colors = analysis?.colors?.length ? analysis.colors.join(", ") : "use brand colors from the product page";
 
-          {product ? (
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="w-7 h-7 rounded-lg bg-[#D7FF00]/10 border border-[#D7FF00]/20 flex items-center justify-center text-xs font-black text-[#D7FF00]">
-                {product.name[0]}
+  return `
+Create a high-converting UGC/product ad video for ${platform}.
+
+Product page analysis:
+Store: ${analysis.storeName || "Unknown store"}
+Brand: ${analysis.brand || analysis.storeName || "Unknown brand"}
+Product: ${analysis.productName || "Product"}
+Price: ${analysis.price ? `${analysis.currency || ""} ${analysis.price}` : "not shown"}
+Description: ${analysis.description || "Use the product page copy."}
+Brand colors: ${colors}
+Important page copy:
+- ${bullets || analysis.description || analysis.productName}
+
+Video requirements:
+Duration: ${duration} seconds
+Aspect ratio: ${ratio}
+Resolution: ${resolution}
+Style: premium UGC ad, direct-response, modern e-commerce, scroll-stopping, realistic product demo.
+Structure:
+1. First 1 second: strong hook that makes the viewer stop scrolling.
+2. Show the product clearly and make it feel desirable.
+3. Highlight the main benefit using visual storytelling, not boring text.
+4. Add subtle social-proof energy: "this looks premium", "I did not expect this", "worth checking out".
+5. End with a clear CTA: "Shop now", "Try it today", or "Tap to learn more".
+Keep the product accurate. Do not invent medical claims. Use clean cinematic lighting, fast pacing, realistic movement, and ad-ready framing.
+`.trim();
+}
+
+function PillButton({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-[0.14em] transition",
+        active
+          ? "border-[#D7FF00] bg-[#D7FF00] text-black shadow-[0_0_30px_rgba(215,255,0,.18)]"
+          : "border-white/10 bg-white/[0.03] text-white/60 hover:border-[#D7FF00]/50 hover:text-[#D7FF00]",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+export default function ProductAdGeneratorPage() {
+  const [productUrl, setProductUrl] = useState("");
+  const [analysis, setAnalysis] = useState(null);
+  const [platform, setPlatform] = useState("tiktok");
+  const [duration, setDuration] = useState(8);
+  const [resolution, setResolution] = useState("480p");
+  const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+
+  const selectedPlatform = useMemo(
+    () => platforms.find((item) => item.key === platform) || platforms[0],
+    [platform]
+  );
+
+  const ratio = selectedPlatform.ratio;
+  const urls = useMemo(() => collectUrls(result || {}), [result]);
+  const firstVideoUrl = urls[0] || "";
+
+  async function analyzeProduct() {
+    if (!productUrl.trim()) return;
+
+    setLoadingAnalysis(true);
+    setError("");
+    setResult(null);
+
+    try {
+      const response = await fetch("/api/product-ad/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: productUrl.trim() }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Could not analyze this product page.");
+      }
+
+      setAnalysis(data);
+    } catch (err) {
+      setError(err?.message || "Could not analyze product page.");
+    } finally {
+      setLoadingAnalysis(false);
+    }
+  }
+
+  async function generateVideo() {
+    if (!analysis) return;
+
+    setGenerating(true);
+    setError("");
+    setResult(null);
+
+    try {
+      const endpoint = analysis.mainImage ? SEEDANCE_FAST_IMAGE : SEEDANCE_FAST_TEXT;
+      const mode = analysis.mainImage ? "image-to-video" : "text-to-video";
+
+      const prompt = buildProductAdPrompt({
+        analysis,
+        platform: selectedPlatform.label,
+        ratio,
+        duration,
+        resolution,
+      });
+
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpoint,
+          prompt,
+          negative_prompt: "low quality, blurry, distorted product, unreadable text, broken hands, fake claims",
+          model: "seedance",
+          mode,
+          type: "video",
+          hasAsset: Boolean(analysis.mainImage),
+          ...(analysis.mainImage ? { image_url: analysis.mainImage } : {}),
+          aspect_ratio: ratio,
+          resolution,
+          duration: String(duration),
+          seconds: duration,
+          product_ad: true,
+          source_url: analysis.url,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.message || data?.error || "Could not generate product ad video.");
+      }
+
+      setResult(data);
+    } catch (err) {
+      setError(err?.message || "Could not generate video.");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-black px-4 py-10 text-white md:px-8">
+      <section className="mx-auto max-w-[1500px]">
+        <div className="rounded-[2rem] border border-[#D7FF00]/20 bg-[radial-gradient(circle_at_20%_20%,rgba(215,255,0,.16),transparent_34%),linear-gradient(135deg,#050505,#0c0c0c)] p-5 md:p-10">
+          <div className="grid gap-8 lg:grid-cols-[1.1fr_.9fr] lg:items-center">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.26em] text-[#D7FF00]">
+                NOVA Product Ad Generator
+              </p>
+
+              <h1 className="mt-4 max-w-5xl text-5xl font-black uppercase leading-[0.88] tracking-[-0.08em] md:text-7xl">
+                Turn any product page into an ad-ready video.
+              </h1>
+
+              <p className="mt-5 max-w-2xl text-base leading-7 text-white/55 md:text-lg">
+                Paste a product URL. NOVA reads the product page, extracts the offer,
+                colors, images and copy, then generates a UGC-style ad for TikTok,
+                Facebook or YouTube.
+              </p>
+
+              <div className="mt-7 grid gap-3 sm:grid-cols-3">
+                {["Read product page", "Build UGC ad script", "Generate video"].map((item) => (
+                  <div key={item} className="rounded-2xl border border-white/10 bg-black/35 p-4 text-sm font-bold text-white/70">
+                    <span className="text-[#D7FF00]">✓</span> {item}
+                  </div>
+                ))}
               </div>
-              <span className="text-white/50 text-sm">{product.domain}</span>
-              <span className="text-[#D7FF00] text-xs bg-[#D7FF00]/10 px-2 py-0.5 rounded-full font-black">✓ Connected</span>
             </div>
-          ) : (
-            <p className="text-xs font-black uppercase tracking-[0.3em] text-[#D7FF00] mb-4">Product · Avatar · UGC</p>
-          )}
 
-          <h1 className="text-5xl md:text-7xl font-black uppercase tracking-[-0.06em] leading-none mb-10">
-            {product ? `Ads for ${product.name}` : "Turn any product into a video ad"}
-          </h1>
+            <div className="rounded-[1.6rem] border border-white/10 bg-black/50 p-4 shadow-[0_30px_100px_rgba(0,0,0,.4)]">
+              <div className="aspect-video rounded-2xl border border-[#D7FF00]/20 bg-black p-6">
+                <div className="flex h-full flex-col justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#D7FF00]">
+                      Fixed UGC Model
+                    </p>
+                    <h2 className="mt-3 text-3xl font-black uppercase tracking-[-0.05em]">
+                      Seedance 2.0 Fast
+                    </h2>
+                    <p className="mt-2 text-sm leading-6 text-white/50">
+                      Built for 4–15s product ads, vertical videos and fast creative testing.
+                    </p>
+                  </div>
 
-          {/* URL input */}
-          <div className="max-w-2xl mx-auto bg-[#0D0D0D] border border-white/10 rounded-2xl p-2 flex gap-2 mb-4">
-            <input
-              value={urlInput}
-              onChange={e => setUrlInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleGenerate()}
-              placeholder="Paste product URL — we extract everything automatically"
-              className="flex-1 bg-transparent px-4 py-3 text-sm text-white placeholder-white/25 outline-none"
-            />
-            <button onClick={handleGenerate} disabled={loading}
-              className="bg-[#D7FF00] text-black text-xs font-black uppercase tracking-wider px-6 py-3 rounded-xl hover:bg-[#c8f000] transition disabled:opacity-50 flex-shrink-0 border-none cursor-pointer">
-              {loading ? "Scanning…" : "GENERATE →"}
-            </button>
-          </div>
-
-          {/* Prompt row */}
-          <div className="max-w-2xl mx-auto flex items-center gap-2 flex-wrap justify-center">
-            <div className="flex items-center gap-2 bg-[#0D0D0D] border border-white/8 rounded-xl px-4 py-2 flex-1 min-w-[180px]">
-              <span className="text-white/20 text-xs">+</span>
-              <input value={prompt} onChange={e => setPrompt(e.target.value)}
-                placeholder="Describe what happens in the ad..."
-                className="bg-transparent text-sm text-white placeholder-white/20 outline-none flex-1 min-w-0" />
-            </div>
-            {["UGC","9:16","8s","720p"].map(f => (
-              <span key={f} className="text-xs text-white/40 bg-white/5 border border-white/8 px-3 py-2 rounded-lg font-bold cursor-pointer hover:border-[#D7FF00]/40 hover:text-white transition select-none">
-                {f}
-              </span>
-            ))}
-            <Link href="/dashboard/generate"
-              className="bg-[#D7FF00] text-black text-xs font-black uppercase tracking-wider px-5 py-2 rounded-xl hover:bg-[#c8f000] transition no-underline flex-shrink-0">
-              GENERATE →
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* TYPE FILTERS */}
-      
-      <ProductAdVideoShowcase />
-
-<div className="max-w-6xl mx-auto px-6 mb-5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-black text-[#D7FF00] mr-2">✦ Generate across formats</span>
-          <button onClick={() => setActiveType(null)}
-            className={"text-xs font-bold px-3 py-1.5 rounded-full border transition cursor-pointer " +
-              (!activeType ? "bg-[#D7FF00] text-black border-[#D7FF00]" : "text-white/40 border-white/10 hover:text-white bg-transparent")}>
-            All
-          </button>
-          {AD_TYPES.map(t => (
-            <button key={t.label} onClick={() => setActiveType(activeType === t.label ? null : t.label)}
-              className={"text-xs font-bold px-3 py-1.5 rounded-full border transition cursor-pointer " +
-                (activeType === t.label ? "border-transparent text-black" : "text-white/40 border-white/10 hover:text-white bg-transparent")}
-              style={activeType === t.label ? { backgroundColor: t.color } : {}}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* VIDEO GRID — CSS grid simples sem columns */}
-      <div className="max-w-6xl mx-auto px-6 pb-24">
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "12px",
-        }}>
-          {filtered.map((item, i) => {
-            const tagColor = TYPE_COLORS[item.type] || "#fff";
-            // Alterna alturas para dar efeito masonry visual
-            const tall = i % 5 === 0 || i % 7 === 0;
-            return (
-              <div key={i}
-                onMouseEnter={() => setHovered(i)}
-                onMouseLeave={() => setHovered(null)}
-                style={{
-                  position: "relative",
-                  borderRadius: "16px",
-                  overflow: "hidden",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  cursor: "pointer",
-                  background: "#111",
-                  aspectRatio: tall ? "9/16" : "3/4",
-                  gridRow: tall ? "span 1" : "span 1",
-                }}>
-                {/* Imagem via via.placeholder que sempre funciona */}
-                <img
-                  src={`https://picsum.photos/seed/${item.seed}/400/${tall ? 700 : 540}`}
-                  alt={item.type}
-                  style={{
-                    width:"100%", height:"100%",
-                    objectFit:"cover",
-                    display:"block",
-                    transition:"transform 0.5s ease",
-                    transform: hovered === i ? "scale(1.05)" : "scale(1)",
-                  }}
-                  onError={e => {
-                    // fallback: colored div se imagem falhar
-                    e.currentTarget.style.display = "none";
-                    e.currentTarget.parentElement.style.background = "#1a1a1a";
-                  }}
-                />
-                {/* Gradient overlay */}
-                <div style={{
-                  position:"absolute", inset:0,
-                  background:"linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%)",
-                  pointerEvents:"none",
-                }} />
-                {/* Type tag */}
-                <div style={{position:"absolute", top:"10px", left:"10px"}}>
-                  <span style={{
-                    fontSize:"10px", fontWeight:900, textTransform:"uppercase",
-                    letterSpacing:"0.05em", background:"rgba(0,0,0,0.7)",
-                    color: tagColor, padding:"4px 8px", borderRadius:"8px",
-                    backdropFilter:"blur(4px)",
-                  }}>{item.type}</span>
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs font-black uppercase tracking-[0.12em]">
+                    <div className="rounded-xl bg-white/[0.04] p-3 text-white/60">{ratio}</div>
+                    <div className="rounded-xl bg-white/[0.04] p-3 text-white/60">{duration}s</div>
+                    <div className="rounded-xl bg-[#D7FF00] p-3 text-black">{resolution}</div>
+                  </div>
                 </div>
-                {/* Hover actions */}
-                {hovered === i && (
-                  <div style={{
-                    position:"absolute", bottom:"10px", left:"10px", right:"10px",
-                    display:"flex", gap:"6px",
-                  }}>
-                    <Link href="/dashboard/generate"
-                      className="no-underline"
-                      style={{
-                        flex:1, textAlign:"center",
-                        background:"#D7FF00", color:"#000",
-                        fontSize:"10px", fontWeight:900,
-                        textTransform:"uppercase", letterSpacing:"0.05em",
-                        padding:"8px", borderRadius:"10px",
-                      }}>
-                      Recreate
-                    </Link>
-                    <button style={{
-                      background:"rgba(255,255,255,0.15)",
-                      backdropFilter:"blur(4px)",
-                      color:"#fff", fontSize:"12px",
-                      padding:"8px 12px", borderRadius:"10px",
-                      border:"none", cursor:"pointer", fontWeight:"bold",
-                    }}>♥</button>
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-[.95fr_1.05fr]">
+          <section className="rounded-[1.7rem] border border-white/10 bg-[#080808] p-5 md:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-[#D7FF00]">
+              Step 1
+            </p>
+            <h2 className="mt-2 text-3xl font-black uppercase tracking-[-0.05em]">
+              Paste product URL
+            </h2>
+
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <input
+                value={productUrl}
+                onChange={(event) => setProductUrl(event.target.value)}
+                placeholder="https://store.com/products/product-name"
+                className="h-14 flex-1 rounded-2xl border border-white/10 bg-black/50 px-4 text-sm font-bold text-white outline-none transition placeholder:text-white/25 focus:border-[#D7FF00]/50"
+              />
+
+              <button
+                type="button"
+                onClick={analyzeProduct}
+                disabled={loadingAnalysis || !productUrl.trim()}
+                className="h-14 rounded-2xl bg-[#D7FF00] px-6 text-sm font-black uppercase tracking-[0.14em] text-black transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loadingAnalysis ? "Analyzing..." : "Analyze"}
+              </button>
+            </div>
+
+            {analysis && (
+              <div className="mt-6 rounded-2xl border border-[#D7FF00]/20 bg-black/40 p-4">
+                <div className="flex gap-4">
+                  {analysis.mainImage && (
+                    <img
+                      src={analysis.mainImage}
+                      alt={analysis.productName}
+                      className="h-24 w-24 rounded-xl border border-white/10 object-cover"
+                    />
+                  )}
+
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D7FF00]">
+                      {analysis.storeName}
+                    </p>
+                    <h3 className="mt-1 text-xl font-black tracking-[-0.04em]">
+                      {analysis.productName}
+                    </h3>
+                    <p className="mt-2 line-clamp-3 text-sm leading-6 text-white/50">
+                      {analysis.description || "Product page analyzed."}
+                    </p>
+                  </div>
+                </div>
+
+                {analysis.colors?.length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {analysis.colors.map((color) => (
+                      <span
+                        key={color}
+                        className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-white/60"
+                      >
+                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
+                        {color}
+                      </span>
+                    ))}
                   </div>
                 )}
               </div>
-            );
-          })}
+            )}
+          </section>
+
+          <section className="rounded-[1.7rem] border border-white/10 bg-[#080808] p-5 md:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-[#D7FF00]">
+              Step 2
+            </p>
+            <h2 className="mt-2 text-3xl font-black uppercase tracking-[-0.05em]">
+              Choose ad format
+            </h2>
+
+            <div className="mt-5 space-y-5">
+              <div>
+                <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em] text-white/45">
+                  Platform
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {platforms.map((item) => (
+                    <PillButton key={item.key} active={platform === item.key} onClick={() => setPlatform(item.key)}>
+                      {item.label}
+                    </PillButton>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em] text-white/45">
+                  Duration
+                </p>
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                  {durations.map((item) => (
+                    <PillButton key={item} active={duration === item} onClick={() => setDuration(item)}>
+                      {item}s
+                    </PillButton>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em] text-white/45">
+                  Resolution
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {resolutions.map((item) => (
+                    <PillButton key={item} active={resolution === item} onClick={() => setResolution(item)}>
+                      {item}
+                    </PillButton>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={generateVideo}
+                disabled={!analysis || generating}
+                className="h-16 w-full rounded-2xl bg-[#D7FF00] text-sm font-black uppercase tracking-[0.18em] text-black transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {generating ? "Generating product ad..." : `Generate ${duration}s ${selectedPlatform.label} Video`}
+              </button>
+
+              <p className="text-xs leading-6 text-white/35">
+                Analysis does not spend credits. Credits are used only when you generate the video.
+              </p>
+            </div>
+          </section>
         </div>
-      </div>
-      <Footer />
-</main>
+
+        <section className="mt-6 rounded-[1.7rem] border border-white/10 bg-[#080808] p-5 md:p-6">
+          <p className="text-xs font-black uppercase tracking-[0.24em] text-[#D7FF00]">
+            Generated result
+          </p>
+          <h2 className="mt-2 text-3xl font-black uppercase tracking-[-0.05em]">
+            Your product ad appears here.
+          </h2>
+
+          {!firstVideoUrl && (
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-white/45">
+              Paste a product page URL, analyze it, choose your ad format, then generate.
+            </p>
+          )}
+
+          {firstVideoUrl && (
+            <div className="mx-auto mt-6 max-w-[920px] overflow-hidden rounded-3xl border border-white/10 bg-black p-3">
+              <video
+                src={firstVideoUrl}
+                controls
+                playsInline
+                preload="metadata"
+                className="aspect-video max-h-[70vh] w-full rounded-2xl bg-black object-contain"
+              />
+
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                <a
+                  href={firstVideoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 rounded-2xl border border-white/10 px-4 py-4 text-center text-xs font-black uppercase tracking-[0.14em] text-white/60 no-underline hover:text-white"
+                >
+                  Open video
+                </a>
+
+                <a
+                  href={`/api/download?url=${encodeURIComponent(firstVideoUrl)}&filename=${encodeURIComponent("nova-product-ad.mp4")}`}
+                  className="flex-1 rounded-2xl bg-[#D7FF00] px-4 py-4 text-center text-xs font-black uppercase tracking-[0.14em] text-black no-underline"
+                >
+                  Download
+                </a>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <div className="mt-8 text-center">
+          <Link href="/dashboard/generate" className="text-xs font-black uppercase tracking-[0.16em] text-white/35 no-underline hover:text-[#D7FF00]">
+            Or use the advanced generator →
+          </Link>
+        </div>
+      </section>
+    </main>
   );
 }
