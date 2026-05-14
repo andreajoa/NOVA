@@ -44,7 +44,7 @@ export const falModels = {
       modes: {
         "text-to-video":      { label: "Text to Video",      endpoint: "alibaba/happy-horse/text-to-video",  needsImage: false },
         "image-to-video":     { label: "Image to Video",     endpoint: "alibaba/happy-horse/image-to-video", needsImage: true  },
-        "reference-to-video": { label: "Reference to Video", endpoint: "fal-ai/wan/v2.2-a14b/image-to-video", needsImage: true  },
+        "reference-to-video": { label: "Reference to Video", endpoint: "alibaba/happy-horse/reference-to-video", needsImage: true  },
       }
     },
     // LTX temporarily disabled: previous endpoints were not verified in fal.ai docs.
