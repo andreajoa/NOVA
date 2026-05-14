@@ -348,6 +348,9 @@ export default function CharacterStudioPage() {
     [characters, selectedId]
   );
 
+  const [finalStoryUrl, setFinalStoryUrl] = useState("");
+  const [mergingStory, setMergingStory] = useState(false);
+
   function updateForm(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
   }
@@ -613,6 +616,48 @@ export default function CharacterStudioPage() {
     if (selectedId === id) {
       const next = characters.find((item) => item.id !== id);
       setSelectedId(next?.id || "");
+    }
+  }
+
+  async function mergeAllStoryClips() {
+    if (!selectedCharacter?.videos?.length || selectedCharacter.videos.length < 2) {
+      setError("Generate at least 2 video clips before merging.");
+      return;
+    }
+
+    setMergingStory(true);
+    setBusy("Merging all clips into one final MP4...");
+    setError("");
+    setFinalStoryUrl("");
+
+    try {
+      const clips = [...selectedCharacter.videos]
+        .reverse()
+        .map((video) => video.videoUrl)
+        .filter(Boolean);
+
+      const response = await fetch("/api/story/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: selectedCharacter.name,
+          ratio: scene.ratio,
+          clips,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Could not merge story clips.");
+      }
+
+      setFinalStoryUrl(data.finalUrl);
+    } catch (error) {
+      setError(error?.message || "Could not merge final story.");
+    } finally {
+      setMergingStory(false);
+      setBusy("");
     }
   }
 
@@ -986,9 +1031,53 @@ export default function CharacterStudioPage() {
                     </div>
 
                     {selectedCharacter.videos?.length > 1 && (
-                      <div className="mt-5 rounded-2xl border border-[#D7FF00]/25 bg-[#D7FF00]/10 p-4 text-sm leading-6 text-white/65">
-                        <span className="font-black text-[#D7FF00]">Long story workflow:</span>{" "}
-                        generate the clips in order and download them. The next production step is adding an async merge job to combine all clips into one MP4.
+                      <div className="mt-5 rounded-2xl border border-[#D7FF00]/25 bg-[#D7FF00]/10 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm font-black text-[#D7FF00]">Final story video</p>
+                            <p className="mt-1 text-xs leading-6 text-white/55">
+                              Merge all generated clips into one final MP4.
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={mergeAllStoryClips}
+                            disabled={mergingStory || Boolean(busy)}
+                            className="rounded-xl bg-[#D7FF00] px-4 py-3 text-[10px] font-black uppercase tracking-[0.14em] text-black disabled:opacity-40"
+                          >
+                            {mergingStory ? "Merging..." : "Merge final MP4"}
+                          </button>
+                        </div>
+
+                        {finalStoryUrl && (
+                          <div className="mt-4 rounded-2xl border border-white/10 bg-black p-3">
+                            <video
+                              src={finalStoryUrl}
+                              controls
+                              playsInline
+                              preload="metadata"
+                              className="aspect-video max-h-[520px] w-full rounded-xl bg-black object-contain"
+                            />
+
+                            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                              <a
+                                href={finalStoryUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex-1 rounded-xl border border-white/10 px-3 py-3 text-center text-[10px] font-black uppercase tracking-[0.14em] text-white/50 no-underline"
+                              >
+                                Open final
+                              </a>
+                              <a
+                                href={downloadHref(finalStoryUrl, `${selectedCharacter.name}-final-story.mp4`)}
+                                className="flex-1 rounded-xl bg-[#D7FF00] px-3 py-3 text-center text-[10px] font-black uppercase tracking-[0.14em] text-black no-underline"
+                              >
+                                Download final MP4
+                              </a>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
