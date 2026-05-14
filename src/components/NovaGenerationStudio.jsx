@@ -690,19 +690,56 @@ export default function NovaGenerationStudio({
             )}
 
             <div className={isImage ? "mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" : "mt-5 grid gap-4"}>
-              {resultUrls.map((url, index) => (
-                <div key={url + index} className="overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-2">
-                  {isImage ? <img src={url} alt={`Generated ${index + 1}`} className="w-full rounded-xl object-cover" /> : <video src={url} controls className="w-full rounded-xl" />}
-                  <div className="mt-2 flex gap-2">
-                    <a href={url} target="_blank" rel="noopener noreferrer" className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-center text-[11px] font-black uppercase tracking-[0.12em] text-white/60 no-underline hover:text-white">
-                      Abrir
-                    </a>
-                    <a href={url} download className="flex-1 rounded-xl bg-[#D7FF00] px-3 py-2 text-center text-[11px] font-black uppercase tracking-[0.12em] text-black no-underline">
-                      Baixar
-                    </a>
+              {resultUrls.map((url, index) => {
+                const downloadName = isImage
+                  ? `nova-image-${index + 1}`
+                  : `nova-video-${index + 1}`;
+
+                const downloadHref = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(downloadName)}`;
+
+                return (
+                  <div
+                    key={url + index}
+                    className="mx-auto w-full max-w-[920px] overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-2 md:p-3"
+                  >
+                    <div className="flex w-full justify-center rounded-xl bg-black">
+                      {isImage ? (
+                        <img
+                          src={url}
+                          alt={`Generated ${index + 1}`}
+                          className="max-h-[70vh] w-full rounded-xl object-contain md:max-h-[680px]"
+                        />
+                      ) : (
+                        <video
+                          src={url}
+                          controls
+                          playsInline
+                          preload="metadata"
+                          className="aspect-video max-h-[70vh] w-full rounded-xl bg-black object-contain md:max-h-[680px]"
+                        />
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 rounded-xl border border-white/10 px-3 py-3 text-center text-[11px] font-black uppercase tracking-[0.12em] text-white/60 no-underline hover:text-white"
+                      >
+                        Abrir
+                      </a>
+
+                      <a
+                        href={downloadHref}
+                        className="flex-1 rounded-xl bg-[#D7FF00] px-3 py-3 text-center text-[11px] font-black uppercase tracking-[0.12em] text-black no-underline"
+                      >
+                        Baixar
+                      </a>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
