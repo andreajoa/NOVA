@@ -17,7 +17,37 @@ const VIDEO_CREDITS_PER_SECOND = 24;
 const DEFAULT_SECONDS = 5;
 const MAX_SECONDS = 30;
 
+
 fal.config({ credentials: process.env.FAL_KEY });
+
+function getFalErrorDetails(err) {
+  return {
+    name: err?.name || null,
+    message: err?.message || String(err),
+    status: err?.status || err?.statusCode || err?.response?.status || null,
+    body: err?.body || err?.response?.body || err?.response?.data || null,
+    cause: err?.cause?.message || null,
+  };
+}
+
+function logFalError(label, err, context = {}) {
+  const details = getFalErrorDetails(err);
+  console.error(label, {
+    ...context,
+    ...details,
+  });
+}
+
+function falEnvStatus() {
+  const key = process.env.FAL_KEY || "";
+  return {
+    exists: Boolean(key),
+    length: key.length,
+    hasColon: key.includes(":"),
+    prefix: key ? key.slice(0, 8) + "..." : null,
+  };
+}
+
 
 function normalizeSeconds(value) {
   const n = Number(value || DEFAULT_SECONDS);
@@ -105,6 +135,24 @@ function isForbiddenOrBillingError(err) {
 function generationUpgradePayload({ isImage, seconds }) {
   const creditsRequired = isImage ? 1 : seconds * VIDEO_CREDITS_PER_SECOND;
 
+  if (!process.env.FAL_KEY) {
+    console.error("FAL_KEY missing in production environment", {
+      endpoint,
+      model,
+      mode,
+      userId,
+    });
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "FAL_KEY is missing on the server.",
+        debug: { falEnv: falEnvStatus() },
+      },
+      { status: 500 }
+    );
+  }
+
   return {
     success: false,
     code: isImage ? "IMAGE_TRIAL_LIMIT_REACHED" : "INSUFFICIENT_CREDITS",
@@ -171,12 +219,33 @@ export async function POST(req) {
         billing: { creditsCharged: 0, remainingCredits: 999999, wallet: "admin" },
       });
     } catch (err) {
+      logFalError("FAL admin generation error", err, {
+        endpoint,
+        model,
+        mode,
+        seconds,
+        isImage,
+        falEnv: falEnvStatus(),
+      });
+
       if (isForbiddenOrBillingError(err)) {
         return NextResponse.json(generationUpgradePayload({ isImage, seconds }), { status: 402 });
       }
 
       return NextResponse.json(
-        { success: false, error: "Não foi possível gerar agora. Tente novamente." },
+        {
+          success: false,
+          error: "Não foi possível gerar agora. Tente novamente.",
+          debug: {
+            source: "admin",
+            endpoint,
+            model,
+            mode,
+            seconds,
+            falEnv: falEnvStatus(),
+            falError: getFalErrorDetails(err),
+          },
+        },
         { status: 500 }
       );
     }
@@ -270,14 +339,25 @@ export async function POST(req) {
       },
     });
   } catch (err) {
-    console.error("FAL generation error:", err.message);
+    logFalError("FAL generation error", err, { endpoint, model, mode, seconds, isImage, falEnv: falEnvStatus() });
 
     if (isForbiddenOrBillingError(err)) {
       return NextResponse.json(generationUpgradePayload({ isImage, seconds }), { status: 402 });
     }
 
     return NextResponse.json(
-      { success: false, error: "Não foi possível gerar agora. Tente novamente." },
+      {
+        success: false,
+        error: "Não foi possível gerar agora. Tente novamente.",
+        debug: {
+          endpoint,
+          model,
+          mode,
+          seconds,
+          falEnv: falEnvStatus(),
+          falError: getFalErrorDetails(err),
+        },
+      },
       { status: 500 }
     );
   }
