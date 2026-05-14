@@ -407,8 +407,16 @@ export default function NovaGenerationStudio({
   function handleAssetChange(event) {
     const file = event.target.files?.[0];
     if (!file) return;
+
     setAsset(file);
     setAssetPreview(URL.createObjectURL(file));
+
+    if (modelKey === "gpt-image" && modeKey === "text-to-image") {
+      setModeKey("image-editing");
+    }
+
+    setResult(null);
+    setError("");
   }
 
   async function handleGenerate() {

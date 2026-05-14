@@ -216,6 +216,71 @@ function normalizeResolutionForEndpoint(endpoint, value) {
   return undefined;
 }
 
+
+function normalizeGptImageEndpoint(endpoint, body = {}) {
+  const hasReferenceImage = Boolean(body.image_url || body.image_urls?.length);
+
+  if (endpoint === "openai/gpt-image-2" && hasReferenceImage) {
+    return "openai/gpt-image-2/edit";
+  }
+
+  return endpoint;
+}
+
+function normalizeGptImageInput(endpoint, input = {}) {
+  if (!String(endpoint || "").includes("openai/gpt-image-2/edit")) {
+    return input;
+  }
+
+  const referenceUrls = [];
+
+  if (Array.isArray(input.image_urls)) {
+    referenceUrls.push(...input.image_urls.filter(Boolean));
+  }
+
+  if (input.image_url) {
+    referenceUrls.push(input.image_url);
+  }
+
+  const uniqueReferenceUrls = [...new Set(referenceUrls)];
+
+  const editPrompt = [
+    "Use the uploaded image as the primary reference.",
+    "Preserve the same subject, composition, pose, camera angle, lighting, colors, background and overall visual identity unless the user explicitly asks for a change.",
+    "Do not redesign or replace the main subject.",
+    input.prompt || "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const normalized = {
+    ...input,
+    prompt: editPrompt,
+    image_urls: uniqueReferenceUrls,
+    image_size: "auto",
+  };
+
+  delete normalized.image_url;
+  delete normalized.aspect_ratio;
+
+  if (!normalized.image_urls.length) {
+    delete normalized.image_urls;
+  }
+
+  return normalized;
+}
+
+function normalizeFalInput(endpoint, input = {}) {
+  let safe = normalizeGptImageInput(endpoint, input);
+
+  if (typeof normalizeFalInputForEndpoint === "function") {
+    safe = normalizeFalInputForEndpoint(endpoint, safe);
+  }
+
+  return safe;
+}
+
+
 export async function POST(req) {
   const apiIdentity = await validateApiKeyFromRequest(req);
   let userId = apiIdentity?.userId || null;
@@ -231,7 +296,8 @@ export async function POST(req) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { endpoint = "", prompt = "", model = "", mode = "" } = body;
+  let { endpoint = "", prompt = "", model = "", mode = "" } = body;
+  endpoint = normalizeGptImageEndpoint(endpoint, body);
   const seconds = normalizeSeconds(body.seconds || body.duration);
   const creditsRequired = seconds * VIDEO_CREDITS_PER_SECOND;
   const isImage = isImageEndpoint(endpoint) || body.type === "image";
@@ -244,13 +310,14 @@ export async function POST(req) {
         prompt,
         ...(body.negative_prompt && { negative_prompt: body.negative_prompt }),
         ...(body.image_url    && { image_url:    body.image_url    }),
+        ...(body.image_urls   && { image_urls:   body.image_urls   }),
         ...(body.duration     && { duration:     seconds            }),
         ...(body.aspect_ratio && { aspect_ratio: body.aspect_ratio }),
         ...(body.resolution   && { resolution:   body.resolution   }),
         ...(body.num_images   && { num_images:   body.num_images   }),
         ...(body.image_size   && { image_size:   body.image_size   }),
       };
-      const result = await fal.subscribe(endpoint, { input: falInput, logs: true });
+      const result = await fal.subscribe(endpoint, { input: normalizeFalInput(endpoint, falInput), logs: true });
       const outputUrl =
         result?.video?.url  || result?.videos?.[0]?.url ||
         result?.image?.url  || result?.images?.[0]?.url ||
@@ -347,6 +414,7 @@ export async function POST(req) {
     const falInput = {
       prompt,
       ...(body.image_url    && { image_url:    body.image_url    }),
+        ...(body.image_urls   && { image_urls:   body.image_urls   }),
       ...(body.duration     && { duration:     seconds            }),
       ...(body.aspect_ratio && { aspect_ratio: body.aspect_ratio }),
       ...(body.resolution   && { resolution:   body.resolution   }),
@@ -354,7 +422,7 @@ export async function POST(req) {
       ...(body.image_size   && { image_size:   body.image_size   }),
     };
 
-    const result = await fal.subscribe(endpoint, { input: falInput, logs: true });
+    const result = await fal.subscribe(endpoint, { input: normalizeFalInput(endpoint, falInput), logs: true });
 
     const outputUrl =
       result?.video?.url  || result?.videos?.[0]?.url ||
