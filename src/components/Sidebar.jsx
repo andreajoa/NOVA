@@ -9,6 +9,7 @@ const items = [
   { href: "/claude",                      label: "Claude AI",    icon: "◇" },
   { href: "/dashboard/models",            label: "Imagem",       icon: "⬛" },
   { href: "/dashboard/generate",          label: "Vídeo",        icon: "▶" },
+  { href: "/dashboard/characters",       label: "Characters",   icon: "◎" },
   { href: "/dashboard/templates",         label: "UGC",          icon: "✦" },
   { href: "/dashboard/landing-page", label: "Landing Page", icon: "▣" },
   { href: "/dashboard/claude-connect", label: "Claude Connect", icon: "⌁" },

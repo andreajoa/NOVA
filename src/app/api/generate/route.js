@@ -311,6 +311,7 @@ export async function POST(req) {
         ...(body.negative_prompt && { negative_prompt: body.negative_prompt }),
         ...(body.image_url    && { image_url:    body.image_url    }),
         ...(body.image_urls   && { image_urls:   body.image_urls   }),
+        ...(body.image_urls   && { image_urls:   body.image_urls   }),
         ...(body.duration     && { duration:     seconds            }),
         ...(body.aspect_ratio && { aspect_ratio: body.aspect_ratio }),
         ...(body.resolution   && { resolution:   body.resolution   }),
@@ -414,6 +415,7 @@ export async function POST(req) {
     const falInput = {
       prompt,
       ...(body.image_url    && { image_url:    body.image_url    }),
+        ...(body.image_urls   && { image_urls:   body.image_urls   }),
         ...(body.image_urls   && { image_urls:   body.image_urls   }),
       ...(body.duration     && { duration:     seconds            }),
       ...(body.aspect_ratio && { aspect_ratio: body.aspect_ratio }),
