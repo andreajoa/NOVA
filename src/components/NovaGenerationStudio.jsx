@@ -5,6 +5,22 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { falModels } from "@/lib/falModels";
 
+import { extractGeneratedMediaUrl, isVideoUrl } from "@/lib/generatedMediaUrl";
+
+
+const normalizeGenerationResponse = (data) => {
+  const mediaUrl = extractGeneratedMediaUrl(data);
+
+  return {
+    ...data,
+    mediaUrl,
+    videoUrl: data?.videoUrl || mediaUrl,
+    url: data?.url || mediaUrl,
+    outputUrl: data?.outputUrl || mediaUrl,
+  };
+};
+
+
 const logoSrc = "/nova/logo-nova.jpeg";
 const IMAGE_RESOLUTIONS = ["1K", "2K", "4K"];
 const VIDEO_RESOLUTIONS = ["720p", "1080p", "4K"];

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { fal } from "@fal-ai/client";
 import { validateApiKeyFromRequest } from "@/lib/apiKeys";
+import { extractGeneratedMediaUrl } from "@/lib/generatedMediaUrl";
+
 import {
   debitApiCredits,
   debitGenerationCredits,
@@ -172,6 +174,20 @@ function generationUpgradePayload({ isImage, seconds }) {
   };
 }
 
+
+function withGeneratedMediaUrls(payload, rawOutput = null) {
+  const mediaUrl = extractGeneratedMediaUrl(payload) || extractGeneratedMediaUrl(rawOutput);
+
+  return {
+    ...payload,
+    mediaUrl,
+    videoUrl: payload?.videoUrl || mediaUrl,
+    url: payload?.url || mediaUrl,
+    outputUrl: payload?.outputUrl || mediaUrl,
+    rawOutput: payload?.rawOutput || rawOutput || payload?.rawOutput,
+  };
+}
+
 export async function POST(req) {
   const apiIdentity = await validateApiKeyFromRequest(req);
   let userId = apiIdentity?.userId || null;
@@ -211,13 +227,12 @@ export async function POST(req) {
         result?.video?.url  || result?.videos?.[0]?.url ||
         result?.image?.url  || result?.images?.[0]?.url ||
         result?.output?.url || null;
-      return NextResponse.json({
-        success: true,
+      return NextResponse.json(withGeneratedMediaUrls({ success: true,
         provider: "fal",
         source: "admin",
         data: { type: isImage ? "image" : "video", url: outputUrl, model, mode, seconds, raw: result },
         billing: { creditsCharged: 0, remainingCredits: 999999, wallet: "admin" },
-      });
+      }, typeof result !== 'undefined' ? result : (typeof output !== 'undefined' ? output : null)));
     } catch (err) {
       logFalError("FAL admin generation error", err, {
         endpoint,
@@ -318,8 +333,7 @@ export async function POST(req) {
       result?.image?.url  || result?.images?.[0]?.url ||
       result?.output?.url || null;
 
-    return NextResponse.json({
-      success: true,
+    return NextResponse.json(withGeneratedMediaUrls({ success: true,
       provider: "fal",
       source: isApiRequest ? "api" : "dashboard",
       data: {
@@ -337,7 +351,7 @@ export async function POST(req) {
         wallet: billingWallet,
         imageUnlimited: isImage && billingWallet === "image_unlimited",
       },
-    });
+    }, typeof result !== 'undefined' ? result : (typeof output !== 'undefined' ? output : null)));
   } catch (err) {
     logFalError("FAL generation error", err, { endpoint, model, mode, seconds, isImage, falEnv: falEnvStatus() });
 
