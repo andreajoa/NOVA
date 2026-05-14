@@ -129,7 +129,7 @@ function TemplateCard({ template, active, onClick }) {
       type="button"
       onClick={onClick}
       className={[
-        "group rounded-[1.5rem] border p-4 text-left transition",
+        "group w-full min-w-0 rounded-[1.5rem] border p-4 text-left transition",
         active
           ? "border-[#D7FF00] bg-[#D7FF00]/10 shadow-[0_0_45px_rgba(215,255,0,.14)]"
           : "border-white/10 bg-white/[0.025] hover:border-[#D7FF00]/40 hover:bg-white/[0.04]",
@@ -194,7 +194,7 @@ function Pill({ active, children, onClick, disabled = false }) {
       onClick={onClick}
       disabled={disabled}
       className={[
-        "rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-[0.14em] transition",
+        "shrink-0 rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-[0.14em] transition",
         active
           ? "border-[#D7FF00] bg-[#D7FF00] text-black"
           : "border-white/10 bg-white/[0.035] text-white/55 hover:border-[#D7FF00]/40 hover:text-[#D7FF00]",
@@ -440,8 +440,8 @@ export default function ViralTemplateStudioPage() {
     : `nova-${selectedTemplate.id}.png`;
 
   return (
-    <main className="min-h-screen bg-black px-4 py-8 text-white md:px-8">
-      <section className="mx-auto max-w-[1600px]">
+    <main className="min-h-screen w-full overflow-x-hidden bg-black px-4 py-8 text-white md:px-8">
+      <section className="mx-auto w-full max-w-[1600px]">
         <div className="rounded-[2rem] border border-[#D7FF00]/20 bg-[radial-gradient(circle_at_18%_18%,rgba(215,255,0,.16),transparent_32%),linear-gradient(135deg,#050505,#0d0d0d)] p-5 md:p-8">
           <p className="text-xs font-black uppercase tracking-[0.26em] text-[#D7FF00]">
             NOVA Viral Template Studio
@@ -486,7 +486,7 @@ export default function ViralTemplateStudioPage() {
           )}
         </div>
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_460px]">
+        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
           <section className="rounded-[1.7rem] border border-white/10 bg-[#080808] p-5 md:p-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
@@ -506,7 +506,7 @@ export default function ViralTemplateStudioPage() {
               </Link>
             </div>
 
-            <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
+            <div className="mt-5 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {TEMPLATE_CATEGORIES.map((item) => (
                 <Pill key={item} active={category === item} onClick={() => setCategory(item)}>
                   {item}
@@ -514,7 +514,7 @@ export default function ViralTemplateStudioPage() {
               ))}
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
               {filteredTemplates.map((template) => (
                 <TemplateCard
                   key={template.id}
@@ -526,7 +526,7 @@ export default function ViralTemplateStudioPage() {
             </div>
           </section>
 
-          <aside className="space-y-6">
+          <aside className="min-w-0 space-y-6">
             <section className="rounded-[1.7rem] border border-white/10 bg-[#080808] p-5 md:p-6">
               <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">
                 Step 2
