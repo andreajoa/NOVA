@@ -92,32 +92,86 @@ function imageSizeFrom(aspectRatio, resolution) {
   return resolution === "1K" ? "square" : "square_hd";
 }
 
-function collectUrls(data) {
-  const raw = data?.data?.raw || {};
+
+function collectUrls(payload) {
   const urls = [];
+  const seenObjects = new Set();
 
-  if (data?.data?.url) urls.push(data.data.url);
+  function addUrl(value) {
+    if (!value || typeof value !== "string") return;
 
-  if (Array.isArray(raw.images)) {
-    raw.images.forEach((item) => {
-      const url = typeof item === "string" ? item : item?.url;
-      if (url) urls.push(url);
-    });
+    const matches = value.match(/https?:\/\/[^\s"'<>\\]+/g) || [];
+
+    for (const raw of matches.length ? matches : [value]) {
+      const clean = String(raw)
+        .replace(/\\u0026/g, "&")
+        .replace(/&amp;/g, "&")
+        .replace(/[),.;\]]+$/g, "");
+
+      if (/^https?:\/\//i.test(clean)) {
+        urls.push(clean);
+      }
+    }
   }
 
-  if (Array.isArray(raw.videos)) {
-    raw.videos.forEach((item) => {
-      const url = typeof item === "string" ? item : item?.url;
-      if (url) urls.push(url);
-    });
+  function walk(value) {
+    if (value == null) return;
+
+    if (typeof value === "string") {
+      addUrl(value);
+      return;
+    }
+
+    if (typeof value !== "object") return;
+    if (seenObjects.has(value)) return;
+
+    seenObjects.add(value);
+
+    if (Array.isArray(value)) {
+      value.forEach(walk);
+      return;
+    }
+
+    const priorityKeys = [
+      "mediaUrl",
+      "videoUrl",
+      "outputUrl",
+      "url",
+      "urls",
+      "video",
+      "file",
+      "files",
+      "data",
+      "output",
+      "result",
+      "raw",
+      "rawOutput",
+      "images",
+      "image",
+    ];
+
+    for (const key of priorityKeys) {
+      if (key in value) walk(value[key]);
+    }
+
+    for (const key of Object.keys(value)) {
+      if (!priorityKeys.includes(key)) {
+        walk(value[key]);
+      }
+    }
   }
 
-  if (raw.image?.url) urls.push(raw.image.url);
-  if (raw.video?.url) urls.push(raw.video.url);
-  if (raw.output?.url) urls.push(raw.output.url);
+  walk(payload);
 
-  return [...new Set(urls)].filter(Boolean);
+  const unique = [...new Set(urls)];
+
+  const mediaFirst = unique.filter((url) =>
+    /\.(mp4|webm|mov|png|jpg|jpeg|webp)(\?|#|$)/i.test(url) || /video/i.test(url)
+  );
+
+  return mediaFirst.length ? mediaFirst : unique;
 }
+
 
 function OptionButton({ active, children, onClick }) {
   return (
@@ -397,7 +451,9 @@ export default function NovaGenerationStudio({
       );
       }
 
-      setResult({ ...data, urls: collectUrls(data) });
+      const urls = collectUrls(data);
+      console.log("[NOVA_GENERATE_RESULT]", { data, urls });
+      setResult({ ...data, urls });
       window.dispatchEvent(new Event("nova:credits-refresh"));
     } catch (err) {
       setError(err?.message || "Generation failed");
@@ -417,7 +473,7 @@ export default function NovaGenerationStudio({
     );
   }
 
-  const resultUrls = result?.urls || [];
+  const resultUrls = result ? collectUrls(result) : [];
   const needsImage = Boolean(modeData?.needsImage);
 
   return (
@@ -624,6 +680,14 @@ export default function NovaGenerationStudio({
             <h2 className="mt-2 text-3xl font-black uppercase tracking-[-0.06em] text-white">
               {isImage ? "Suas variações estão prontas." : "Seu vídeo está pronto."}
             </h2>
+
+            {resultUrls.length === 0 && (
+              <div data-nova-result-empty-debug className="mt-5 rounded-2xl border border-yellow-400/30 bg-yellow-400/10 p-4 text-sm text-yellow-100">
+                <p className="font-bold">A geração retornou sucesso, mas nenhuma URL de mídia foi encontrada na resposta.</p>
+                <p className="mt-2 text-yellow-100/70">Abra o Console do navegador e copie o log [NOVA_GENERATE_RESULT] para depuração.</p>
+                <pre className="mt-3 max-h-72 overflow-auto rounded-xl bg-black/60 p-3 text-[11px] text-white/70">{JSON.stringify(result, null, 2)}</pre>
+              </div>
+            )}
 
             <div className={isImage ? "mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" : "mt-5 grid gap-4"}>
               {resultUrls.map((url, index) => (
