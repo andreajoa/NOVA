@@ -31,15 +31,15 @@ export default function Nav({ lang="en", setLang=()=>{} }) {
         <div className="flex items-center gap-3 shrink-0">
           <button onClick={()=>setLang(lang==="en"?"pt":"en")} className="text-xs font-black uppercase tracking-wider text-white/40 hover:text-white border border-white/10 hover:border-white/30 px-3 py-1.5 rounded-lg transition">{lang==="en"?"PT":"EN"}</button>
           <Link href="/dashboard" className="hidden sm:inline-flex bg-[#D7FF00] text-black text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-lg hover:bg-[#c8f000] transition">{t.start}</Link>
-          <button onClick={()=>setOpen(!open)} className="lg:hidden flex flex-col gap-1.5 p-2" aria-label="Menu">
-            <span className={"block w-6 h-0.5 bg-white transition-all "+(open?"rotate-45 translate-y-2":"")} />
-            <span className={"block w-6 h-0.5 bg-white transition-all "+(open?"opacity-0":"")} />
-            <span className={"block w-6 h-0.5 bg-white transition-all "+(open?"-rotate-45 -translate-y-2":"")} />
-          </button>
+          <button onClick={()=>setOpen(!open)} className="lg:hidden inline-flex min-h-12 items-center gap-2 rounded-2xl border border-[#D7FF00]/60 bg-[#D7FF00] px-4 py-2.5 text-[11px] font-black uppercase tracking-[0.16em] text-black shadow-[0_0_34px_rgba(215,255,0,.32)] transition active:scale-95" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open}><span className="leading-none">{open ? "Close" : "Menu"}</span><span className="flex flex-col gap-1.5">
+            <span className={"block w-6 h-0.5 bg-black transition-all "+(open?"rotate-45 translate-y-2":"")} />
+            <span className={"block w-6 h-0.5 bg-black transition-all "+(open?"opacity-0":"")} />
+            <span className={"block w-6 h-0.5 bg-black transition-all "+(open?"-rotate-45 -translate-y-2":"")} />
+          </span></button>
         </div>
       </div>
       {open && (
-        <div className="lg:hidden border-t border-white/8 mt-3 pt-4 pb-4 space-y-1">
+        <div className="lg:hidden fixed left-3 right-3 top-20 z-[90] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-3xl border border-[#D7FF00]/25 bg-black/95 p-4 shadow-[0_0_60px_rgba(215,255,0,.18)] backdrop-blur-xl space-y-1">
           {links.map(l=>(
             <Link key={l.href} href={l.href} onClick={()=>setOpen(false)} className={"block px-4 py-3 text-sm font-black uppercase tracking-widest rounded-xl transition "+(path===l.href?"bg-[#D7FF00]/10 text-[#D7FF00]":"text-white/50 hover:text-white hover:bg-white/5")}>{l.label}</Link>
           ))}
