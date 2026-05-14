@@ -5,9 +5,9 @@ export const falModels = {
       description: "ByteDance flagship video model",
       image: "/models/seedance.png",
       modes: {
-        "text-to-video":       { label: "Text to Video",       endpoint: "fal-ai/bytedance/seedance-2-0/text-to-video",       needsImage: false },
-        "image-to-video":      { label: "Image to Video",      endpoint: "fal-ai/bytedance/seedance-2-0/image-to-video",      needsImage: true  },
-        "reference-to-video":  { label: "Reference to Video",  endpoint: "fal-ai/bytedance/seedance-2-0/reference-to-video",  needsImage: true  },
+        "text-to-video":       { label: "Text to Video",       endpoint: "bytedance/seedance-2.0/text-to-video",       needsImage: false },
+        "image-to-video":      { label: "Image to Video",      endpoint: "bytedance/seedance-2.0/image-to-video",      needsImage: true  },
+        "reference-to-video":  { label: "Reference to Video",  endpoint: "bytedance/seedance-2.0/reference-to-video",  needsImage: true  },
       }
     },
     kling: {
@@ -32,9 +32,9 @@ export const falModels = {
       description: "Google DeepMind video model",
       image: "/models/veo.png",
       modes: {
-        "text-to-video":      { label: "Text to Video",      endpoint: "fal-ai/veo3", needsImage: false },
-        "image-to-video":     { label: "Image to Video",     endpoint: "fal-ai/veo3", needsImage: true  },
-        "reference-to-video": { label: "Reference to Video", endpoint: "fal-ai/veo3", needsImage: true  },
+        "text-to-video":      { label: "Text to Video",      endpoint: "fal-ai/veo3.1", needsImage: false },
+        "image-to-video":     { label: "Image to Video",     endpoint: "fal-ai/veo3.1/image-to-video", needsImage: true  },
+        "reference-to-video": { label: "Reference to Video", endpoint: "fal-ai/veo3.1/reference-to-video", needsImage: true  },
       }
     },
     happyhorse: {
@@ -42,34 +42,33 @@ export const falModels = {
       description: "Alibaba creative video AI",
       image: "/models/happyhorse.png",
       modes: {
-        "text-to-video":      { label: "Text to Video",      endpoint: "fal-ai/wan-pro/text-to-video",  needsImage: false },
-        "image-to-video":     { label: "Image to Video",     endpoint: "fal-ai/wan-pro/image-to-video", needsImage: true  },
-        "reference-to-video": { label: "Reference to Video", endpoint: "fal-ai/wan-pro/image-to-video", needsImage: true  },
+        "text-to-video":      { label: "Text to Video",      endpoint: "alibaba/happy-horse/text-to-video",  needsImage: false },
+        "image-to-video":     { label: "Image to Video",     endpoint: "alibaba/happy-horse/image-to-video", needsImage: true  },
+        "reference-to-video": { label: "Reference to Video", endpoint: "fal-ai/wan/v2.2-a14b/image-to-video", needsImage: true  },
       }
     },
-    ltx: {
-      label: "LTX Video 2.3",
-      description: "Lightning-fast video generation",
-      image: "/models/ltx.png",
-      modes: {
-        "video-to-video":           { label: "Video to Video",  endpoint: "fal-ai/ltx-video/video-to-video", needsImage: true },
-        "reference-video-to-video": { label: "Reference Video", endpoint: "fal-ai/ltx-video",               needsImage: true },
-      }
-    },
+    // LTX temporarily disabled: previous endpoints were not verified in fal.ai docs.
+    // ltx: {
+    //   label: "LTX Video 2.3",
+    //   description: "Lightning-fast video generation",
+    //   image: "/models/ltx.png",
+    //   modes: {}
+    // },
     wan: {
       label: "Wan 2.2",
       description: "Open-source video powerhouse",
       image: "/models/wan.png",
       modes: {
-        "image-to-video": { label: "Image to Video", endpoint: "fal-ai/wan-pro/image-to-video", needsImage: true },
+        "text-to-video":  { label: "Text to Video",  endpoint: "fal-ai/wan/v2.2-a14b/text-to-video",  needsImage: false },
+        "image-to-video": { label: "Image to Video", endpoint: "fal-ai/wan/v2.2-a14b/image-to-video", needsImage: true  },
       }
     },
     lyra: {
-      label: "Lyra 2",
+      label: "Hunyuan Video",
       description: "High-fidelity motion synthesis",
       image: "/models/lyra.png",
       modes: {
-        "image-to-video": { label: "Image to Video", endpoint: "fal-ai/hunyuan-video", needsImage: true },
+        "text-to-video": { label: "Text to Video", endpoint: "fal-ai/hunyuan-video", needsImage: false },
       }
     },
     lucy: {
@@ -141,8 +140,8 @@ export const falModels = {
       costPerGen: 0.02,
       unlimited: true,
       modes: {
-        "text-to-image":  { label: "Text to Image",  endpoint: "fal-ai/gpt-image-1",       needsImage: false },
-        "image-editing":  { label: "Image Editing",  endpoint: "fal-ai/gpt-image-1/edit",  needsImage: true  },
+        "text-to-image":  { label: "Text to Image",  endpoint: "openai/gpt-image-2",       needsImage: false },
+        "image-editing":  { label: "Image Editing",  endpoint: "openai/gpt-image-2/edit",  needsImage: true  },
       },
     },
     "recraft-v3": {
@@ -227,7 +226,6 @@ export const falModels = {
       unlimited: true,
       modes: {
         "text-to-image":  { label: "Text to Image",  endpoint: "fal-ai/kolors",                  needsImage: false },
-        "image-to-image": { label: "Virtual Try-On", endpoint: "fal-ai/kolors-virtual-try-on",   needsImage: true  },
       },
     },
   },
