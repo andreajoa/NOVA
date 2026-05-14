@@ -15,7 +15,7 @@ export const falModels = {
       description: "Kuaishou pro-grade video model",
       image: "/models/kling.png",
       modes: {
-        "text-to-video":  { label: "Text to Video",  endpoint: "fal-ai/kling-video/v2.1/standard/text-to-video",  needsImage: false },
+        "text-to-video":  { label: "Text to Video",  endpoint: "fal-ai/kling-video/v2.1/master/text-to-video",  needsImage: false },
         "image-to-video": { label: "Image to Video", endpoint: "fal-ai/kling-video/v2.1/standard/image-to-video", needsImage: true  },
       }
     },
