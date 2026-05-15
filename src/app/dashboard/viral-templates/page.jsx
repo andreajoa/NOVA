@@ -144,10 +144,6 @@ function TemplateCard({ template, active, onClick }) {
           loading="lazy"
         />
 
-        <div className="absolute left-3 top-3 rounded-full border border-black/20 bg-[#D7FF00] px-3 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-black">
-          Example
-        </div>
-
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
       </div>
 
