@@ -304,6 +304,17 @@ function normalizeUpgrade(data) {
   };
 }
 
+
+function modelGeneratesAudio(modelKey, model = {}) {
+  const key = String(modelKey || "").toLowerCase();
+  const name = String(model?.name || model?.label || "").toLowerCase();
+  if (key.includes("wan") || name.includes("wan")) return false;
+  if (key.includes("kling") || name.includes("kling")) return false;
+  if (key.includes("pixverse") || name.includes("pixverse")) return false;
+  if (key.includes("happyhorse") || name.includes("happy horse")) return false;
+  return true;
+}
+
 export default function NovaGenerationStudio({
   initialModelKey = "",
   initialModeKey = "",
@@ -338,6 +349,7 @@ export default function NovaGenerationStudio({
     [modelKey, modeKey]
   );
   const shouldShowVideoResolution = !isImage && videoResolutionOptions.length > 0;
+  const shouldShowNoAudioBadge = !isImage && !modelGeneratesAudio(modelKey, model);
   const [imageResolution, setImageResolution] = useState("2K");
   const [videoResolution, setVideoResolution] = useState("720p");
   const [imageRatio, setImageRatio] = useState("1:1");
@@ -616,6 +628,17 @@ export default function NovaGenerationStudio({
               <div className="grid gap-4">
                 <SelectBox label="Modelo" value={modelKey} onChange={selectModel} options={modelEntries} />
                 <SelectBox label="Modo" value={modeKey} onChange={selectMode} options={modeEntries} />
+
+                {shouldShowNoAudioBadge && (
+                  <div data-nova-no-audio-warning className="rounded-2xl border border-[#D7FF00]/25 bg-[#D7FF00]/10 p-4">
+                    <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#D7FF00]">
+                      Video only · No audio
+                    </p>
+                    <p className="mt-2 text-xs leading-5 text-white/45">
+                      This model generates silent video. Add music or voiceover after export.
+                    </p>
+                  </div>
+                )}
 
                 {shouldShowVideoResolution && (
                   <div data-nova-video-resolution className="rounded-2xl border border-white/10 bg-black/30 p-4">

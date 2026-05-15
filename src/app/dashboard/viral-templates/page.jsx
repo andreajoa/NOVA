@@ -221,6 +221,7 @@ export default function ViralTemplateStudioPage() {
   const [statusText, setStatusText] = useState("");
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const [upgradeOffer, setUpgradeOffer] = useState(null);
   const [intermediateImage, setIntermediateImage] = useState("");
 
   const selectedTemplate = useMemo(() => getTemplateById(templateId), [templateId]);
@@ -243,6 +244,7 @@ export default function ViralTemplateStudioPage() {
     setResolution(next.defaultResolution || "480p");
     setError("");
     setResult(null);
+    setUpgradeOffer(null);
     setIntermediateImage("");
   }
 
@@ -305,6 +307,25 @@ export default function ViralTemplateStudioPage() {
     });
 
     const data = await response.json().catch(() => ({}));
+
+    if (
+      response.status === 402 ||
+      data?.code === "INSUFFICIENT_CREDITS" ||
+      data?.code === "IMAGE_TRIAL_LIMIT_REACHED"
+    ) {
+      const upgrade = {
+        ...data,
+        code: data?.code || "INSUFFICIENT_CREDITS",
+        title: data?.title || "More credits needed",
+        message:
+          data?.message ||
+          "You need more credits to generate this creative. Recharge your balance or choose a plan to continue.",
+        cta: data?.cta || "Recharge credits",
+        href: data?.href || data?.checkoutUrl || "/pricing",
+      };
+      setUpgradeOffer(upgrade);
+      throw new Error("__NOVA_UPGRADE_REQUIRED__");
+    }
 
     if (!response.ok || !data?.success) {
       throw new Error(data?.message || data?.error || "Generation failed.");
@@ -403,7 +424,7 @@ export default function ViralTemplateStudioPage() {
 
       throw new Error("Unsupported template workflow.");
     } catch (err) {
-      setError(err?.message || "Could not generate this template.");
+      if (err?.message !== "__NOVA_UPGRADE_REQUIRED__") setError(err?.message || "Could not generate this template.");
     } finally {
       setLoading(false);
       setStatusText("");
@@ -427,7 +448,7 @@ export default function ViralTemplateStudioPage() {
       const videoResult = await generateVideo(resultUrl, prompt);
       setResult(videoResult);
     } catch (err) {
-      setError(err?.message || "Could not animate image.");
+      if (err?.message !== "__NOVA_UPGRADE_REQUIRED__") setError(err?.message || "Could not animate image.");
     } finally {
       setLoading(false);
       setStatusText("");
@@ -482,6 +503,36 @@ export default function ViralTemplateStudioPage() {
           {loading && (
             <div className="mt-6 rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-4 text-sm font-bold text-[#D7FF00]">
               {statusText || "Generating..."}
+            </div>
+          )}
+
+          {upgradeOffer && (
+            <div className="mt-6 rounded-3xl border border-[#D7FF00]/40 bg-black/90 p-5 shadow-[0_0_70px_rgba(215,255,0,.16)]">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">
+                Credits required
+              </p>
+              <h3 className="mt-2 text-2xl font-black uppercase tracking-[-0.04em] text-white">
+                {upgradeOffer.title || "More credits needed"}
+              </h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
+                {upgradeOffer.message || "You need more credits to generate this creative. Recharge your balance or choose a plan to continue."}
+              </p>
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => { window.location.href = upgradeOffer.href || "/pricing"; }}
+                  className="rounded-2xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-black"
+                >
+                  {upgradeOffer.cta || "Recharge credits"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUpgradeOffer(null)}
+                  className="rounded-2xl border border-white/10 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-white/45"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           )}
         </div>
