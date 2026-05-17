@@ -6,16 +6,35 @@ const L = {
   en: { dashboard:"Dashboard",generate:"Generate",explore:"Explore",originals:"Originals",brandkit:"Brand Kit",pricing:"Pricing",settings:"Settings",contact:"Contact",start:"Start Free →" },
   pt: { dashboard:"Dashboard",generate:"Gerar",explore:"Explorar",originals:"Originais",brandkit:"Brand Kit",pricing:"Planos",settings:"Configurações",contact:"Contato",start:"Começar Grátis →" },
 };
+
+const aiLinks = [
+  { href: "/ai/text-to-video", label: "Text to Video" },
+  { href: "/ai/image-to-video", label: "Image to Video" },
+  { href: "/ai/kling-video-generator", label: "Kling 3.0" },
+  { href: "/ai/veo-video-generator", label: "Veo 3.1" },
+  { href: "/ai/seedance-video-generator", label: "Seedance 2.0" },
+  { href: "/ai/wan-video-generator", label: "Wan 2.2" },
+  { href: "/ai/pixverse-video-generator", label: "PixVerse V6" },
+  { href: "/ai/hunyuan-video-generator", label: "Hunyuan Video" },
+];
+
 export default function Nav({ lang="en", setLang=()=>{} }) {
   const [open, setOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const path = usePathname();
   const t = L[lang] || L.en;
   const links = [
+    {href:"/explore",label:t.explore},
+    {href:"/pricing",label:t.pricing},
+    {href:"/contact",label:t.contact},
+  ];
+  const mobileLinks = [
     {href:"/dashboard",label:t.dashboard},{href:"/generate",label:t.generate},
     {href:"/explore",label:t.explore},{href:"/originals",label:t.originals},
     {href:"/brandkit",label:t.brandkit},{href:"/pricing",label:t.pricing},
     {href:"/claude",label:"Claude AI"},
     {href:"/settings",label:t.settings},{href:"/contact",label:t.contact},
+    ...aiLinks,
   ];
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/8 bg-[#050505]/95 backdrop-blur-xl px-6 py-3">
@@ -24,6 +43,21 @@ export default function Nav({ lang="en", setLang=()=>{} }) {
           <img src="/logo-nova.png" alt="Nova" style={{height:"64px",width:"auto",objectFit:"contain"}} />
         </Link>
         <div className="hidden lg:flex items-center gap-5">
+          {/* AI Tools dropdown */}
+          <div className="relative" onMouseEnter={()=>setAiOpen(true)} onMouseLeave={()=>setAiOpen(false)}>
+            <button className={"text-xs font-bold uppercase tracking-widest transition hover:text-white flex items-center gap-1 "+(path.startsWith("/ai")?"text-[#D7FF00]":"text-white/40")}>
+              AI Tools <span className="text-[10px]">▾</span>
+            </button>
+            {aiOpen && (
+              <div className="absolute top-full left-0 mt-2 w-52 rounded-2xl border border-white/10 bg-[#0a0a0a] shadow-[0_20px_60px_rgba(0,0,0,.6)] p-2 z-50">
+                {aiLinks.map(l=>(
+                  <Link key={l.href} href={l.href} className="block px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white/50 hover:text-white hover:bg-white/5 rounded-xl transition">
+                    {l.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
           {links.map(l=>(
             <Link key={l.href} href={l.href} className={"text-xs font-bold uppercase tracking-widest transition hover:text-white "+(path===l.href?"text-[#D7FF00]":"text-white/40")}>{l.label}</Link>
           ))}
@@ -40,7 +74,7 @@ export default function Nav({ lang="en", setLang=()=>{} }) {
       </div>
       {open && (
         <div className="lg:hidden fixed left-3 right-3 top-20 z-[90] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-3xl border border-[#D7FF00]/25 bg-black/95 p-4 shadow-[0_0_60px_rgba(215,255,0,.18)] backdrop-blur-xl space-y-1">
-          {links.map(l=>(
+          {mobileLinks.map(l=>(
             <Link key={l.href} href={l.href} onClick={()=>setOpen(false)} className={"block px-4 py-3 text-sm font-black uppercase tracking-widest rounded-xl transition "+(path===l.href?"bg-[#D7FF00]/10 text-[#D7FF00]":"text-white/50 hover:text-white hover:bg-white/5")}>{l.label}</Link>
           ))}
           <div className="pt-3 px-4">
