@@ -21,7 +21,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
     changeFrequency: "monthly" as const,
   }));
 
-  return [...staticPages, ...modelPages].map((page) => ({
+  const aiPages = [
+    { url: `${base}/ai/kling-video-generator`, priority: 0.9, changeFrequency: "monthly" as const },
+    { url: `${base}/ai/veo-video-generator`, priority: 0.9, changeFrequency: "monthly" as const },
+    { url: `${base}/ai/seedance-video-generator`, priority: 0.9, changeFrequency: "monthly" as const },
+    { url: `${base}/ai/wan-video-generator`, priority: 0.9, changeFrequency: "monthly" as const },
+    { url: `${base}/ai/pixverse-video-generator`, priority: 0.9, changeFrequency: "monthly" as const },
+    { url: `${base}/ai/hunyuan-video-generator`, priority: 0.9, changeFrequency: "monthly" as const },
+    { url: `${base}/ai/text-to-video`, priority: 1.0, changeFrequency: "weekly" as const },
+    { url: `${base}/ai/image-to-video`, priority: 1.0, changeFrequency: "weekly" as const },
+  ];
+
+  return [...staticPages, ...modelPages, ...aiPages].map((page) => ({
     ...page,
     lastModified: now,
   }));

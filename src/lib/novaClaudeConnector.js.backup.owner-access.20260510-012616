@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { validateApiKeyFromRequest } from "@/lib/apiKeys";
 import { debitApiCredits } from "@/lib/db";
-import { isNovaAdminUser, novaAdminBypassResult } from "@/lib/novaAdminAccess";
 import { falModels } from "@/lib/falModels";
-import { shouldUseRunPod, runOnRunPod } from "@/lib/runpodClient";
 
 
 
@@ -131,15 +129,6 @@ export async function requireNovaApiCredits(req, amount) {
     };
   }
 
-  if (await isNovaAdminUser(identity.userId)) {
-    return novaAdminBypassResult({
-      identity: {
-        ...identity,
-        novaAdminBypass: true,
-      },
-    });
-  }
-
   const debit = await debitApiCredits({
     userId: identity.userId,
     amount,
@@ -216,14 +205,6 @@ export function outputUrlsFromFal(result) {
 export async function runFal(endpoint, input) {
   if (!endpoint) {
     throw new Error("NOVA model endpoint not found.");
-  }
-
-  if (shouldUseRunPod(endpoint)) {
-    try {
-      return await runOnRunPod(endpoint, input);
-    } catch (err) {
-      console.warn("[RunPod] Fallback para fal.ai (" + endpoint + "):", err?.message || err);
-    }
   }
 
   return fal.subscribe(endpoint, {

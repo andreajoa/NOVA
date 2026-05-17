@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { validateApiKeyFromRequest } from "@/lib/apiKeys";
 import { debitApiCredits } from "@/lib/db";
-import { isNovaAdminUser, novaAdminBypassResult } from "@/lib/novaAdminAccess";
 import { falModels } from "@/lib/falModels";
-import { shouldUseRunPod, runOnRunPod } from "@/lib/runpodClient";
 
 
 
@@ -45,22 +43,6 @@ function getNovaApiKeyFromRequest(req) {
 function getNovaApiAuthHeader(req) {
   const key = getNovaApiKeyFromRequest(req);
   return key ? `Bearer ${key}` : "";
-}
-
-function requestWithNormalizedNovaApiKey(req) {
-  const key = getNovaApiKeyFromRequest(req);
-
-  if (!key) return req;
-
-  const headers = new Headers(req.headers);
-  headers.set("Authorization", `Bearer ${key}`);
-  headers.set("x-nova-api-key", key);
-  headers.set("x-api-key", key);
-
-  return new Request(req.url, {
-    method: req.method || "GET",
-    headers,
-  });
 }
 
 export const NOVA_API_CREDIT_MINIMUM_URL = "/checkout/api-credits?pack=starter";
@@ -110,8 +92,7 @@ export function novaApiCreditsRequiredPayload({
 }
 
 export async function requireNovaApiCredits(req, amount) {
-  const normalizedReq = requestWithNormalizedNovaApiKey(req);
-  const identity = await validateApiKeyFromRequest(normalizedReq);
+  const identity = await validateApiKeyFromRequest(req);
 
   if (!identity?.userId) {
     return {
@@ -129,15 +110,6 @@ export async function requireNovaApiCredits(req, amount) {
         { status: 401 }
       ),
     };
-  }
-
-  if (await isNovaAdminUser(identity.userId)) {
-    return novaAdminBypassResult({
-      identity: {
-        ...identity,
-        novaAdminBypass: true,
-      },
-    });
   }
 
   const debit = await debitApiCredits({
@@ -216,14 +188,6 @@ export function outputUrlsFromFal(result) {
 export async function runFal(endpoint, input) {
   if (!endpoint) {
     throw new Error("NOVA model endpoint not found.");
-  }
-
-  if (shouldUseRunPod(endpoint)) {
-    try {
-      return await runOnRunPod(endpoint, input);
-    } catch (err) {
-      console.warn("[RunPod] Fallback para fal.ai (" + endpoint + "):", err?.message || err);
-    }
   }
 
   return fal.subscribe(endpoint, {

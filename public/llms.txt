@@ -1,0 +1,53 @@
+# NOVA AI Video Studio
+
+> NOVA is an AI-powered video and image generation platform focused on ecommerce product ads, UGC creatives, TikTok/Reels/Shorts, and social media content.
+
+## What is NOVA?
+
+NOVA AI Video Studio (novvideos.online) is a multi-model AI generation platform that gives creators and ecommerce brands access to the world's best AI video and image models in one place. Users can generate product videos, UGC-style ads, cinematic clips, and social media creatives without technical skills.
+
+## Who is NOVA for?
+
+- Ecommerce brands (Shopify, Amazon, WooCommerce)
+- Social media creators and marketers
+- TikTok, Instagram Reels, and YouTube Shorts creators
+- Agencies creating video ads at scale
+
+## Video Models Available
+
+- Seedance 2.0 — ByteDance flagship. Text-to-video, image-to-video, reference-to-video.
+- Kling 3.0 — Kuaishou pro-grade. Text-to-video, image-to-video.
+- PixVerse V6 — Cinematic video generation. Image-to-video.
+- Veo 3.1 — Google DeepMind. Text-to-video, image-to-video, reference-to-video.
+- Happy Horse — Alibaba creative AI. Text-to-video, image-to-video, reference-to-video.
+- Wan 2.2 — Open-source powerhouse. Text-to-video, image-to-video.
+- Hunyuan Video — High-fidelity motion synthesis.
+- Lucy (Decart) — Real-time world simulation.
+- Kling Avatar — AI avatar and lipsync generation.
+
+## Image Models Available
+
+- FLUX Schnell, FLUX Dev, FLUX Pro 1.1, FLUX Ultra
+- GPT Image 2 (OpenAI)
+- Recraft V3, Ideogram V3, Stable Diffusion 3.5
+- AuraFlow, HiDream I1, Sana, Kolors, Nano Banana 2
+
+## Pricing
+
+- Trial: 10 free credits, no credit card required
+- Basic: 70 credits/month
+- Plus: 500 credits/month
+- Ultra: 3000 credits/month + unlimited images
+- Business: 3000 credits/month + unlimited images
+
+## URLs
+
+- Homepage: https://www.novvideos.online
+- Pricing: https://www.novvideos.online/pricing
+- Explore gallery: https://www.novvideos.online/explore
+- Product ad generator: https://www.novvideos.online/product-ad-generator
+
+## Alternatives
+
+NOVA is an alternative to Runway, Pika, InVideo, Kling AI, Veo, Luma AI, Sora.
+NOVA focuses specifically on ecommerce product ads and social media creatives.
