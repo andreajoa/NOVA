@@ -79,7 +79,7 @@ function isActive(href, pathname) {
 
 function NavGroup({ group, pathname }) {
   const hasActive = group.items.some((i) => isActive(i.href, pathname));
-  const [open, setOpen] = useState(!group.collapsible || hasActive);
+  const [open, setOpen] = useState(true);
   return (
     <div className="mb-1">
       {group.label && (
