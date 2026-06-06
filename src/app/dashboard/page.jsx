@@ -126,7 +126,7 @@ function FalBalanceAlert() {
       </div>
     </div>
   );
-
+}
 
 const modelCards = [
   { name: "SEEDANCE", version: "2.0 FAST", slug: "seedance",    image: "/nova/nova-seedance-fast.png",
