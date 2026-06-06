@@ -26,7 +26,7 @@ function FalBalanceAlert() {
   const valueClass = critical ? "text-red-300" : "text-yellow-300";
   const btnClass = critical ? "bg-red-500 text-white hover:bg-red-400" : "bg-yellow-400 text-black hover:bg-yellow-300";
   const label = critical ? "fal.ai balance CRITICAL" : "fal.ai balance low";
-  const msg = critical ? " Recarregue agora para nao interromper as geracoes." : " Considere recarregar em breve.";
+  const msg = critical ? " Recharge now to avoid interrupting generations." : " Consider recharging soon.";
   const bal = typeof balance === "number" ? balance.toFixed(2) : balance;
 
   return (
