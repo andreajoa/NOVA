@@ -11,6 +11,9 @@ const items = [
   { href: "/dashboard/models",            label: "Imagem",       icon: "⬛" },
   { href: "/dashboard/generate",          label: "Vídeo",        icon: "▶" },
   { href: "/dashboard/characters",       label: "Characters",   icon: "◎" },
+  { href: "/dashboard/talking-avatar",   label: "Talking Avatar", icon: "◉" },
+  { href: "/dashboard/long-video",       label: "Long Video",    icon: "▤" },
+  { href: "/dashboard/video-tools",      label: "Extend Video",  icon: "➜" },
   { href: "/dashboard/templates",         label: "UGC",          icon: "✦" },
   { href: "/dashboard/landing-page", label: "Landing Page", icon: "▣" },
   { href: "/dashboard/claude-connect", label: "Claude Connect", icon: "⌁" },
@@ -26,6 +29,7 @@ const mobileItems = [
   { href: "/claude",             label: "Claude", icon: "◇" },
   { href: "/dashboard/models",   label: "Imagem", icon: "⬛" },
   { href: "/dashboard/generate", label: "Vídeo",  icon: "▶" },
+  { href: "/dashboard/talking-avatar", label: "Avatar", icon: "◉" },
   { href: "/dashboard/templates",label: "UGC",    icon: "✦" },
   { href: "/dashboard/settings", label: "Config", icon: "≡" },
 ];

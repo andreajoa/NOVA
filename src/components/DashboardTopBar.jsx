@@ -5,6 +5,9 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/dashboard",          label: "Dashboard"  },
   { href: "/dashboard/characters", label: "Characters" },
+  { href: "/dashboard/talking-avatar", label: "Talking Avatar" },
+  { href: "/dashboard/long-video", label: "Long Video" },
+  { href: "/dashboard/video-tools", label: "Extend Video" },
   { href: "/dashboard/generate", label: "Generate"   },
   { href: "/dashboard/models",   label: "Models"     },
   { href: "/pricing",            label: "Pricing"    },
