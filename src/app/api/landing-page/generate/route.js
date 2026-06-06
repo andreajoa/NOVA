@@ -123,7 +123,7 @@ async function chargeInternalCredits({ clerkUserId, amount }) {
       status: 402,
       code: "NOVA_INTERNAL_CREDITS_REQUIRED",
       message:
-        "Saldo insuficiente para gerar esta landing page. Compre créditos ou faça upgrade para continuar.",
+        "Not enough credits to generate this landing page. Upgrade to continue.",
       requiredCredits: amount,
       currentBalance,
       checkoutUrl: "/pricing",

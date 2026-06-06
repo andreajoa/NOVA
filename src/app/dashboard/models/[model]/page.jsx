@@ -73,7 +73,7 @@ export default function ModelPage() {
                       : "Comece apenas com prompt e ajuste as opções antes de gerar."}
                   </p>
                   <div className="mt-5 text-xs font-black uppercase tracking-[0.12em] text-[#D7FF00]">
-                    Abrir gerador →
+                    Open generator →
                   </div>
                 </Link>
               ))}

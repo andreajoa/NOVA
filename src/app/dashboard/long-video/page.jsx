@@ -25,7 +25,7 @@ function SceneCard({ scene, index, isRendering }) {
           <p className="mt-1 text-sm text-white/70">{scene.prompt}</p>
         </div>
         <div className={"rounded-xl border px-3 py-1.5 text-[10px] font-black uppercase " + (isDone ? "border-[#D7FF00]/40 text-[#D7FF00]" : isRendering ? "border-white/20 text-white/50" : "border-white/10 text-white/25")}>
-          {isDone ? "Done" : isRendering ? "..." : "Aguard"}
+          {isDone ? "Done" : isRendering ? "..." : "Wait"}
         </div>
       </div>
       {isDone && scene.videoUrl && (
@@ -116,7 +116,7 @@ export default function LongVideoPage() {
                   </div>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[.025] p-3 text-xs text-white/40">
-                  {minutes}min / {sceneSeconds}s = aprox {est} cenas / aprox {est * 35} creditos
+                  {minutes}min / {sceneSeconds}s = approx {est} scenes / approx {est * 35} credits
                 </div>
               </div>
             </div>
@@ -131,7 +131,7 @@ export default function LongVideoPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-black uppercase text-[#D7FF00]">Plan generated</p>
-                <h2 className="mt-1 text-2xl font-black uppercase text-white">{plan.sceneCount} cenas - {plan.minutes}min - aprox {plan.estimatedCredits} creditos</h2>
+                <h2 className="mt-1 text-2xl font-black uppercase text-white">{plan.sceneCount} scenes - {plan.minutes}min - approx {plan.estimatedCredits} credits</h2>
               </div>
               <div className="flex gap-3">
                 <button onClick={() => { setPlan(null); setScenes([]); setDone(false); setError(""); }} className="rounded-xl border border-white/15 px-4 py-3 text-xs font-black uppercase text-white/50 hover:text-white">New plan</button>

@@ -284,7 +284,7 @@ function shouldOpenUpgrade(res, data) {
     data?.code === "IMAGE_TRIAL_LIMIT_REACHED" ||
     msg.includes("forbidden") ||
     msg.includes("insufficient") ||
-    msg.includes("saldo insuficiente")
+    msg.includes("insufficient")
   );
 }
 
@@ -296,7 +296,7 @@ function normalizeUpgrade(data) {
     message:
       data?.message && !String(data.message).toLowerCase().includes("forbidden")
         ? data.message
-        : "Saldo insuficiente para gerar. Faça upgrade para continuar.",
+        : "Not enough credits. Upgrade to continue.",
     plans: data?.plans || {
       annual: { label: "Annual", price: "$5/mo", href: "/checkout/plan?plan=basic&billing=annual" },
       monthly: { label: "Monthly", price: "$7/mo", href: "/checkout/plan?plan=basic&billing=monthly" },
@@ -488,7 +488,7 @@ export default function NovaGenerationStudio({
       if (!res.ok || !data?.success) {
         throw new Error(
         String(data?.message || data?.error || "").toLowerCase().includes("forbidden")
-          ? "Saldo insuficiente para gerar. Faça upgrade para continuar."
+          ? "Not enough credits. Upgrade to continue."
           : data?.message || data?.error || "Não foi possível gerar agora. Tente novamente."
       );
       }
@@ -534,7 +534,7 @@ export default function NovaGenerationStudio({
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-white/52 md:text-base">
                 {isImage
-                  ? "Escolha modelo, resolução, formato e quantidade. Cada imagem gerada cria uma variação única a partir do mesmo prompt."
+                  ? "Choose model, resolution, format and quantity. Each generated image creates a unique variation from the same prompt."
                   : "Escolha modelo, duração compatível, formato e qualidade. Gere vídeos prontos para anúncios e redes sociais."}
               </p>
             </div>
@@ -713,7 +713,7 @@ export default function NovaGenerationStudio({
                 <div className="rounded-2xl border border-white/10 bg-white/[.025] p-4">
                   <p className="text-xs leading-6 text-white/45">
                     {isImage
-                      ? "Cada imagem gerada será uma variação única. Mesmo prompt, resultados diferentes."
+                      ? "Each generated image will be a unique variation. Same prompt, different results."
                       : `Vídeo de ${seconds}s usa aproximadamente ${seconds * 24} créditos.`}
                   </p>
                   {needsImage && <p className="mt-2 text-xs leading-6 text-[#D7FF00]/70">Este modo funciona melhor com referência.</p>}
@@ -725,7 +725,7 @@ export default function NovaGenerationStudio({
                   disabled={loading || !prompt.trim()}
                   className="min-h-16 rounded-2xl bg-[#D7FF00] px-6 py-4 text-sm font-black uppercase tracking-[0.14em] text-black transition hover:scale-[1.01] hover:bg-[#e5ff2f] disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  {loading ? statusText || "Gerando..." : isImage ? `Gerar imagens ✨ ${imageCount}` : `Gerar vídeo ✨ ${seconds}s`}
+                  {loading ? statusText || "Generating..." : isImage ? `Generate images ✨ ${imageCount}` : `Generate video ✨ ${seconds}s`}
                 </button>
               </div>
             </aside>
@@ -736,7 +736,7 @@ export default function NovaGenerationStudio({
           <section className="mt-5 rounded-[2rem] border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-5 md:p-6">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#D7FF00]">Upgrade necessário</p>
             <h3 className="mt-2 text-2xl font-black uppercase tracking-[-0.04em] text-white">
-              {upgradeOffer?.message || "Você precisa de mais créditos para continuar."}
+              {upgradeOffer?.message || "You need more credits to continue."}
             </h3>
             <Link href="/pricing" className="mt-5 inline-flex rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-black no-underline">
               Ver planos →
@@ -799,14 +799,14 @@ export default function NovaGenerationStudio({
                         rel="noopener noreferrer"
                         className="flex-1 rounded-xl border border-white/10 px-3 py-3 text-center text-[11px] font-black uppercase tracking-[0.12em] text-white/60 no-underline hover:text-white"
                       >
-                        Abrir
+                        Open
                       </a>
 
                       <a
                         href={downloadHref}
                         className="flex-1 rounded-xl bg-[#D7FF00] px-3 py-3 text-center text-[11px] font-black uppercase tracking-[0.12em] text-black no-underline"
                       >
-                        Baixar
+                        Download
                       </a>
                     </div>
                   </div>

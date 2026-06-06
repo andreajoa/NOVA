@@ -30,7 +30,7 @@ function paywallPayload({ currentCredits = 0, creditsRequired = 0, seconds = 0 }
     success: false,
     code: "INSUFFICIENT_CREDITS",
     error: "INSUFFICIENT_CREDITS",
-    message: "Saldo insuficiente para gerar este clipe. Faça upgrade para continuar.",
+    message: "Not enough credits to generate this clip. Upgrade to continue.",
     currentCredits,
     creditsRequired,
     creditsMissing: Math.max(0, creditsRequired - currentCredits),

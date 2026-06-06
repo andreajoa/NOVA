@@ -72,7 +72,7 @@ export default function BrandKitUpload() {
       if (!res.ok) throw new Error(json.error || `Erro ${res.status}`)
       const { uploadUrl, publicUrl, key } = json
 
-      setStatusMsg("Enviando arquivo...")
+      setStatusMsg("Uploading file...")
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest()
         xhr.upload.onprogress = (ev) => {
@@ -87,7 +87,7 @@ export default function BrandKitUpload() {
 
       let thumbnailUrl = null
       if (file.type.startsWith('video/')) {
-        setStatusMsg("Gerando thumbnail...")
+        setStatusMsg("Generating thumbnail...")
         const thumbBlob = await generateVideoThumbnail(file)
         if (thumbBlob) {
           const thumbRes = await fetch("/api/upload-url", {

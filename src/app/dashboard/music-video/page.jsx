@@ -34,8 +34,8 @@ function creditEstimate(durationSeconds) {
 function statusLabel(status) {
   const map = {
     pending: "Pendente",
-    generating: "Gerando",
-    done: "Pronto",
+    generating: "Generating",
+    done: "Done",
     failed: "Falhou",
   };
 
@@ -92,7 +92,7 @@ export default function NovaMusicVideoPage() {
   async function uploadAudio() {
     if (!audioFile) return audioUrl;
 
-    setBusy("Enviando música para R2...");
+    setBusy("Uploading music to R2...");
     setError("");
 
     const form = new FormData();
@@ -261,7 +261,7 @@ export default function NovaMusicVideoPage() {
   async function generateScene(sceneIndex) {
     if (!job?.id) return null;
 
-    setBusy(`Gerando cena ${sceneIndex + 1}...`);
+    setBusy(`Generating scene ${sceneIndex + 1}...`);
     setError("");
     setUpgrade(null);
 
@@ -396,7 +396,7 @@ export default function NovaMusicVideoPage() {
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/35 p-5">
                 <p className="text-3xl font-black text-[#D7FF00]">{totalScenes}</p>
-                <p className="mt-1 text-xs uppercase tracking-[0.14em] text-white/35">Cenas geradas</p>
+                <p className="mt-1 text-xs uppercase tracking-[0.14em] text-white/35">Generated scenes</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/35 p-5">
                 <p className="text-3xl font-black text-[#D7FF00]">{estimatedCredits}</p>
@@ -538,7 +538,7 @@ export default function NovaMusicVideoPage() {
                 </button>
 
                 <button onClick={renderFinalVideo} disabled={busy || !canRender} className="rounded-2xl border border-[#D7FF00]/35 bg-[#D7FF00]/10 px-5 py-4 text-xs font-black uppercase tracking-[0.12em] text-[#D7FF00] transition hover:bg-[#D7FF00] hover:text-black disabled:opacity-40">
-                  Renderizar MP4 final
+                  Render final MP4
                 </button>
               </div>
             </div>
@@ -557,7 +557,7 @@ export default function NovaMusicVideoPage() {
 
             {upgrade && (
               <div className="mb-5 rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-5">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#D7FF00]">Saldo insuficiente</p>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#D7FF00]">Insufficient credits</p>
                 <h3 className="mt-2 text-2xl font-black uppercase text-white">{upgrade.message}</h3>
                 <a href="/pricing" className="mt-4 inline-flex rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-black no-underline">
                   Ver planos →
@@ -570,7 +570,7 @@ export default function NovaMusicVideoPage() {
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-[#D7FF00]">Clipe final pronto</p>
                 <video src={job.finalUrl} controls className="mt-4 w-full rounded-2xl" />
                 <a href={job.finalUrl} download className="mt-4 inline-flex rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-black no-underline">
-                  Baixar MP4 final
+                  Download final MP4
                 </a>
               </div>
             )}
@@ -620,7 +620,7 @@ export default function NovaMusicVideoPage() {
                     <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/50 p-2">
                       <video src={scene.videoUrl} controls className="w-full rounded-xl" />
                       <a href={scene.videoUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex rounded-xl border border-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.12em] text-white/60 no-underline hover:text-white">
-                        Abrir clipe
+                        Open clip
                       </a>
                     </div>
                   )}

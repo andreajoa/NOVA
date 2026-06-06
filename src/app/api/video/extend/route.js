@@ -65,7 +65,7 @@ export async function POST(request) {
           success: false,
           code: "INSUFFICIENT_CREDITS",
           error: "INSUFFICIENT_CREDITS",
-          message: "Saldo insuficiente para estender o vídeo. Faça upgrade para continuar.",
+          message: "Not enough credits to extend video. Upgrade to continue.",
           currentCredits: account.credits,
           creditsRequired,
           creditsMissing: Math.max(0, creditsRequired - account.credits),
@@ -89,7 +89,7 @@ export async function POST(request) {
           success: false,
           code: "INSUFFICIENT_CREDITS",
           error: "INSUFFICIENT_CREDITS",
-          message: "Saldo insuficiente. Faça upgrade para continuar.",
+          message: "Not enough credits. Upgrade to continue.",
           currentCredits: debit.currentCredits,
           creditsRequired,
         }, { status: 402 });

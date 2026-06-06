@@ -82,7 +82,7 @@ function ModelCard({ item, index }) {
 
             <div className="mt-5 flex items-center justify-between gap-3 text-[11px] font-black uppercase tracking-[0.12em]">
               <span className="text-white/45">{key}</span>
-              <span className="text-[#D7FF00]">Abrir modelo →</span>
+              <span className="text-[#D7FF00]">Open model →</span>
             </div>
           </div>
         </div>

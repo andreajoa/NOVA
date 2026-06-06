@@ -9,7 +9,7 @@ const navGroups = [
   { label: null, items: [
       { href: "/dashboard",                    label: "Dashboard",     icon: "▦" },
       { href: "/dashboard/viral-templates",    label: "Templates",     icon: "✦" },
-      { href: "/dashboard/projects",           label: "Projetos",      icon: "▣" },
+      { href: "/dashboard/projects",           label: "Projects",      icon: "▣" },
   ]},
   { label: "CRIAR", items: [
       { href: "/dashboard/models",             label: "Imagem",        icon: "⬛" },
@@ -42,7 +42,7 @@ const mobileItems = [
   { href: "/dashboard",          label: "Home",     icon: "▦" },
   { href: "/dashboard/generate", label: "Vídeo",    icon: "▶" },
   { href: "/dashboard/models",   label: "Imagem",   icon: "⬛" },
-  { href: "/dashboard/projects", label: "Projetos", icon: "▣" },
+  { href: "/dashboard/projects", label: "Projects", icon: "▣" },
 ];
 
 const mobileDrawerGroups = [
@@ -171,7 +171,7 @@ export default function Sidebar() {
             <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-[1.5rem] border-b border-white/10 bg-[#050505] px-5 py-4">
               <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">Menu</p>
               <button onClick={() => setMobileOpen(false)}
-                className="rounded-full border border-white/10 px-3 py-1 text-xs font-black text-white/50">Fechar</button>
+                className="rounded-full border border-white/10 px-3 py-1 text-xs font-black text-white/50">Close</button>
             </div>
             <div className="px-4 pb-2">
               {mobileDrawerGroups.map((group, i) => (

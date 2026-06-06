@@ -10,7 +10,7 @@ function normalizePaywallPayload(data) {
     error: data?.error || "INSUFFICIENT_CREDITS",
     message:
       data?.message ||
-      "Saldo insuficiente para gerar. Faça upgrade para continuar.",
+      "Not enough credits. Upgrade to continue.",
     plans: data?.plans || {
       annual: {
         label: "Annual",
@@ -38,7 +38,7 @@ function shouldShowPaywall(response, data, url) {
     data?.code === "IMAGE_TRIAL_LIMIT_REACHED" ||
     msg.includes("forbidden") ||
     msg.includes("insufficient") ||
-    msg.includes("saldo insuficiente")
+    msg.includes("insufficient")
   );
 }
 
@@ -88,16 +88,16 @@ export default function GeneratePaywallProvider({ children = null } = {}) {
 
             <div className="relative">
               <div className="mb-4 inline-flex rounded-full bg-[#D7FF00] px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-black">
-                Saldo insuficiente
+                Insufficient credits
               </div>
 
               <h2 className="text-3xl font-black uppercase leading-[0.9] tracking-[-0.06em] text-white md:text-5xl">
-                Você precisa de créditos para continuar.
+                You need credits to continue.
               </h2>
 
               <p className="mt-4 max-w-xl text-sm leading-7 text-white/55 md:text-base">
                 {paywall.message.includes("Forbidden")
-                  ? "Saldo insuficiente para gerar. Escolha um plano para liberar mais gerações, mais qualidade e modelos premium."
+                  ? "Insufficient credits para gerar. Escolha um plano para liberar mais gerações, mais qualidade e modelos premium."
                   : paywall.message}
               </p>
 
@@ -108,13 +108,13 @@ export default function GeneratePaywallProvider({ children = null } = {}) {
                   className="rounded-2xl bg-[#D7FF00] px-5 py-4 text-black no-underline transition hover:scale-[1.02]"
                 >
                   <p className="text-[10px] font-black uppercase tracking-[0.16em]">
-                    Melhor valor
+                    Best value
                   </p>
                   <p className="mt-1 text-3xl font-black">
                     {paywall?.plans?.annual?.price || "Ver planos"}
                   </p>
                   <p className="mt-1 text-xs font-bold text-black/60">
-                    Assinatura anual
+                    Annual subscription
                   </p>
                 </Link>
 
@@ -127,7 +127,7 @@ export default function GeneratePaywallProvider({ children = null } = {}) {
                     Flexível
                   </p>
                   <p className="mt-1 text-3xl font-black">
-                    {paywall?.plans?.monthly?.price || "Mensal"}
+                    {paywall?.plans?.monthly?.price || "Monthly"}
                   </p>
                   <p className="mt-1 text-xs font-bold text-white/40">
                     Cancele quando quiser
@@ -141,7 +141,7 @@ export default function GeneratePaywallProvider({ children = null } = {}) {
                   onClick={() => setPaywall(null)}
                   className="text-sm font-black uppercase tracking-[0.12em] text-[#D7FF00] no-underline hover:underline"
                 >
-                  Ver todos os planos →
+                  See all plans →
                 </Link>
 
                 <button
@@ -149,7 +149,7 @@ export default function GeneratePaywallProvider({ children = null } = {}) {
                   onClick={() => setPaywall(null)}
                   className="rounded-xl border border-white/10 bg-white/[.04] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-white/60 transition hover:text-white"
                 >
-                  Fechar
+                  Close
                 </button>
               </div>
             </div>

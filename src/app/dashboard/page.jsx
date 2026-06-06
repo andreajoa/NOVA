@@ -25,7 +25,7 @@ function FalBalanceAlert() {
   const labelClass = critical ? "text-red-400" : "text-yellow-300";
   const valueClass = critical ? "text-red-300" : "text-yellow-300";
   const btnClass = critical ? "bg-red-500 text-white hover:bg-red-400" : "bg-yellow-400 text-black hover:bg-yellow-300";
-  const label = critical ? "Saldo fal.ai CRITICO" : "Saldo fal.ai baixo";
+  const label = critical ? "fal.ai balance CRITICAL" : "fal.ai balance low";
   const msg = critical ? " Recarregue agora para nao interromper as geracoes." : " Considere recarregar em breve.";
   const bal = typeof balance === "number" ? balance.toFixed(2) : balance;
 
@@ -36,7 +36,7 @@ function FalBalanceAlert() {
           {label}
         </p>
         <p className="text-sm text-white/60">
-          Saldo atual: <span className={"font-black " + valueClass}>${bal}</span>{msg}
+          Current balance: <span className={"font-black " + valueClass}>${bal}</span>{msg}
         </p>
       </div>
       <a href="https://fal.ai/dashboard" target="_blank" rel="noopener noreferrer"

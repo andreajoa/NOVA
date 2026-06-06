@@ -129,7 +129,7 @@ function shouldOpenUpgrade(res, data) {
     data?.code === "IMAGE_TRIAL_LIMIT_REACHED" ||
     msg.includes("forbidden") ||
     msg.includes("insufficient") ||
-    msg.includes("saldo insuficiente")
+    msg.includes("insufficient")
   );
 }
 
@@ -141,7 +141,7 @@ function normalizeUpgrade(data) {
     message:
       data?.message && !String(data.message).toLowerCase().includes("forbidden")
         ? data.message
-        : "Saldo insuficiente para gerar. Faça upgrade para continuar.",
+        : "Not enough credits. Upgrade to continue.",
     plans: data?.plans || {
       annual: { label: "Annual", price: "$5/mo", href: "/checkout/plan?plan=basic&billing=annual" },
       monthly: { label: "Monthly", price: "$7/mo", href: "/checkout/plan?plan=basic&billing=monthly" },
@@ -253,7 +253,7 @@ export default function UGCProdutoPage() {
       if (!res.ok || !data?.success) {
         throw new Error(
         String(data?.message || data?.error || "").toLowerCase().includes("forbidden")
-          ? "Saldo insuficiente para gerar. Faça upgrade para continuar."
+          ? "Not enough credits. Upgrade to continue."
           : data?.message || data?.error || "Falha ao gerar vídeo UGC."
       );
       }
@@ -423,7 +423,7 @@ export default function UGCProdutoPage() {
                 disabled={loading || !productFile}
                 className="mt-5 min-h-16 w-full rounded-2xl bg-[#D7FF00] px-6 py-4 text-sm font-black uppercase tracking-[0.14em] text-black transition hover:scale-[1.01] hover:bg-[#e5ff2f] disabled:cursor-not-allowed disabled:opacity-45"
               >
-                {loading ? statusText || "Gerando..." : `Gerar vídeo UGC → ${seconds}s`}
+                {loading ? statusText || "Generating..." : `Generate UGC video → ${seconds}s`}
               </button>
             </div>
           </div>
@@ -433,7 +433,7 @@ export default function UGCProdutoPage() {
           <section className="mt-5 rounded-[2rem] border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-5 md:p-6">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#D7FF00]">Upgrade necessário</p>
             <h3 className="mt-2 text-2xl font-black uppercase tracking-[-0.04em] text-white">
-              {upgradeOffer?.message || "Você precisa de mais créditos para continuar."}
+              {upgradeOffer?.message || "You need more credits to continue."}
             </h3>
             <Link href="/pricing" className="mt-5 inline-flex rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-black no-underline">
               Ver planos →
@@ -455,7 +455,7 @@ export default function UGCProdutoPage() {
                 <h2 className="mt-2 text-3xl font-black uppercase tracking-[-0.06em] text-white">Seu vídeo UGC está pronto.</h2>
               </div>
               <a href={resultUrl} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-white/10 px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-white/60 no-underline hover:text-white">
-                Abrir vídeo
+                Open video
               </a>
             </div>
 

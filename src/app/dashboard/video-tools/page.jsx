@@ -6,7 +6,7 @@ function UpgradeBanner({ data, onDismiss }) {
   return (
     <div className="mt-5 rounded-[2rem] border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-5">
       <p className="text-xs font-black uppercase text-[#D7FF00]">Upgrade required</p>
-      <h3 className="mt-2 text-2xl font-black uppercase text-white">{data?.message || "Saldo insuficiente."}</h3>
+      <h3 className="mt-2 text-2xl font-black uppercase text-white">{data?.message || "Insufficient credits."}</h3>
       <div className="mt-5 flex gap-3">
         <Link href="/pricing" className="rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase text-black no-underline">See plans</Link>
         <button onClick={onDismiss} className="rounded-xl border border-white/15 px-5 py-3 text-xs font-black uppercase text-white/50">Close</button>
@@ -70,7 +70,7 @@ export default function VideoToolsPage() {
                   {["16:9", "9:16", "1:1"].map((r) => <button key={r} onClick={() => setAspectRatio(r)} className={"flex-1 rounded-xl border px-4 py-3 text-xs font-black uppercase " + (aspectRatio === r ? "border-[#D7FF00] bg-[#D7FF00] text-black" : "border-white/10 text-white/55")}>{r}</button>)}
                 </div>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[.025] p-4 text-xs text-white/40">Cost: {seconds * 24} creditos</div>
+              <div className="rounded-2xl border border-white/10 bg-white/[.025] p-4 text-xs text-white/40">Cost: {seconds * 24} credits</div>
               <button onClick={handleExtend} disabled={loading} className="min-h-14 rounded-2xl bg-[#D7FF00] px-6 py-4 text-sm font-black uppercase text-black disabled:opacity-45">
                 {loading ? (status || "Generating...") : ("Estender " + seconds + "s")}
               </button>
@@ -81,7 +81,7 @@ export default function VideoToolsPage() {
         {upgradeOffer && <UpgradeBanner data={upgradeOffer} onDismiss={() => setUpgradeOffer(null)} />}
         {result && (
           <div className="mt-5 rounded-[2rem] border border-white/10 bg-[#070707] p-6">
-            <p className="text-xs font-black uppercase text-[#D7FF00]">Continuacao gerada</p>
+            <p className="text-xs font-black uppercase text-[#D7FF00]">Continuation generated</p>
             <video src={result.videoUrl} controls playsInline className="mt-4 w-full rounded-2xl border border-white/10 bg-black" />
             <div className="mt-3 flex gap-3">
               <a href={result.videoUrl} target="_blank" rel="noopener noreferrer" className="flex-1 rounded-xl border border-white/10 px-4 py-3 text-center text-xs font-black uppercase text-white/60 no-underline hover:text-white">Open</a>

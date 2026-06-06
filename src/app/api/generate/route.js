@@ -70,7 +70,7 @@ function dashboardPaywallPayload({ currentCredits, creditsRequired, seconds }) {
     success: false,
     code: "INSUFFICIENT_CREDITS",
     error: "INSUFFICIENT_CREDITS",
-    message: "Saldo insuficiente para gerar este vídeo. Faça upgrade para continuar.",
+    message: "Not enough credits to generate this video. Upgrade to continue.",
     currentCredits,
     creditsRequired,
     creditsMissing: Math.max(0, creditsRequired - currentCredits),
@@ -88,7 +88,7 @@ function imageTrialPaywallPayload({ imageGensUsed, imageMonthlyLimit }) {
     success: false,
     code: "IMAGE_TRIAL_LIMIT_REACHED",
     error: "IMAGE_TRIAL_LIMIT_REACHED",
-    message: `Saldo insuficiente para gerar imagem. Você usou ${imageMonthlyLimit} gerações grátis. Faça upgrade para continuar.`,
+    message: `Not enough credits. You have used ${imageMonthlyLimit} free generations. Upgrade to continue.`,
     imageGensUsed,
     imageMonthlyLimit,
     plans: {
@@ -160,8 +160,8 @@ function generationUpgradePayload({ isImage, seconds }) {
     code: isImage ? "IMAGE_TRIAL_LIMIT_REACHED" : "INSUFFICIENT_CREDITS",
     error: isImage ? "IMAGE_TRIAL_LIMIT_REACHED" : "INSUFFICIENT_CREDITS",
     message: isImage
-      ? "Saldo insuficiente para gerar imagem. Faça upgrade para continuar."
-      : "Saldo insuficiente para gerar este vídeo. Faça upgrade para continuar.",
+      ? "Not enough credits to generate image. Upgrade to continue."
+      : "Not enough credits to generate this video. Upgrade to continue.",
     currentCredits: 0,
     creditsRequired,
     creditsMissing: creditsRequired,

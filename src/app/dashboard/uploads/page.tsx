@@ -86,7 +86,7 @@ export default function UploadsPage() {
 
       if (!uploadUrl) throw new Error("uploadUrl não veio na resposta")
 
-      setStatusMsg("Enviando para R2...")
+      setStatusMsg("Uploading to R2...")
 
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
