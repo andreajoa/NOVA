@@ -9,17 +9,22 @@ function FalBalanceAlert() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/admin/fal-balance")
-      .then(r => {
-        if (r.status === 403 || r.status === 401) return null; // not admin
-        if (r.ok) { setIsAdmin(true); return r.json(); }
-        return null;
+    // First check if user is admin
+    fetch("/api/admin/me")
+      .then(r => r.ok ? r.json() : { isAdmin: false })
+      .then(d => {
+        if (!d.isAdmin) { setLoading(false); return; }
+        setIsAdmin(true);
+        // Only fetch balance if admin
+        return fetch("/api/admin/fal-balance")
+          .then(r => r.ok ? r.json() : null)
+          .then(b => { if (b) setBalance(b.balance); })
+          .finally(() => setLoading(false));
       })
-      .then(d => { if (d) setBalance(d.balance); })
-      .finally(() => setLoading(false));
+      .catch(() => setLoading(false));
   }, []);
 
-  // Only admins see this — API returns 403 for everyone else
+  // Invisible to everyone except admin
   if (loading || !isAdmin || balance === null) return null;
 
   const low = balance < 10;
