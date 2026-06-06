@@ -137,7 +137,41 @@ export default function DashboardPage() {
       </div>
 
 
-      <footer className="mt-16 pt-8 border-t border-white/8 flex items-center justify-between">
+      
+      <section className="mt-8 rounded-[1.8rem] border border-[#D7FF00]/20 bg-[#D7FF00]/[0.04] p-5 md:rounded-[2.2rem] md:p-7">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D7FF00]">Advanced Media Suite</p>
+            <h2 className="mt-2 text-3xl font-black uppercase tracking-[-0.05em] text-white">New creation tools</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
+              Talking avatars, long-video planning and video extension workflows for professional AI video production.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <a href="/dashboard/talking-avatar" className="rounded-3xl border border-white/10 bg-black/50 p-5 no-underline transition hover:border-[#D7FF00]/50">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#D7FF00]">Photo + Voice</p>
+            <h3 className="mt-3 text-xl font-black text-white">Talking Avatar</h3>
+            <p className="mt-2 text-sm leading-6 text-white/45">Generate a talking video from a portrait and script/audio.</p>
+          </a>
+
+          <a href="/dashboard/long-video" className="rounded-3xl border border-white/10 bg-black/50 p-5 no-underline transition hover:border-[#D7FF00]/50">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#D7FF00]">Scene Planner</p>
+            <h3 className="mt-3 text-xl font-black text-white">Long Video</h3>
+            <p className="mt-2 text-sm leading-6 text-white/45">Plan long videos as scenes with estimated credit cost.</p>
+          </a>
+
+          <a href="/dashboard/video-tools" className="rounded-3xl border border-white/10 bg-black/50 p-5 no-underline transition hover:border-[#D7FF00]/50">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#D7FF00]">Continue Scene</p>
+            <h3 className="mt-3 text-xl font-black text-white">Video Extension</h3>
+            <p className="mt-2 text-sm leading-6 text-white/45">Prepare video continuation with async FFmpeg/R2 workflow.</p>
+          </a>
+        </div>
+      </section>
+
+
+<footer className="mt-16 pt-8 border-t border-white/8 flex items-center justify-between">
         <p className="text-white/20 text-xs">© 2026 Nova AI · All rights reserved</p>
         <div className="flex gap-6">
           <a href="/pricing" className="text-white/20 text-xs hover:text-white transition">Pricing</a>
