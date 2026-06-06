@@ -5,16 +5,22 @@ import { useEffect, useState } from "react";
 
 function FalBalanceAlert() {
   const [balance, setBalance] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/admin/fal-balance")
-      .then(r => r.ok ? r.json() : null)
+      .then(r => {
+        if (r.status === 403 || r.status === 401) return null; // not admin
+        if (r.ok) { setIsAdmin(true); return r.json(); }
+        return null;
+      })
       .then(d => { if (d) setBalance(d.balance); })
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading || balance === null) return null;
+  // Only admins see this — API returns 403 for everyone else
+  if (loading || !isAdmin || balance === null) return null;
 
   const low = balance < 10;
   const critical = balance < 3;
