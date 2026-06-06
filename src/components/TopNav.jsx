@@ -9,35 +9,35 @@ import CreditBalancePill from "@/components/CreditBalancePill";
 const MENU_GROUPS = [
   {
     key: "criar",
-    label: "Criar",
-    description: "Escolha o tipo de conteúdo que quer gerar",
+    label: "Create",
+    description: "Choose the type of content you want to generate",
     columns: [
       {
-        title: "Geração",
+        title: "Generate",
         items: [
-          { label: "Gerar Imagem",  href: "/dashboard/models",    path: "/dashboard/models"    },
-          { label: "Gerar Vídeo",   href: "/dashboard/generate",  path: "/dashboard/generate"  },
+          { label: "Generate Image",  href: "/dashboard/models",    path: "/dashboard/models"    },
+          { label: "Generate Video",   href: "/dashboard/generate",  path: "/dashboard/generate"  },
           { label: "Character & Story Studio", href: "/dashboard/characters", path: "/dashboard/characters" },
-          { label: "UGC Produto",   href: "/dashboard/templates", path: "/dashboard/templates" },
+          { label: "UGC Product",   href: "/dashboard/templates", path: "/dashboard/templates" },
           { label: "Viral Templates", href: "/dashboard/viral-templates", path: "/dashboard/viral-templates" },
           { href: "/dashboard/landing-page", label: "Landing Page", icon: "▣" },
           { href: "/dashboard/claude-connect", label: "Claude Connect", icon: "⌁" },
         ],
       },
       {
-        title: "Recursos",
+        title: "Resources",
         items: [
           { label: "Brand Kit",     href: "/dashboard/brandkit",  path: "/dashboard/brandkit"  },
           { label: "Uploads",       href: "/dashboard/uploads",   path: "/dashboard/uploads"   },
-          { label: "Projetos",      href: "/dashboard/projects",  path: "/dashboard/projects"  },
+          { label: "Projects",      href: "/dashboard/projects",  path: "/dashboard/projects"  },
         ],
       },
     ],
   },
   {
     key: "produto",
-    label: "Produto",
-    description: "Saiba mais sobre o NOVA e escolha seu plano",
+    label: "Product",
+    description: "Learn more about NOVA and choose your plan",
     columns: [
       {
         title: "NOVA",
@@ -48,7 +48,7 @@ const MENU_GROUPS = [
           { label: "Characters", href: "/dashboard/characters", path: "/dashboard/characters" },
           { label: "Product Ad Generator",href: "/product-ad-generator", path: "/product-ad-generator"  },
           { label: "Character Stories", href: "/dashboard/characters", path: "/dashboard/characters" },
-          { label: "Explorar",            href: "/explore",              path: "/explore"               },
+          { label: "Explore",            href: "/explore",              path: "/explore"               },
         ],
       },
     ],
@@ -56,10 +56,10 @@ const MENU_GROUPS = [
   {
     key: "api",
     label: "API",
-    description: "Use os modelos NOVA no seu próprio projeto",
+    description: "Use NOVA models in your own project",
     columns: [
       {
-        title: "Desenvolvedor",
+        title: "Developer",
         items: [
           { label: "API Credits",   href: "/dashboard/settings/api-keys", path: "/dashboard/settings/api-keys" },
           { label: "Billing",       href: "/dashboard/settings/billing",   path: "/dashboard/settings/billing"  },
@@ -70,14 +70,14 @@ const MENU_GROUPS = [
   },
   {
     key: "empresa",
-    label: "Empresa",
-    description: "Informações legais e contato",
+    label: "Company",
+    description: "Legal information and contact",
     columns: [
       {
-        title: "Empresa",
+        title: "Company",
         items: [
-          { label: "Contato",  href: "/contact", path: "/contact" },
-          { label: "Termos",   href: "/terms",   path: "/terms"   },
+          { label: "Contact",  href: "/contact", path: "/contact" },
+          { label: "Terms",   href: "/terms",   path: "/terms"   },
           { label: "Privacy",  href: "/privacy", path: "/privacy" },
         ],
       },

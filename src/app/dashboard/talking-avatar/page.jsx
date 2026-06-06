@@ -5,11 +5,11 @@ const UPGRADE_CODES = ["INSUFFICIENT_CREDITS"];
 function UpgradeBanner({ data, onDismiss }) {
   return (
     <div className="mt-5 rounded-[2rem] border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-5">
-      <p className="text-xs font-black uppercase text-[#D7FF00]">Upgrade necessario</p>
-      <h3 className="mt-2 text-2xl font-black uppercase text-white">{data?.message || "Saldo insuficiente."}</h3>
+      <p className="text-xs font-black uppercase text-[#D7FF00]">Upgrade required</p>
+      <h3 className="mt-2 text-2xl font-black uppercase text-white">{data?.message || "Insufficient credits."}</h3>
       <div className="mt-5 flex gap-3">
-        <Link href="/pricing" className="rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase text-black no-underline">Ver planos</Link>
-        <button onClick={onDismiss} className="rounded-xl border border-white/15 px-5 py-3 text-xs font-black uppercase text-white/50">Fechar</button>
+        <Link href="/pricing" className="rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase text-black no-underline">See plans</Link>
+        <button onClick={onDismiss} className="rounded-xl border border-white/15 px-5 py-3 text-xs font-black uppercase text-white/50">Close</button>
       </div>
     </div>
   );
@@ -51,14 +51,14 @@ export default function TalkingAvatarPage() {
     setAudioFile(file); setAudioUrl("");
   }
   async function handleSubmit() {
-    if (!imageFile && !imageUrl) { setError("Adicione uma foto."); return; }
-    if (!script.trim() && !audioFile && !audioUrl.trim()) { setError("Adicione script ou audio."); return; }
+    if (!imageFile && !imageUrl) { setError("Add a photo."); return; }
+    if (!script.trim() && !audioFile && !audioUrl.trim()) { setError("Add a script or audio file."); return; }
     setLoading(true); setError(""); setResult(null); setUpgradeOffer(null);
     try {
       let fi = imageUrl.trim(); let fa = audioUrl.trim();
-      if (imageFile && !fi) { setStatus("Enviando imagem..."); fi = await uploadFile(imageFile); }
-      if (audioFile && !fa) { setStatus("Enviando audio..."); fa = await uploadFile(audioFile); }
-      setStatus("Gerando...");
+      if (imageFile && !fi) { setStatus("Uploading image..."); fi = await uploadFile(imageFile); }
+      if (audioFile && !fa) { setStatus("Uploading audio..."); fa = await uploadFile(audioFile); }
+      setStatus("Generating...");
       const res = await fetch("/api/talking-avatar/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageUrl: fi, audioUrl: fa, script: fa ? "" : script, prompt, modelId, seconds: 5 }),
@@ -80,9 +80,9 @@ export default function TalkingAvatarPage() {
         </div>
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <div className="rounded-[2rem] border border-white/10 bg-[#070707] p-6">
-            <p className="text-xs font-black uppercase text-[#D7FF00]">1. Foto do avatar</p>
+            <p className="text-xs font-black uppercase text-[#D7FF00]">1. Avatar photo</p>
             <div onClick={() => imageInputRef.current?.click()} className="mt-4 flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 hover:border-[#D7FF00]/40">
-              {imagePreview ? <img src={imagePreview} alt="Avatar" className="max-h-[160px] w-full rounded-2xl object-cover" /> : <p className="text-xs text-white/35">Clique para enviar foto JPG PNG WEBP</p>}
+              {imagePreview ? <img src={imagePreview} alt="Avatar" className="max-h-[160px] w-full rounded-2xl object-cover" /> : <p className="text-xs text-white/35">Click to upload photo JPG PNG WEBP</p>}
             </div>
             <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
             {imagePreview && <button onClick={() => { setImageFile(null); setImagePreview(""); setImageUrl(""); }} className="mt-2 text-xs font-black uppercase text-white/30 hover:text-white">remover</button>}
@@ -95,7 +95,7 @@ export default function TalkingAvatarPage() {
             <textarea value={script} onChange={(e) => { setScript(e.target.value); setAudioFile(null); setAudioUrl(""); }} placeholder="O que o avatar deve falar..." rows={4} className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none" />
             <p className="mt-4 text-[10px] font-black uppercase text-white/35">Arquivo de audio</p>
             <button onClick={() => audioInputRef.current?.click()} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.03] px-4 py-3 text-left text-sm text-white/50 hover:text-white">
-              {audioFile ? ("Selecionado: " + audioFile.name) : "Clique para enviar MP3 WAV M4A"}
+              {audioFile ? ("Selected: " + audioFile.name) : "Clique para enviar MP3 WAV M4A"}
             </button>
             <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={handleAudioChange} />
             <p className="mt-4 text-[10px] font-black uppercase text-white/35">Ou URL de audio</p>
@@ -110,7 +110,7 @@ export default function TalkingAvatarPage() {
               <option value="kling-lipsync">Kling LipSync</option>
             </select>
             <button onClick={handleSubmit} disabled={loading} className="min-h-14 rounded-2xl bg-[#D7FF00] px-8 py-4 text-sm font-black uppercase text-black disabled:opacity-45">
-              {loading ? (status || "Gerando...") : "Gerar Talking Avatar"}
+              {loading ? (status || "Generating...") : "Generate Talking Avatar"}
             </button>
           </div>
           {error && !upgradeOffer && <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">{error}</div>}
@@ -118,14 +118,14 @@ export default function TalkingAvatarPage() {
         {upgradeOffer && <UpgradeBanner data={upgradeOffer} onDismiss={() => setUpgradeOffer(null)} />}
         {result && (
           <div className="mt-5 rounded-[2rem] border border-white/10 bg-[#070707] p-6">
-            <p className="text-xs font-black uppercase text-[#D7FF00]">Resultado</p>
+            <p className="text-xs font-black uppercase text-[#D7FF00]">Result</p>
             {result.audioUrl && <audio src={result.audioUrl} controls className="mt-4 w-full" />}
             {result.videoUrl && (
               <div className="mt-4">
                 <video src={result.videoUrl} controls playsInline className="w-full rounded-2xl border border-white/10 bg-black" />
                 <div className="mt-3 flex gap-3">
-                  <a href={result.videoUrl} target="_blank" rel="noopener noreferrer" className="flex-1 rounded-xl border border-white/10 px-4 py-3 text-center text-xs font-black uppercase text-white/60 no-underline hover:text-white">Abrir</a>
-                  <a href={"/api/download?url=" + encodeURIComponent(result.videoUrl) + "&filename=talking-avatar"} className="flex-1 rounded-xl bg-[#D7FF00] px-4 py-3 text-center text-xs font-black uppercase text-black no-underline">Baixar</a>
+                  <a href={result.videoUrl} target="_blank" rel="noopener noreferrer" className="flex-1 rounded-xl border border-white/10 px-4 py-3 text-center text-xs font-black uppercase text-white/60 no-underline hover:text-white">Open</a>
+                  <a href={"/api/download?url=" + encodeURIComponent(result.videoUrl) + "&filename=talking-avatar"} className="flex-1 rounded-xl bg-[#D7FF00] px-4 py-3 text-center text-xs font-black uppercase text-black no-underline">Download</a>
                 </div>
               </div>
             )}

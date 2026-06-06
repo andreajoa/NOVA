@@ -5,11 +5,11 @@ const UPGRADE_CODES = ["INSUFFICIENT_CREDITS"];
 function UpgradeBanner({ data, onDismiss }) {
   return (
     <div className="mt-5 rounded-[2rem] border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-5">
-      <p className="text-xs font-black uppercase text-[#D7FF00]">Upgrade necessario</p>
-      <h3 className="mt-2 text-xl font-black uppercase text-white">{data?.message || "Saldo insuficiente."}</h3>
+      <p className="text-xs font-black uppercase text-[#D7FF00]">Upgrade required</p>
+      <h3 className="mt-2 text-xl font-black uppercase text-white">{data?.message || "Insufficient credits."}</h3>
       <div className="mt-4 flex gap-3">
-        <Link href="/pricing" className="rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase text-black no-underline">Ver planos</Link>
-        <button onClick={onDismiss} className="rounded-xl border border-white/15 px-5 py-3 text-xs font-black uppercase text-white/50">Fechar</button>
+        <Link href="/pricing" className="rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase text-black no-underline">See plans</Link>
+        <button onClick={onDismiss} className="rounded-xl border border-white/15 px-5 py-3 text-xs font-black uppercase text-white/50">Close</button>
       </div>
     </div>
   );
@@ -21,18 +21,18 @@ function SceneCard({ scene, index, isRendering }) {
     <div className={"rounded-2xl border p-4 " + (isDone ? "border-[#D7FF00]/30 bg-[#D7FF00]/5" : isRendering ? "border-white/20 bg-white/[.04]" : "border-white/10 bg-black/30")}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <p className="text-[10px] font-black uppercase text-white/35">{"Cena " + (index + 1) + " - " + scene.durationSeconds + "s"}</p>
+          <p className="text-[10px] font-black uppercase text-white/35">{"Scene " + (index + 1) + " - " + scene.durationSeconds + "s"}</p>
           <p className="mt-1 text-sm text-white/70">{scene.prompt}</p>
         </div>
         <div className={"rounded-xl border px-3 py-1.5 text-[10px] font-black uppercase " + (isDone ? "border-[#D7FF00]/40 text-[#D7FF00]" : isRendering ? "border-white/20 text-white/50" : "border-white/10 text-white/25")}>
-          {isDone ? "Pronto" : isRendering ? "..." : "Aguard"}
+          {isDone ? "Done" : isRendering ? "..." : "Aguard"}
         </div>
       </div>
       {isDone && scene.videoUrl && (
         <div className="mt-3">
           <video src={scene.videoUrl} controls playsInline className="w-full rounded-xl border border-white/10 bg-black" style={{ maxHeight: 180 }} />
           <a href={dlHref} className="mt-2 block rounded-xl border border-white/10 px-3 py-2 text-center text-[10px] font-black uppercase text-white/50 no-underline hover:text-white">
-            {"Baixar cena " + (index + 1)}
+            {"Download scene " + (index + 1)}
           </a>
         </div>
       )}
@@ -58,9 +58,9 @@ export default function LongVideoPage() {
     try {
       const res = await fetch("/api/long-video/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: topic.trim(), minutes, sceneSeconds }) });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) throw new Error(data?.message || "Falha.");
+      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed.");
       setPlan(data); setScenes(data.scenes.map((s) => ({ ...s, videoUrl: null })));
-    } catch (err) { setError(err?.message || "Falha."); }
+    } catch (err) { setError(err?.message || "Failed."); }
     finally { setPlanLoading(false); }
   }
   async function handleRender() {
@@ -75,7 +75,7 @@ export default function LongVideoPage() {
         if (!res.ok || !data?.success) throw new Error(data?.message || ("Falha cena " + (i + 1)));
         setScenes((prev) => { const next = [...prev]; next[i] = { ...next[i], videoUrl: data.videoUrl }; return next; });
         window.dispatchEvent(new Event("nova:credits-refresh"));
-      } catch (err) { setError("Cena " + (i + 1) + ": " + (err?.message || "Falha.")); setRenderLoading(false); return; }
+      } catch (err) { setError("Scene " + (i + 1) + ": " + (err?.message || "Failed.")); setRenderLoading(false); return; }
     }
     setRenderLoading(false); setCurrentScene(-1); setDone(true);
   }
@@ -122,7 +122,7 @@ export default function LongVideoPage() {
             </div>
             {error && <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">{error}</div>}
             <button onClick={handlePlan} disabled={planLoading} className="mt-5 min-h-14 w-full rounded-2xl bg-[#D7FF00] px-6 py-4 text-sm font-black uppercase text-black disabled:opacity-45">
-              {planLoading ? "Gerando plano..." : "Gerar plano de cenas"}
+              {planLoading ? "Generating plan..." : "Generate scene plan"}
             </button>
           </div>
         )}
@@ -130,13 +130,13 @@ export default function LongVideoPage() {
           <div className="mt-5 rounded-[2rem] border border-white/10 bg-[#070707] p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-black uppercase text-[#D7FF00]">Plano gerado</p>
+                <p className="text-xs font-black uppercase text-[#D7FF00]">Plan generated</p>
                 <h2 className="mt-1 text-2xl font-black uppercase text-white">{plan.sceneCount} cenas - {plan.minutes}min - aprox {plan.estimatedCredits} creditos</h2>
               </div>
               <div className="flex gap-3">
-                <button onClick={() => { setPlan(null); setScenes([]); setDone(false); setError(""); }} className="rounded-xl border border-white/15 px-4 py-3 text-xs font-black uppercase text-white/50 hover:text-white">Novo plano</button>
-                {!renderLoading && !done && <button onClick={handleRender} className="rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase text-black">Renderizar tudo</button>}
-                {renderLoading && <div className="rounded-xl border border-white/15 px-4 py-3 text-xs font-black uppercase text-white/50">{"Cena " + (currentScene + 1) + "/" + scenes.length}</div>}
+                <button onClick={() => { setPlan(null); setScenes([]); setDone(false); setError(""); }} className="rounded-xl border border-white/15 px-4 py-3 text-xs font-black uppercase text-white/50 hover:text-white">New plan</button>
+                {!renderLoading && !done && <button onClick={handleRender} className="rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase text-black">Render all</button>}
+                {renderLoading && <div className="rounded-xl border border-white/15 px-4 py-3 text-xs font-black uppercase text-white/50">{"Scene " + (currentScene + 1) + "/" + scenes.length}</div>}
               </div>
             </div>
             {renderLoading && (
@@ -147,11 +147,11 @@ export default function LongVideoPage() {
             {error && !upgradeOffer && (
               <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">
                 {error}
-                {!renderLoading && <button onClick={handleRender} className="ml-4 rounded-xl bg-white/10 px-4 py-1.5 text-xs font-black uppercase">Tentar novamente</button>}
+                {!renderLoading && <button onClick={handleRender} className="ml-4 rounded-xl bg-white/10 px-4 py-1.5 text-xs font-black uppercase">Try again</button>}
               </div>
             )}
             {upgradeOffer && <UpgradeBanner data={upgradeOffer} onDismiss={() => setUpgradeOffer(null)} />}
-            {done && <div className="mt-4 rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-4"><p className="text-sm font-black uppercase text-[#D7FF00]">{"Todas as " + scenes.length + " cenas prontas."}</p></div>}
+            {done && <div className="mt-4 rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-4"><p className="text-sm font-black uppercase text-[#D7FF00]">{"All " + scenes.length + " cenas prontas."}</p></div>}
             <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {scenes.map((scene, i) => <SceneCard key={i} scene={scene} index={i} isRendering={renderLoading && i === currentScene} />)}
             </div>
