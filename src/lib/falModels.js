@@ -231,11 +231,6 @@ export const falModels = {
   },
 };
 
-export const PLAN_CONFIG = {
-  trial:    { credits: 10,     imageUnlimited: false, imageMonthlyLimit: 10   },
-  basic:    { credits: 70,     imageUnlimited: false, imageMonthlyLimit: null },
-  plus:     { credits: 500,    imageUnlimited: false, imageMonthlyLimit: null },
-  ultra:    { credits: 3000,   imageUnlimited: true,  imageMonthlyLimit: null },
-  business: { credits: 3000,   imageUnlimited: true,  imageMonthlyLimit: null },
-  admin:    { credits: 999999, imageUnlimited: true,  imageMonthlyLimit: null },
-};
+// Fonte única em @/lib/planConfig — módulo sem imports, para poder ser usado
+// tanto no servidor quanto em componentes de cliente.
+export { PLAN_CONFIG } from "@/lib/planConfig";

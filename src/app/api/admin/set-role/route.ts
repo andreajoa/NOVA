@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { setAdminRole } from "@/lib/db";
 
 // Chave secreta para proteger esse endpoint

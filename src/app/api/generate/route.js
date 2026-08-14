@@ -10,6 +10,9 @@ import {
   checkAndDebitImageGen,
   ensureUserGenerationAccount,
   isAdminUser,
+  refundApiCredits,
+  refundGenerationCredits,
+  refundImageGen,
 } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -134,26 +137,11 @@ function isForbiddenOrBillingError(err) {
   );
 }
 
+// Construtor de payload puro. A checagem de FAL_KEY que morava aqui referenciava
+// endpoint/model/mode/userId, que só existem dentro do POST — era ReferenceError
+// garantido. A verificação agora acontece no início do POST, antes de cobrar.
 function generationUpgradePayload({ isImage, seconds }) {
   const creditsRequired = isImage ? 1 : seconds * VIDEO_CREDITS_PER_SECOND;
-
-  if (!process.env.FAL_KEY) {
-    console.error("FAL_KEY missing in production environment", {
-      endpoint,
-      model,
-      mode,
-      userId,
-    });
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: "FAL_KEY is missing on the server.",
-        debug: { falEnv: falEnvStatus() },
-      },
-      { status: 500 }
-    );
-  }
 
   return {
     success: false,
@@ -271,13 +259,33 @@ function normalizeGptImageInput(endpoint, input = {}) {
 }
 
 function normalizeFalInput(endpoint, input = {}) {
-  let safe = normalizeGptImageInput(endpoint, input);
+  const safe = normalizeGptImageInput(endpoint, input);
 
-  if (typeof normalizeFalInputForEndpoint === "function") {
-    safe = normalizeFalInputForEndpoint(endpoint, safe);
+  // Cada modelo aceita um conjunto próprio de resoluções. Mandar "1080p" para
+  // um endpoint que só aceita até 720p faz o fal recusar a chamada inteira —
+  // e o crédito já foi debitado nesse ponto.
+  if (safe.resolution !== undefined) {
+    const normalized = normalizeResolutionForEndpoint(endpoint, safe.resolution);
+    if (normalized === undefined) delete safe.resolution;
+    else safe.resolution = normalized;
   }
 
   return safe;
+}
+
+/** Monta o input do fal a partir do corpo da requisição, sem chaves repetidas. */
+function buildFalInput(body, seconds) {
+  return {
+    prompt: body.prompt || "",
+    ...(body.negative_prompt && { negative_prompt: body.negative_prompt }),
+    ...(body.image_url && { image_url: body.image_url }),
+    ...(body.image_urls && { image_urls: body.image_urls }),
+    ...(body.duration && { duration: seconds }),
+    ...(body.aspect_ratio && { aspect_ratio: body.aspect_ratio }),
+    ...(body.resolution && { resolution: body.resolution }),
+    ...(body.num_images && { num_images: body.num_images }),
+    ...(body.image_size && { image_size: body.image_size }),
+  };
 }
 
 
@@ -302,22 +310,32 @@ export async function POST(req) {
   const creditsRequired = seconds * VIDEO_CREDITS_PER_SECOND;
   const isImage = isImageEndpoint(endpoint) || body.type === "image";
 
+  if (!endpoint) {
+    return NextResponse.json(
+      { success: false, error: "MISSING_ENDPOINT", message: "Informe o endpoint do modelo." },
+      { status: 400 }
+    );
+  }
+
+  // Falha cedo, ANTES de cobrar: sem FAL_KEY a geração não tem como funcionar,
+  // e debitar crédito para depois estourar no provedor é cobrar por nada.
+  if (!process.env.FAL_KEY) {
+    console.error("FAL_KEY ausente no ambiente", { endpoint, model, mode, userId });
+    return NextResponse.json(
+      {
+        success: false,
+        error: "FAL_KEY is missing on the server.",
+        debug: { falEnv: falEnvStatus() },
+      },
+      { status: 500 }
+    );
+  }
+
   // ── Admin bypass ──────────────────────────────────────────────────────────
   const adminCheck = !isApiRequest && (await isAdminUser(userId));
   if (adminCheck) {
     try {
-      const falInput = {
-        prompt,
-        ...(body.negative_prompt && { negative_prompt: body.negative_prompt }),
-        ...(body.image_url    && { image_url:    body.image_url    }),
-        ...(body.image_urls   && { image_urls:   body.image_urls   }),
-        ...(body.image_urls   && { image_urls:   body.image_urls   }),
-        ...(body.duration     && { duration:     seconds            }),
-        ...(body.aspect_ratio && { aspect_ratio: body.aspect_ratio }),
-        ...(body.resolution   && { resolution:   body.resolution   }),
-        ...(body.num_images   && { num_images:   body.num_images   }),
-        ...(body.image_size   && { image_size:   body.image_size   }),
-      };
+      const falInput = buildFalInput({ ...body, prompt }, seconds);
       const result = await fal.subscribe(endpoint, { input: normalizeFalInput(endpoint, falInput), logs: true });
       const outputUrl =
         result?.video?.url  || result?.videos?.[0]?.url ||
@@ -328,7 +346,7 @@ export async function POST(req) {
         source: "admin",
         data: { type: isImage ? "image" : "video", url: outputUrl, model, mode, seconds, raw: result },
         billing: { creditsCharged: 0, remainingCredits: 999999, wallet: "admin" },
-      }, typeof result !== 'undefined' ? result : (typeof output !== 'undefined' ? output : null)));
+      }, result));
     } catch (err) {
       logFalError("FAL admin generation error", err, {
         endpoint,
@@ -410,19 +428,24 @@ export async function POST(req) {
     remainingCredits = debit.remainingCredits;
   }
 
+  // Estorna o que foi cobrado acima. Chamado sempre que a geração falha
+  // depois do débito — o usuário não pode pagar por um vídeo que não recebeu.
+  async function refundCharge() {
+    if (isApiRequest) {
+      return refundApiCredits({
+        userId,
+        amount: isImage ? 1 : creditsRequired,
+        apiKeyId: apiIdentity.apiKeyId,
+        reason: "generation_failed",
+      });
+    }
+    if (isImage) return refundImageGen(userId);
+    return refundGenerationCredits(userId, creditsRequired);
+  }
+
   // ── Call fal.ai ───────────────────────────────────────────────────────────
   try {
-    const falInput = {
-      prompt,
-      ...(body.image_url    && { image_url:    body.image_url    }),
-        ...(body.image_urls   && { image_urls:   body.image_urls   }),
-        ...(body.image_urls   && { image_urls:   body.image_urls   }),
-      ...(body.duration     && { duration:     seconds            }),
-      ...(body.aspect_ratio && { aspect_ratio: body.aspect_ratio }),
-      ...(body.resolution   && { resolution:   body.resolution   }),
-      ...(body.num_images   && { num_images:   body.num_images   }),
-      ...(body.image_size   && { image_size:   body.image_size   }),
-    };
+    const falInput = buildFalInput({ ...body, prompt }, seconds);
 
     const result = await fal.subscribe(endpoint, { input: normalizeFalInput(endpoint, falInput), logs: true });
 
@@ -449,18 +472,27 @@ export async function POST(req) {
         wallet: billingWallet,
         imageUnlimited: isImage && billingWallet === "image_unlimited",
       },
-    }, typeof result !== 'undefined' ? result : (typeof output !== 'undefined' ? output : null)));
+    }, result));
   } catch (err) {
     logFalError("FAL generation error", err, { endpoint, model, mode, seconds, isImage, falEnv: falEnvStatus() });
 
+    const refunded = await refundCharge();
+
     if (isForbiddenOrBillingError(err)) {
-      return NextResponse.json(generationUpgradePayload({ isImage, seconds }), { status: 402 });
+      return NextResponse.json(
+        { ...generationUpgradePayload({ isImage, seconds }), refunded },
+        { status: 402 }
+      );
     }
 
     return NextResponse.json(
       {
         success: false,
         error: "Não foi possível gerar agora. Tente novamente.",
+        refunded,
+        message: refunded
+          ? "Seus créditos foram devolvidos."
+          : "Não conseguimos devolver os créditos automaticamente — fale com o suporte.",
         debug: {
           endpoint,
           model,

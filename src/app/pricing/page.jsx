@@ -479,9 +479,9 @@ export default function PricingPage() {
 
             <div>
               <p className="mb-4 text-xs font-black uppercase tracking-widest text-white/30">Product</p>
-              <a href="/dashboard" className="mb-3 block text-sm text-white/35 transition hover:text-white">Studio</a>
-              <a href="/dashboard/models" className="mb-3 block text-sm text-white/35 transition hover:text-white">Models</a>
-              <a href="/pricing" className="mb-3 block text-sm text-white/35 transition hover:text-white">Pricing</a>
+              <Link href="/dashboard" className="mb-3 block text-sm text-white/35 transition hover:text-white">Studio</Link>
+              <Link href="/dashboard/models" className="mb-3 block text-sm text-white/35 transition hover:text-white">Models</Link>
+              <Link href="/pricing" className="mb-3 block text-sm text-white/35 transition hover:text-white">Pricing</Link>
             </div>
 
             <div>

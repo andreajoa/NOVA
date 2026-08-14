@@ -5,13 +5,13 @@ import { runDispatch } from "@/lib/crm/dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 const KEYS = {
   crm_paused: { label: "Kill switch global", parse: (v) => (v ? "1" : "0") },
   crm_cadence_days: { label: "Cadência fixa em dias (0 = usar o escalonado)", parse: (v) => String(Math.max(0, Number(v) || 0)) },
   crm_max_no_open_streak: { label: "Pausar após N e-mails sem abertura", parse: (v) => String(Math.max(1, Number(v) || 10)) },
-  crm_max_per_run: { label: "Máximo de envios por ciclo", parse: (v) => String(Math.min(200, Math.max(1, Number(v) || 60))) },
+  crm_max_per_run: { label: "Máximo de envios por ciclo", parse: (v) => String(Math.min(2000, Math.max(1, Number(v) || 500))) },
 };
 
 export async function GET() {
@@ -24,7 +24,7 @@ export async function GET() {
       paused: (await getSetting("crm_paused", "0")) === "1",
       cadenceDays: Number(await getSetting("crm_cadence_days", "0")),
       maxNoOpenStreak: Number(await getSetting("crm_max_no_open_streak", "10")),
-      maxPerRun: Number(await getSetting("crm_max_per_run", "60")),
+      maxPerRun: Number(await getSetting("crm_max_per_run", "500")),
     },
     keys: Object.fromEntries(Object.entries(KEYS).map(([key, meta]) => [key, meta.label])),
   });
@@ -39,7 +39,7 @@ export async function POST(request) {
   // Ação de teste: roda um ciclo agora, sem esperar o cron.
   if (body.action === "run_now") {
     const result = await runDispatch({
-      limit: Number(body.limit || 20),
+      limit: Number(body.limit || 500),
       dryRun: body.dryRun === true,
     });
     return NextResponse.json({ ok: true, action: "run_now", result });

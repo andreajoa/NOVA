@@ -21,7 +21,7 @@ export default function TextToVideoPage() {
           Text to Video<br />AI Generator
         </h1>
         <p className="mt-6 max-w-2xl text-lg leading-8 text-white/60">
-          Turn any text prompt into a high-quality video using the world's best AI models — all in one platform. Kling 3.0, Veo 3.1, Seedance 2.0, Wan 2.2, Hunyuan Video and more. Start free on NOVA AI.
+          Turn any text prompt into a high-quality video using the world&apos;s best AI models — all in one platform. Kling 3.0, Veo 3.1, Seedance 2.0, Wan 2.2, Hunyuan Video and more. Start free on NOVA AI.
         </p>
         <div className="mt-8 flex flex-wrap gap-4">
           <Link href="/sign-up" className="rounded-2xl bg-[#D7FF00] px-8 py-4 text-sm font-black uppercase tracking-[0.1em] text-black transition hover:bg-white">Try Free — 10 Credits</Link>

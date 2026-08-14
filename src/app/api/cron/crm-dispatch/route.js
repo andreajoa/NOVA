@@ -3,7 +3,9 @@ import { runDispatch } from "@/lib/crm/dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+// Plano Hobby do Vercel corta a função em 60s. O runDispatch tem orçamento
+// interno de 45s e devolve o que sobrar para o próximo ciclo.
+export const maxDuration = 60;
 
 /**
  * Ciclo de disparo do CRM. Chamado pelo Vercel Cron (ver vercel.json).
@@ -31,7 +33,7 @@ async function handle(request) {
 
   const url = new URL(request.url);
   const dryRun = url.searchParams.get("dryRun") === "1";
-  const limit = Number(url.searchParams.get("limit") || 60);
+  const limit = Number(url.searchParams.get("limit") || 500);
 
   try {
     const result = await runDispatch({ limit, dryRun });

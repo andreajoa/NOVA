@@ -80,6 +80,9 @@ export default function ApiKeysPage() {
   }
 
   useEffect(() => {
+    // loadKeys/loadApiWallet são async: o setState acontece na continuação da
+    // promise, não no corpo síncrono do efeito.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadKeys();
     loadApiWallet();
   }, []);
@@ -169,6 +172,8 @@ setBusy(true);
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
+          {/* Rota de API que devolve HTML do servidor — next/link quebraria. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a
             href="/api/api-keys/claude-direct"
             className="inline-flex h-11 items-center justify-center rounded-xl border border-[#D7FF00]/40 px-5 text-xs font-black uppercase tracking-[.14em] text-[#D7FF00] no-underline transition hover:bg-[#D7FF00]/10"
@@ -255,6 +260,8 @@ setBusy(true);
               Use the direct generator. It creates the full API key and shows the exact Claude connector URL.
             </p>
           </div>
+          {/* Rota de API que devolve HTML do servidor — next/link quebraria. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a
             href="/api/api-keys/claude-direct"
             className="rounded-xl bg-[#D7FF00] px-5 py-3 text-center text-xs font-black uppercase tracking-[.14em] text-black no-underline transition hover:bg-[#c8f000]"

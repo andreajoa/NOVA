@@ -47,7 +47,9 @@ export default function ClaudeConnectPage() {
   }, [apiKey]);
 
   useEffect(() => {
+    // Idem: localStorage é client-only, a leitura tem que ser pós-montagem.
     const saved = localStorage.getItem("nova_claude_api_key") || "";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved) setApiKey(saved);
   }, []);
 
@@ -173,6 +175,8 @@ export default function ClaudeConnectPage() {
             </p>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              {/* Rota de API que devolve HTML do servidor — next/link quebraria. */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
               <a
                 href="/api/api-keys/claude-direct?create=1"
                 className="rounded-2xl bg-lime-300 px-5 py-4 text-center text-sm font-black uppercase tracking-[0.12em] text-black shadow-[0_0_30px_rgba(217,255,0,.25)]"
@@ -196,6 +200,8 @@ export default function ClaudeConnectPage() {
               </a>
 
 
+              {/* Rota de API que devolve HTML do servidor — next/link quebraria. */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
               <a
                 href="/api/api-keys/claude-direct"
                 className="rounded-2xl border border-lime-300/40 bg-black/40 px-5 py-4 text-center text-sm font-black uppercase tracking-[0.12em] text-lime-300"

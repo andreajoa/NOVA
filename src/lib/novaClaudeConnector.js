@@ -42,11 +42,6 @@ function getNovaApiKeyFromRequest(req) {
   }
 }
 
-function getNovaApiAuthHeader(req) {
-  const key = getNovaApiKeyFromRequest(req);
-  return key ? `Bearer ${key}` : "";
-}
-
 function requestWithNormalizedNovaApiKey(req) {
   const key = getNovaApiKeyFromRequest(req);
 

@@ -21,7 +21,7 @@ export default function SeedanceVideoGeneratorPage() {
           Seedance 2.0<br />Video Generator
         </h1>
         <p className="mt-6 max-w-2xl text-lg leading-8 text-white/60">
-          Generate stunning videos with Seedance 2.0 — ByteDance's flagship AI video model. Supports text-to-video, image-to-video, and reference-to-video on NOVA AI.
+          Generate stunning videos with Seedance 2.0 — ByteDance&apos;s flagship AI video model. Supports text-to-video, image-to-video, and reference-to-video on NOVA AI.
         </p>
         <div className="mt-8 flex flex-wrap gap-4">
           <Link href="/sign-up" className="rounded-2xl bg-[#D7FF00] px-8 py-4 text-sm font-black uppercase tracking-[0.1em] text-black transition hover:bg-white">Try Free — 10 Credits</Link>
@@ -43,7 +43,7 @@ export default function SeedanceVideoGeneratorPage() {
         <section className="mt-16">
           <h2 className="text-3xl font-black uppercase tracking-[-0.05em]">What is Seedance 2.0?</h2>
           <p className="mt-4 max-w-3xl text-base leading-8 text-white/55">
-            Seedance 2.0 is ByteDance's flagship AI video generation model — the same company behind TikTok. It delivers high-motion, high-fidelity video output that is especially well-suited for social media content, short-form ads, and ecommerce creatives. On NOVA AI, you can access Seedance 2.0 alongside 8 other top video models in one platform.
+            Seedance 2.0 is ByteDance&apos;s flagship AI video generation model — the same company behind TikTok. It delivers high-motion, high-fidelity video output that is especially well-suited for social media content, short-form ads, and ecommerce creatives. On NOVA AI, you can access Seedance 2.0 alongside 8 other top video models in one platform.
           </p>
         </section>
         <section className="mt-16 rounded-[1.5rem] border border-[#D7FF00]/20 bg-[#D7FF00]/5 p-8">

@@ -11,13 +11,13 @@ stack que a NOVA já usa: Cloudflare D1 + Resend + Vercel Cron. Sem serviço nov
 Cadastro (webhook Clerk)  ──┐
 Importação de CSV (painel) ─┼──► crm_contacts ──► crm_enrollments
                             │                          │
-                            │              cron horário │ (/api/cron/crm-dispatch)
+                            │               cron diário │ (/api/cron/crm-dispatch)
                             │                          ▼
                             │                    runDispatch()
                             │                    ├─ kill switch?
                             │                    ├─ suprimido?
                             │                    ├─ sem abrir há N?
-                            │                    └─ Resend.send() ──► crm_email_log
+                            │                    └─ batch.send(100) ──► crm_email_log
                             │                                              ▲
 Assinatura (webhook Stripe) ┘                                              │
    └─► markContactAsCustomer() → sai da sequência      webhook Resend ──────┘
@@ -90,12 +90,38 @@ inclusive recuperação de senha e recibo do Stripe. Por isso o motor tem:
 | Bounce duro e reclamação → supressão automática | webhook Resend |
 | Pausa automática de quem não abre | `crm_max_no_open_streak` (padrão 10) |
 | One-click unsubscribe (RFC 8058) | header `List-Unsubscribe-Post` |
-| Limite de envios por ciclo | `crm_max_per_run` (padrão 60/hora ≈ 1.400/dia) |
-| Intervalo entre envios | 550 ms, respeita o rate limit da Resend |
+| Limite de envios por ciclo | `crm_max_per_run` (padrão 500) |
+| Envio em lote de 100 | 1 requisição por lote, dentro do orçamento de 45s |
 | Saída automática na conversão | webhook Stripe |
 
 O painel mostra a taxa de reclamação com semáforo: verde abaixo de 0,1%,
 amarelo entre 0,1% e 0,3%, vermelho acima — que é onde o bloqueio acontece.
+
+---
+
+## Plano Hobby do Vercel
+
+Duas restrições do plano free moldaram o motor:
+
+**Função morre em 60s.** O `runDispatch` tem orçamento interno de 45s: quando
+estoura, para de abrir lotes novos e devolve o restante para o próximo ciclo.
+Nenhum ponteiro é movido, então nada se perde nem é enviado duas vezes.
+
+**Cron roda 1x por dia.** Por isso o envio é em **lote de 100** (`resend.batch.send`)
+em vez de individual. Envio um a um custa ~550ms por causa do rate limit — em 45s
+seriam ~80 e-mails por dia. Em lote, 100 e-mails custam uma requisição, e o ciclo
+diário passa a caber na casa dos milhares.
+
+A cadência escalonada não sofre com o cron diário: cada e-mail sai no dia em que
+vence, só que a fila é verificada uma vez ao dia em vez de a cada hora.
+
+> Se um dia quiser disparo mais frequente sem pagar o Vercel Pro, aponte um cron
+> externo gratuito (cron-job.org, GitHub Actions) para
+> `/api/cron/crm-dispatch?secret=$CRON_SECRET`.
+
+> A conta da **Resend** também tem limite próprio de envio diário conforme o
+> plano. O motor não tenta adivinhar esse limite — se a Resend recusar, o lote é
+> registrado como falha e reenviado no ciclo seguinte.
 
 ---
 
@@ -131,9 +157,8 @@ Passos:
 2. Em **Resend → Webhooks**, apontar para `https://www.novvideos.online/api/webhooks/resend`
    e assinar os eventos `email.delivered`, `email.opened`, `email.clicked`,
    `email.bounced`, `email.complained`.
-3. O cron já está declarado em `vercel.json` (de hora em hora). O plano Hobby do
-   Vercel limita crons a 1 execução por dia — para disparo horário é preciso plano
-   Pro, ou apontar um cron externo para `/api/cron/crm-dispatch?secret=$CRON_SECRET`.
+3. O cron já está declarado em `vercel.json`: **1x por dia às 13:00 UTC**
+   (10h de Brasília), que é o limite do plano Hobby do Vercel.
 4. As tabelas se criam sozinhas no primeiro request (`ensureCrmTables`). O DDL de
    referência está em `src/lib/crm/schema.sql`.
 

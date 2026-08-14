@@ -330,10 +330,14 @@ export default function CharacterStudioPage() {
   });
 
   useEffect(() => {
+    // Hidratação a partir do localStorage: só existe no cliente, então tem que
+    // ser depois da montagem. Ler num initializer causaria mismatch de hidratação.
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
       if (Array.isArray(saved)) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCharacters(saved);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (saved[0]?.id) setSelectedId(saved[0].id);
       }
     } catch {}
@@ -970,7 +974,7 @@ export default function CharacterStudioPage() {
                   />
 
                   <p className="mt-4 text-xs leading-6 text-white/35">
-                    Model: Seedance 2.0 image-to-video. It is designed to animate still images into cinematic video with motion prompts. :contentReference[oaicite:2]{index=2}
+                    Model: Seedance 2.0 image-to-video — animates a still image into cinematic video from a motion prompt.
                   </p>
                 </section>
 

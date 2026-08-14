@@ -1,4 +1,5 @@
 import { isNovaAdminUser, novaAdminBypassResult } from "@/lib/novaAdminAccess"
+import { PLAN_CONFIG as PLAN_CONFIG_SOURCE } from "@/lib/planConfig"
 type D1Response = {
   success?: boolean
   errors?: unknown[]
@@ -49,18 +50,15 @@ export function d1Rows(response: D1Response): Record<string, unknown>[] {
   return response.result?.[0]?.results ?? []
 }
 
-export const PLAN_CONFIG: Record<string, {
+export type PlanConfigEntry = {
   credits: number
   imageUnlimited: boolean
   imageMonthlyLimit: number | null
-}> = {
-  trial:    { credits: 10,     imageUnlimited: false, imageMonthlyLimit: 10   },
-  basic:    { credits: 70,     imageUnlimited: false, imageMonthlyLimit: null },
-  plus:     { credits: 500,    imageUnlimited: false, imageMonthlyLimit: null },
-  ultra:    { credits: 3000,   imageUnlimited: true,  imageMonthlyLimit: null },
-  business: { credits: 3000,   imageUnlimited: true,  imageMonthlyLimit: null },
-  admin:    { credits: 999999, imageUnlimited: true,  imageMonthlyLimit: null },
 }
+
+// Reexportado de @/lib/planConfig (módulo sem imports) para que componentes de
+// cliente possam ler a tabela de planos sem puxar este módulo de servidor.
+export const PLAN_CONFIG = PLAN_CONFIG_SOURCE as Record<string, PlanConfigEntry>
 
 export async function createUser(clerkId: string, email: string) {
   return queryD1(
@@ -211,6 +209,41 @@ export async function ensureUserGenerationAccount(userId: string) {
   }
 }
 
+/**
+ * Devolve créditos de dashboard. Chamado quando a geração é cobrada e depois
+ * falha no provedor — sem isto o usuário paga por um vídeo que nunca recebeu.
+ * Nunca lança: um erro no estorno não pode derrubar a resposta de erro original.
+ */
+export async function refundGenerationCredits(userId: string, amount: number) {
+  if (!userId || !Number.isFinite(amount) || amount <= 0) return false
+  try {
+    await queryD1(
+      `UPDATE users SET credits = credits + ? WHERE id = ? OR clerk_id = ?`,
+      [amount, userId, userId]
+    )
+    return true
+  } catch (error) {
+    console.error('[billing] refund de créditos falhou', { userId, amount, error })
+    return false
+  }
+}
+
+/** Devolve uma geração de imagem ao contador mensal. */
+export async function refundImageGen(userId: string) {
+  if (!userId) return false
+  try {
+    await queryD1(
+      `UPDATE users SET image_gens_used = MAX(0, image_gens_used - 1)
+       WHERE id = ? OR clerk_id = ?`,
+      [userId, userId]
+    )
+    return true
+  } catch (error) {
+    console.error('[billing] refund de image gen falhou', { userId, error })
+    return false
+  }
+}
+
 export async function debitGenerationCredits(userId: string, amount: number) {
   const account = await ensureUserGenerationAccount(userId)
 
@@ -328,6 +361,44 @@ export async function ensureApiCreditWallet(userId: string) {
 export async function getApiCreditBalance(userId: string) {
   const wallet = await ensureApiCreditWallet(userId)
   return { userId, balance: wallet.balance }
+}
+
+/** Estorno na carteira de API. Registra a transação para a conta fechar. */
+export async function refundApiCredits(data: {
+  userId: string
+  amount: number
+  apiKeyId?: string
+  reason?: string
+}) {
+  if (!data.userId || !Number.isFinite(data.amount) || data.amount <= 0) return false
+
+  try {
+    const now = Math.floor(Date.now() / 1000)
+
+    await queryD1(
+      `UPDATE api_credit_wallets SET balance = balance + ?, updated_at = ? WHERE user_id = ?`,
+      [data.amount, now, data.userId]
+    )
+
+    await queryD1(
+      `INSERT INTO api_credit_transactions
+        (id, user_id, amount, type, reason, api_key_id, created_at)
+       VALUES (?, ?, ?, 'refund', ?, ?, ?)`,
+      [
+        globalThis.crypto.randomUUID(),
+        data.userId,
+        Math.abs(data.amount),
+        data.reason ?? 'generation_failed',
+        data.apiKeyId ?? null,
+        now,
+      ]
+    )
+
+    return true
+  } catch (error) {
+    console.error('[billing] refund de API credits falhou', { userId: data.userId, error })
+    return false
+  }
 }
 
 export async function addApiCredits(data: {

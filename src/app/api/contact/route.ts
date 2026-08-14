@@ -13,6 +13,7 @@ export async function POST(req: Request) {
     })
     return NextResponse.json({ success: true })
   } catch (error) {
+    console.error('[contact] falha ao enviar e-mail:', error)
     return NextResponse.json({ error: 'Erro ao enviar' }, { status: 500 })
   }
 }

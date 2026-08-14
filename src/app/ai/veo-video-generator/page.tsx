@@ -21,7 +21,7 @@ export default function VeoVideoGeneratorPage() {
           Veo 3.1<br />Video Generator
         </h1>
         <p className="mt-6 max-w-2xl text-lg leading-8 text-white/60">
-          Generate photorealistic videos with Veo 3.1 — Google DeepMind's most advanced AI video model. Text-to-video, image-to-video, and reference-to-video on NOVA AI.
+          Generate photorealistic videos with Veo 3.1 — Google DeepMind&apos;s most advanced AI video model. Text-to-video, image-to-video, and reference-to-video on NOVA AI.
         </p>
         <div className="mt-8 flex flex-wrap gap-4">
           <Link href="/sign-up" className="rounded-2xl bg-[#D7FF00] px-8 py-4 text-sm font-black uppercase tracking-[0.1em] text-black transition hover:bg-white">Try Free — 10 Credits</Link>
@@ -43,7 +43,7 @@ export default function VeoVideoGeneratorPage() {
         <section className="mt-16">
           <h2 className="text-3xl font-black uppercase tracking-[-0.05em]">What is Veo 3.1?</h2>
           <p className="mt-4 max-w-3xl text-base leading-8 text-white/55">
-            Veo 3.1 is Google DeepMind's latest AI video generation model, known for exceptional realism, accurate physics simulation, and high-fidelity motion. It is one of the most capable text-to-video models available today. Access Veo 3.1 on NOVA AI alongside Kling 3.0, Seedance 2.0, and other top models — starting free.
+            Veo 3.1 is Google DeepMind&apos;s latest AI video generation model, known for exceptional realism, accurate physics simulation, and high-fidelity motion. It is one of the most capable text-to-video models available today. Access Veo 3.1 on NOVA AI alongside Kling 3.0, Seedance 2.0, and other top models — starting free.
           </p>
         </section>
         <section className="mt-16 rounded-[1.5rem] border border-[#D7FF00]/20 bg-[#D7FF00]/5 p-8">

@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { auth } from "@clerk/nextjs/server";
-import { debitGenerationCredits, ensureUserGenerationAccount, isAdminUser } from "@/lib/db";
+import {
+  debitGenerationCredits,
+  ensureUserGenerationAccount,
+  isAdminUser,
+  refundGenerationCredits,
+} from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -12,14 +17,9 @@ const EXTEND_CREDITS_PER_SECOND = 24;
 const EXTEND_ENDPOINT = "fal-ai/wan/v2.2-a14b/image-to-video";
 
 async function extractLastFrame(videoUrl) {
-  const r2Base = process.env.R2_PUBLIC_URL || process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "";
-  const uploadEndpoint = process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/extract-frame`
-    : null;
-
-  const ffmpegAvailable = Boolean(process.env.FFMPEG_WORKER_URL);
-
-  if (!ffmpegAvailable) {
+  // Sem worker de FFmpeg configurado não há como extrair o último frame.
+  // O chamador cai no fallback de mandar a própria URL do vídeo.
+  if (!process.env.FFMPEG_WORKER_URL) {
     return { frameUrl: null, method: "unavailable" };
   }
 
@@ -37,8 +37,15 @@ async function extractLastFrame(videoUrl) {
 }
 
 export async function POST(request) {
+  // Fora do try para o catch conseguir estornar.
+  let userId = null;
+  let creditsRequired = 0;
+  let charged = false;
+
   try {
-    const { userId } = await auth();
+    const session = await auth();
+    userId = session.userId;
+
     if (!userId) {
       return NextResponse.json({ success: false, error: "UNAUTHORIZED" }, { status: 401 });
     }
@@ -55,7 +62,7 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: "PROMPT_REQUIRED" }, { status: 400 });
     }
 
-    const creditsRequired = seconds * EXTEND_CREDITS_PER_SECOND;
+    creditsRequired = seconds * EXTEND_CREDITS_PER_SECOND;
     const admin = await isAdminUser(userId);
 
     if (!admin) {
@@ -80,7 +87,6 @@ export async function POST(request) {
     const { frameUrl, method } = await extractLastFrame(videoUrl);
 
     const imageUrl = frameUrl || videoUrl;
-    const inputIsVideo = !frameUrl;
 
     if (!admin) {
       const debit = await debitGenerationCredits(userId, creditsRequired);
@@ -94,6 +100,7 @@ export async function POST(request) {
           creditsRequired,
         }, { status: 402 });
       }
+      charged = true;
     }
 
     const result = await fal.subscribe(EXTEND_ENDPOINT, {
@@ -114,10 +121,12 @@ export async function POST(request) {
     else if (Array.isArray(content?.outputs)) extendedVideoUrl = content.outputs[0]?.url || content.outputs[0];
 
     if (!extendedVideoUrl) {
+      const refunded = charged ? await refundGenerationCredits(userId, creditsRequired) : false;
       return NextResponse.json({
         success: false,
         error: "NO_VIDEO_URL_RETURNED",
         frameMethod: method,
+        refunded,
         raw: result,
       }, { status: 502 });
     }
@@ -132,10 +141,14 @@ export async function POST(request) {
     });
   } catch (error) {
     console.error("Video extend failed:", error);
+
+    const refunded = charged ? await refundGenerationCredits(userId, creditsRequired) : false;
+
     return NextResponse.json({
       success: false,
       error: "VIDEO_EXTEND_FAILED",
       message: error?.message || String(error),
+      refunded,
     }, { status: 500 });
   }
 }

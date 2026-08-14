@@ -3,7 +3,12 @@ import { fal } from "@fal-ai/client";
 import { auth } from "@clerk/nextjs/server";
 import { getMediaModel, estimateCredits } from "@/lib/mediaCapabilities";
 import { extractFirstUrl, safeErrorMessage } from "@/lib/falResultUtils";
-import { debitGenerationCredits, ensureUserGenerationAccount, isAdminUser } from "@/lib/db";
+import {
+  debitGenerationCredits,
+  ensureUserGenerationAccount,
+  isAdminUser,
+  refundGenerationCredits,
+} from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -20,8 +25,16 @@ async function generateAudioFromScript({ script, voice }) {
 }
 
 export async function POST(request) {
+  // Declarados fora do try para o catch conseguir estornar. Se ficarem dentro,
+  // o catch referencia variável fora de escopo e o estorno nunca acontece.
+  let userId = null;
+  let creditsRequired = 0;
+  let charged = false;
+
   try {
-    const { userId } = await auth();
+    const session = await auth();
+    userId = session.userId;
+
     if (!userId) {
       return NextResponse.json({ success: false, error: "UNAUTHORIZED" }, { status: 401 });
     }
@@ -43,7 +56,7 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: "SCRIPT_OR_AUDIO_REQUIRED" }, { status: 400 });
     }
 
-    const creditsRequired =
+    creditsRequired =
       estimateCredits(modelId, { seconds: body.seconds || 5 }) +
       (script ? estimateCredits("chatterboxhd-tts") : 0);
 
@@ -91,6 +104,7 @@ export async function POST(request) {
           },
         }, { status: 402 });
       }
+      charged = true;
     }
 
     const input = {
@@ -104,16 +118,21 @@ export async function POST(request) {
     const videoUrl = extractFirstUrl(result, "video");
 
     if (!videoUrl) {
+      const refunded = charged ? await refundGenerationCredits(userId, creditsRequired) : false;
       return NextResponse.json({
         success: false,
         error: "NO_VIDEO_URL_RETURNED",
         audioUrl,
+        refunded,
         raw: result,
       }, { status: 502 });
     }
 
-    window?.dispatchEvent?.(new Event("nova:credits-refresh"));
-
+    // Havia aqui um window.dispatchEvent — API de browser dentro de um route
+    // handler. `window?.` NÃO protege identificador não declarado: isso lançava
+    // ReferenceError DEPOIS de cobrar e gerar, devolvendo 500 com o vídeo pronto
+    // e o crédito já debitado. O refresh de saldo é responsabilidade do client,
+    // que dispara o evento ao receber esta resposta.
     return NextResponse.json({
       success: true,
       modelId,
@@ -125,10 +144,14 @@ export async function POST(request) {
     });
   } catch (error) {
     console.error("Talking avatar failed:", error);
+
+    const refunded = charged ? await refundGenerationCredits(userId, creditsRequired) : false;
+
     return NextResponse.json({
       success: false,
       error: "TALKING_AVATAR_FAILED",
       message: safeErrorMessage(error),
+      refunded,
     }, { status: 500 });
   }
 }

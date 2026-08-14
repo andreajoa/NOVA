@@ -131,7 +131,7 @@ export async function GET() {
       paused: (await getSetting("crm_paused", "0")) === "1",
       cadenceDays: Number(await getSetting("crm_cadence_days", "0")) || null,
       maxNoOpenStreak: Number(await getSetting("crm_max_no_open_streak", "10")),
-      maxPerRun: Number(await getSetting("crm_max_per_run", "60")),
+      maxPerRun: Number(await getSetting("crm_max_per_run", "500")),
     },
   });
 }

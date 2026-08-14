@@ -365,13 +365,20 @@ export default function NovaGenerationStudio({
   const [error, setError] = useState("");
 
   useEffect(() => {
+    // window.location só existe no cliente, então a leitura tem que ser
+    // pós-montagem. Ler num initializer causaria mismatch de hidratação.
     const params = new URLSearchParams(window.location.search);
     const queryPrompt = params.get("prompt");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (queryPrompt) setPrompt(queryPrompt);
   }, []);
 
+  // Correção de estado quando o modelo muda e a duração atual deixa de ser
+  // válida. O guard garante convergência numa passada: depois do set, o
+  // includes passa a ser true.
   useEffect(() => {
     if (!durationOptions.includes(seconds)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSeconds(durationOptions[0] || 5);
     }
   }, [durationOptions, seconds]);
@@ -386,6 +393,9 @@ export default function NovaGenerationStudio({
     );
 
     if (nextResolution && nextResolution !== videoResolution) {
+      // Idem: converge numa passada, pois nextResolution é estável para o par
+      // (modelKey, modeKey).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVideoResolution(nextResolution);
     }
   }, [modelKey, modeKey, videoResolution, shouldShowVideoResolution]);

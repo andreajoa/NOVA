@@ -6,6 +6,7 @@ import {
   debitGenerationCredits,
   ensureUserGenerationAccount,
   isAdminUser,
+  refundGenerationCredits,
 } from "@/lib/db";
 import {
   getMusicVideoJob,
@@ -144,6 +145,7 @@ export async function POST(req, ctx) {
   const duration = Number(scene.duration || job.sceneSeconds || 10);
   const creditsRequired = duration * VIDEO_CREDITS_PER_SECOND;
   const admin = await isAdminUser(userId);
+  let charged = false;
 
   if (!admin) {
     const account = await ensureUserGenerationAccount(userId);
@@ -161,6 +163,8 @@ export async function POST(req, ctx) {
         { status: 402 }
       );
     }
+
+    charged = true;
   }
 
   const scenesGenerating = job.scenes.map((item, index) =>
@@ -179,6 +183,8 @@ export async function POST(req, ctx) {
   const { endpoint } = endpointFor(job);
 
   if (!endpoint) {
+    if (charged) await refundGenerationCredits(userId, creditsRequired);
+
     const failedScenes = scenesGenerating.map((item, index) =>
       index === sceneIndex
         ? { ...item, status: "failed", error: "Endpoint do modelo não encontrado." }
@@ -239,6 +245,9 @@ export async function POST(req, ctx) {
       },
     });
   } catch (err) {
+    // A cena falhou depois do débito: devolve os créditos antes de responder.
+    const refunded = charged ? await refundGenerationCredits(userId, creditsRequired) : false;
+
     const nextScenes = scenesGenerating.map((item, index) =>
       index === sceneIndex
         ? { ...item, status: "failed", error: err?.message || "Falha ao gerar cena." }
@@ -256,6 +265,7 @@ export async function POST(req, ctx) {
       success: false,
       job: updated,
       error: err?.message || "Falha ao gerar cena.",
+      refunded,
     }, { status: 500 });
   }
 }

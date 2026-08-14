@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { auth } from "@clerk/nextjs/server";
-import { debitGenerationCredits, ensureUserGenerationAccount, isAdminUser } from "@/lib/db";
+import {
+  debitGenerationCredits,
+  ensureUserGenerationAccount,
+  isAdminUser,
+  refundGenerationCredits,
+} from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -12,8 +17,13 @@ const SCENE_ENDPOINT = "fal-ai/wan/v2.2-a14b/text-to-video";
 const CREDITS_PER_SCENE = 35;
 
 export async function POST(request) {
+  let userId = null;
+  let charged = false;
+
   try {
-    const { userId } = await auth();
+    const session = await auth();
+    userId = session.userId;
+
     if (!userId) {
       return NextResponse.json({ success: false, error: "UNAUTHORIZED" }, { status: 401 });
     }
@@ -69,6 +79,7 @@ export async function POST(request) {
           sceneIndex,
         }, { status: 402 });
       }
+      charged = true;
     }
 
     const result = await fal.subscribe(SCENE_ENDPOINT, {
@@ -88,10 +99,12 @@ export async function POST(request) {
     else if (Array.isArray(content?.outputs)) videoUrl = content.outputs[0]?.url || content.outputs[0];
 
     if (!videoUrl) {
+      const refunded = charged ? await refundGenerationCredits(userId, CREDITS_PER_SCENE) : false;
       return NextResponse.json({
         success: false,
         error: "NO_VIDEO_URL_RETURNED",
         sceneIndex,
+        refunded,
         raw: result,
       }, { status: 502 });
     }
@@ -105,10 +118,14 @@ export async function POST(request) {
     });
   } catch (error) {
     console.error("Long video render failed:", error);
+
+    const refunded = charged ? await refundGenerationCredits(userId, CREDITS_PER_SCENE) : false;
+
     return NextResponse.json({
       success: false,
       error: "SCENE_RENDER_FAILED",
       message: error?.message || String(error),
+      refunded,
     }, { status: 500 });
   }
 }

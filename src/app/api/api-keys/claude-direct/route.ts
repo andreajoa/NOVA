@@ -117,12 +117,13 @@ export async function GET(request: Request) {
         <a href="/api/api-keys/claude-direct">Create another</a>
       </div>
     `)
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
     return page(`
       <div class="card">
         <h1>API Key creation failed</h1>
         <p>Erro real do servidor:</p>
-        <pre>${esc(err?.message || String(err))}</pre>
+        <pre>${esc(message)}</pre>
         <a href="/api/api-keys/claude-direct">Try again</a>
       </div>
     `, 500)

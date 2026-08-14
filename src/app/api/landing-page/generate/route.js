@@ -6,6 +6,11 @@ import {
   LANDING_PAGE_WITH_IMAGES,
   landingPricingPublic,
 } from "@/lib/novaLandingPricing";
+import {
+  ensureUserGenerationAccount,
+  debitGenerationCredits,
+  refundGenerationCredits,
+} from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,145 +20,50 @@ function json(data, status = 200) {
   return NextResponse.json(data, { status });
 }
 
-async function getDb() {
-  const mod = await import("@/lib/db").catch(() => null);
-  if (!mod) return null;
-  return mod.prisma || mod.db || mod.default || null;
-}
-
-async function findWallet(db, clerkUserId) {
-  const modelNames = [
-    "user",
-    "users",
-    "profile",
-    "account",
-    "customer",
-    "userAccount",
-    "creditWallet",
-    "wallet",
-  ];
-
-  const whereList = [
-    { clerkId: clerkUserId },
-    { clerkUserId },
-    { userId: clerkUserId },
-    { externalId: clerkUserId },
-    { id: clerkUserId },
-  ];
-
-  for (const modelName of modelNames) {
-    const model = db?.[modelName];
-    if (!model?.findFirst) continue;
-
-    for (const where of whereList) {
-      try {
-        const record = await model.findFirst({ where });
-        if (record) return { modelName, model, record, where };
-      } catch {}
-    }
-  }
-
-  return null;
-}
-
-function pickCreditField(record = {}) {
-  const fields = [
-    "credits",
-    "creditBalance",
-    "generationCredits",
-    "availableCredits",
-    "imageCredits",
-    "monthlyCredits",
-    "balance",
-  ];
-
-  for (const field of fields) {
-    if (typeof record[field] === "number") return field;
-  }
-
-  return null;
-}
-
+/**
+ * Cobrança de créditos internos da NOVA.
+ *
+ * A versão anterior procurava um client Prisma em @/lib/db (mod.prisma ||
+ * mod.db || mod.default) — nenhum deles existe: o projeto fala com o D1 por
+ * REST. getDb() devolvia null sempre, então esta rota retornava
+ * NOVA_DB_NOT_FOUND 500 para todo usuário não-admin. A landing page nunca
+ * funcionou para cliente pagante.
+ */
 async function chargeInternalCredits({ clerkUserId, amount }) {
-  const db = await getDb();
+  const account = await ensureUserGenerationAccount(clerkUserId);
 
-  if (!db) {
-    return {
-      ok: false,
-      status: 500,
-      code: "NOVA_DB_NOT_FOUND",
-      message: "NOVA não conseguiu acessar o banco de créditos internos.",
-    };
-  }
-
-  const wallet = await findWallet(db, clerkUserId);
-
-  if (!wallet) {
-    return {
-      ok: false,
-      status: 404,
-      code: "NOVA_USER_WALLET_NOT_FOUND",
-      message: "NOVA não encontrou sua carteira de créditos internos.",
-    };
-  }
-
-  const creditField = pickCreditField(wallet.record);
-
-  if (!creditField) {
-    return {
-      ok: false,
-      status: 500,
-      code: "NOVA_INTERNAL_CREDIT_FIELD_NOT_FOUND",
-      message:
-        "NOVA não conseguiu identificar o campo de saldo/créditos internos desta conta.",
-      debug: {
-        modelName: wallet.modelName,
-        availableFields: Object.keys(wallet.record).filter((key) =>
-          /credit|balance|saldo|usage|limit/i.test(key)
-        ),
-      },
-    };
-  }
-
-  const currentBalance = Number(wallet.record[creditField] || 0);
-
-  if (currentBalance < amount) {
+  if (account.credits < amount) {
     return {
       ok: false,
       status: 402,
       code: "NOVA_INTERNAL_CREDITS_REQUIRED",
-      message:
-        "Not enough credits to generate this landing page. Upgrade to continue.",
+      message: "Not enough credits to generate this landing page. Upgrade to continue.",
       requiredCredits: amount,
-      currentBalance,
+      currentBalance: account.credits,
       checkoutUrl: "/pricing",
     };
   }
 
-  await wallet.model.updateMany({
-    where: wallet.where,
-    data: {
-      [creditField]: {
-        decrement: amount,
-      },
-    },
-  });
+  const debit = await debitGenerationCredits(clerkUserId, amount);
+
+  if (!debit.ok) {
+    return {
+      ok: false,
+      status: 402,
+      code: "NOVA_INTERNAL_CREDITS_REQUIRED",
+      message: "Not enough credits to generate this landing page. Upgrade to continue.",
+      requiredCredits: amount,
+      currentBalance: debit.currentCredits,
+      checkoutUrl: "/pricing",
+    };
+  }
 
   return {
     ok: true,
     identity: { userId: clerkUserId },
     charged: amount,
-    remainingBalance: currentBalance - amount,
-    refund: async () => {
-      await wallet.model.updateMany({
-        where: wallet.where,
-        data: {
-          [creditField]: {
-            increment: amount,
-          },
-        },
-      });
-    },
+    remainingBalance: debit.remainingCredits,
+    refund: async () => refundGenerationCredits(clerkUserId, amount),
   };
 }
 
