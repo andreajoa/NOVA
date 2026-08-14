@@ -1,106 +1,104 @@
-import urllib.request
-import urllib.error
+#!/usr/bin/env python3
+"""
+Disparo manual de campanha via Resend.
+
+SUPERSEDIDO pelo CRM (src/lib/crm) — prefira importar a lista em
+/dashboard/admin/crm, que respeita supressão, descadastro e reclamação.
+Este script fica aqui só para disparo pontual.
+
+Uso:
+    export RESEND_API_KEY="re_..."
+    python3 enviar_nova.py destinatarios.txt /tmp/nova_email.html
+
+O arquivo de destinatários é um e-mail por linha e NÃO fica no repositório:
+endereço de cliente é dado pessoal e este repositório é público.
+"""
+
 import json
+import os
+import sys
 import time
+import urllib.error
+import urllib.request
 
-RESEND_API_KEY = "re_WRDv2VxB_G1t5mtXTACTC3v12to4zZWW1"
-FROM_EMAIL = "NOVA AI Studio <noreply@novvideos.online>"
-SUBJECT = "Create stunning product images & videos — AI in seconds"
+API_KEY = os.environ.get("RESEND_API_KEY", "")
+FROM_EMAIL = os.environ.get("CRM_FROM_EMAIL", "NOVA AI Studio <noreply@novvideos.online>")
+SUBJECT = os.environ.get(
+    "CAMPAIGN_SUBJECT", "Create stunning product images & videos — AI in seconds"
+)
 
-EMAILS = [
-    "saifshakeel032@gmail.com",
-    "475277864@qq.com",
-    "polkadot.girl.101@gmail.com",
-    "likyujyth@qq.com",
-    "youqisi1314@gmail.com",
-    "amengd31@gmail.com",
-    "592272755@qq.com",
-    "debzpamyde@oiyyjkfy.xyz",
-    "haavshsbs@gmail.com",
-    "ceciliashajan827@gmail.com",
-    "dserewfwfe@gmx.com",
-    "kanesoko@gmail.com",
-    "1004hoobin1004@gmail.com",
-    "ypangzhi@gmail.com",
-    "uzut31@cartolina.net",
-    "hibij18492@4nly.com",
-    "mazengoherman@gmail.com",
-    "piktras8@gmail.com",
-    "krays7490@gmail.com",
-    "alabimustafa06@gmail.com",
-    "ivankulson1@gmail.com",
-    "yonsmhmd39@gmail.com",
-    "kozuranibal@gmail.com",
-    "weitongxue93@gmail.com",
-    "kifflom033@gmail.com",
-    "luizhenriquemaia123321@gmail.com",
-    "ljimmy@seznam.cz",
-    "valuesdrama@gmail.com",
-    "kkxx59946@gmail.com",
-    "sidhishah9799@gmail.com",
-    "iqbalmw4@gmail.com",
-    "tinhluc02@gmail.com",
-    "yxs01012qq@gmail.com",
-    "tdahma2@gmail.com",
-    "andremuseu@gmail.com",
-    "andrezohoemail@gmail.com",
-    "anamacielboutique@gmail.com",
-]
 
-HTML_BODY = open("/tmp/nova_email.html").read()
+def load_recipients(path):
+    with open(path, encoding="utf-8") as handle:
+        return [line.strip() for line in handle if line.strip() and "@" in line]
 
-def send_email(to_email):
-    payload = json.dumps({
-        "from": FROM_EMAIL,
-        "to": [to_email],
-        "subject": SUBJECT,
-        "html": HTML_BODY,
-    }).encode("utf-8")
-    req = urllib.request.Request(
+
+def send_email(to_email, html_body):
+    payload = json.dumps(
+        {"from": FROM_EMAIL, "to": [to_email], "subject": SUBJECT, "html": html_body}
+    ).encode("utf-8")
+
+    request = urllib.request.Request(
         "https://api.resend.com/emails",
         data=payload,
         headers={
-            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Authorization": f"Bearer {API_KEY}",
             "Content-Type": "application/json",
         },
         method="POST",
     )
+
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            result = json.loads(resp.read().decode())
-            return True, result.get("id", "ok")
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        return False, f"HTTP {e.code}: {body}"
-    except Exception as e:
-        return False, str(e)
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return True, json.loads(response.read().decode()).get("id", "ok")
+    except urllib.error.HTTPError as error:
+        return False, f"HTTP {error.code}: {error.read().decode()}"
+    except Exception as error:  # noqa: BLE001
+        return False, str(error)
+
 
 def main():
-    print(f"\n🚀 NOVA Email Marketing")
-    print(f"📧 Total: {len(EMAILS)} destinatários")
-    print(f"📤 De: {FROM_EMAIL}")
+    if not API_KEY:
+        sys.exit("RESEND_API_KEY não definida. Rode: export RESEND_API_KEY=...")
+
+    if len(sys.argv) < 3:
+        sys.exit(f"Uso: {sys.argv[0]} <arquivo_destinatarios> <arquivo_html>")
+
+    recipients = load_recipients(sys.argv[1])
+
+    with open(sys.argv[2], encoding="utf-8") as handle:
+        html_body = handle.read()
+
+    if not recipients:
+        sys.exit("Nenhum destinatário válido no arquivo.")
+
+    print(f"\nNOVA — disparo de campanha")
+    print(f"Total: {len(recipients)} destinatários")
+    print(f"De: {FROM_EMAIL}")
     print("-" * 55)
+
     ok = 0
-    fail = 0
     errors = []
-    for i, email in enumerate(EMAILS, 1):
-        success, info = send_email(email)
+
+    for index, email in enumerate(recipients, 1):
+        success, info = send_email(email, html_body)
+
         if success:
             ok += 1
-            print(f"✅ [{i:02d}/{len(EMAILS)}] {email}")
+            print(f"OK   [{index:03d}/{len(recipients)}] {email}")
         else:
-            fail += 1
             errors.append((email, info))
-            print(f"❌ [{i:02d}/{len(EMAILS)}] {email} → {info}")
-        if i < len(EMAILS):
+            print(f"FAIL [{index:03d}/{len(recipients)}] {email} -> {info}")
+
+        if index < len(recipients):
             time.sleep(0.5)
+
     print("-" * 55)
-    print(f"\n✅ Enviados: {ok}  ❌ Falhas: {fail}")
-    if errors:
-        print("\nErros:")
-        for em, err in errors:
-            print(f"  • {em}: {err}")
-    print("\n🎉 Campanha concluída!")
+    print(f"\nEnviados: {ok}   Falhas: {len(errors)}")
+
+    for email, error in errors:
+        print(f"  - {email}: {error}")
+
 
 if __name__ == "__main__":
     main()

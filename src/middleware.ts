@@ -8,6 +8,12 @@ const isPublicRoute = createRouteMatcher([
   '/sign-up(.*)',
   '/api/webhooks(.*)',
   '/api/landing-page(.*)',
+  // Descadastro precisa funcionar sem login — o Gmail chama o POST de
+  // one-click direto, e quem clica no rodapé raramente está logado.
+  '/api/crm/unsubscribe(.*)',
+  // Cron do CRM: protegido por CRON_SECRET dentro da própria rota,
+  // não pela sessão do Clerk (o Vercel Cron não tem sessão).
+  '/api/cron(.*)',
   '/pricing(.*)',
   '/contact(.*)',
   '/terms(.*)',

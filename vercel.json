@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/crm-dispatch",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { activatePlanSubscription, addApiCredits } from "@/lib/db";
+import { markContactAsCustomer } from "@/lib/crm/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,6 +71,18 @@ export async function POST(request) {
       });
 
       console.log(`[stripe webhook] plan=${plan} billing=${billing} userId=${userId}`);
+
+      // CRM: quem assinou sai da sequência de venda na hora. Continuar
+      // mandando "assine a NOVA" para quem acabou de assinar é a forma mais
+      // rápida de ganhar uma reclamação de spam de um cliente pagante.
+      try {
+        await markContactAsCustomer(userId, plan);
+        if (session.customer_details?.email) {
+          await markContactAsCustomer(session.customer_details.email, plan);
+        }
+      } catch (error) {
+        console.error("[crm] failed to exit converted contact:", error);
+      }
     }
   }
 

@@ -3,6 +3,9 @@ import { Webhook } from 'svix'
 import { Resend } from 'resend'
 import { NextResponse } from 'next/server'
 import { createUser } from '@/lib/db'
+import { upsertContact, enrollContact, markContactAsCustomer } from '@/lib/crm/db'
+import { SEQUENCE_ID } from '@/lib/crm/sequence'
+import { normalizeLocale } from '@/lib/crm/render'
 
 const WELCOME_HTML = `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -264,6 +267,45 @@ export async function POST(req: Request) {
         }
       } catch (error) {
         console.error('Failed to add contact to Resend audience:', error)
+      }
+
+      // 4. CRM: cria o contato e inscreve na sequência de nutrição.
+      //    Começa no passo 1 (dia 1) porque o passo 0 é o boas-vindas que
+      //    acabou de ser enviado acima como transacional.
+      try {
+        const meta = (data.unsafe_metadata ?? data.public_metadata ?? {}) as Record<string, unknown>
+        const locale = normalizeLocale(
+          String(meta.locale ?? meta.language ?? process.env.CRM_DEFAULT_LOCALE ?? 'en')
+        )
+
+        const contact = await upsertContact({
+          email,
+          firstName,
+          lastName,
+          clerkId,
+          locale,
+          source: 'signup',
+          plan: 'trial',
+        })
+
+        if (contact?.id && contact.status === 'subscribed') {
+          await enrollContact(contact.id, SEQUENCE_ID, 86400, 1)
+          console.log(`[crm] enrolled ${email} (${locale}) in ${SEQUENCE_ID}`)
+        }
+      } catch (error) {
+        console.error('[crm] failed to enroll contact:', error)
+      }
+    }
+  }
+
+  // Assinatura cancelada ou conta apagada não deve continuar recebendo pitch.
+  if (evt.type === 'user.deleted') {
+    const clerkId = (evt.data?.id as string) ?? ''
+    if (clerkId) {
+      try {
+        await markContactAsCustomer(clerkId, 'deleted')
+      } catch (error) {
+        console.error('[crm] failed to exit deleted user:', error)
       }
     }
   }
