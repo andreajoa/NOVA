@@ -54,6 +54,8 @@ export type PlanConfigEntry = {
   credits: number
   imageUnlimited: boolean
   imageMonthlyLimit: number | null
+  imageMonthlySoftCap: number | null
+  imageOverCapCredits: number
 }
 
 // Reexportado de @/lib/planConfig (módulo sem imports) para que componentes de
@@ -278,18 +280,56 @@ export async function checkAndDebitImageGen(userId: string): Promise<{
   imageUnlimited: boolean
   imageGensUsed: number
   imageMonthlyLimit: number | null
+  creditsCharged?: number
 }> {
   const account = await ensureUserGenerationAccount(userId)
 
   if (account.imageUnlimited) {
+    const planConfig = PLAN_CONFIG[account.plan] ?? PLAN_CONFIG.basic
+    const softCap = planConfig.imageMonthlySoftCap ?? null
+
+    // Under soft cap or no soft cap (admin): free image
+    if (softCap === null || account.imageGensUsed < softCap) {
+      await queryD1(
+        `UPDATE users SET image_gens_used = image_gens_used + 1
+         WHERE id = ? OR clerk_id = ?`,
+        [userId, userId]
+      )
+      return {
+        ok: true,
+        imageUnlimited: true,
+        imageGensUsed: account.imageGensUsed + 1,
+        imageMonthlyLimit: null,
+      }
+    }
+
+    // Over soft cap: deduct credits from video balance
+    const overCapCost = planConfig.imageOverCapCredits ?? 2
+    if (account.credits < overCapCost) {
+      return {
+        ok: false,
+        reason: 'image_soft_cap_no_credits',
+        imageUnlimited: true,
+        imageGensUsed: account.imageGensUsed,
+        imageMonthlyLimit: softCap,
+      }
+    }
+
+    await queryD1(
+      `UPDATE users SET image_gens_used = image_gens_used + 1, credits = credits - ?
+       WHERE (id = ? OR clerk_id = ?) AND credits >= ?`,
+      [overCapCost, userId, userId, overCapCost]
+    )
     return {
       ok: true,
       imageUnlimited: true,
-      imageGensUsed: account.imageGensUsed,
-      imageMonthlyLimit: null,
+      imageGensUsed: account.imageGensUsed + 1,
+      imageMonthlyLimit: softCap,
+      creditsCharged: overCapCost,
     }
   }
 
+  // Trial: hard limit
   const limit = account.imageMonthlyLimit ?? 10
   if (account.imageGensUsed >= limit) {
     return {

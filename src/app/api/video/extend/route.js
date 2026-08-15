@@ -8,6 +8,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import ffmpegStatic from "ffmpeg-static";
 import { uploadToR2 } from "@/lib/r2";
+import { logFalSpending } from "@/lib/falSpending";
 import {
   debitGenerationCredits,
   ensureUserGenerationAccount,
@@ -159,6 +160,10 @@ export async function POST(request) {
     else if (content?.video_url) extendedVideoUrl = content.video_url;
     else if (typeof content?.output === "string") extendedVideoUrl = content.output;
     else if (Array.isArray(content?.outputs)) extendedVideoUrl = content.outputs[0]?.url || content.outputs[0];
+
+    if (extendedVideoUrl) {
+      logFalSpending({ userId, endpoint: EXTEND_ENDPOINT, creditsCharged: creditsRequired });
+    }
 
     if (!extendedVideoUrl) {
       const refunded = charged ? await refundGenerationCredits(userId, creditsRequired) : false;

@@ -5,39 +5,31 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 function FalBalanceAlert() {
-  const [balance, setBalance] = useState(null);
+  const [data, setData] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [inputVal, setInputVal] = useState("");
   const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-  function loadBalance() {
+  function loadData() {
     fetch("/api/admin/fal-balance")
-      .then(r => r.ok ? r.json() : null)
-      .then(b => {
-        if (b && b.balance !== null) {
-          setBalance(b.balance);
-          setInputVal(String(b.balance));
-        }
-      });
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) { setData(d); setInputVal(String(d.setBalance || 0)); }
+      })
+      .catch(() => {});
   }
 
   useEffect(() => {
     fetch("/api/admin/me")
-      .then(r => r.ok ? r.json() : { isAdmin: false })
-      .then(d => {
+      .then((r) => (r.ok ? r.json() : { isAdmin: false }))
+      .then((d) => {
         if (!d.isAdmin) { setLoading(false); return; }
         setIsAdmin(true);
-        fetch("/api/admin/fal-balance")
-          .then(r => r.ok ? r.json() : null)
-          .then(b => {
-            if (b && b.balance !== null) {
-              setBalance(b.balance);
-              setInputVal(String(b.balance));
-            }
-          })
-          .finally(() => setLoading(false));
+        loadData();
+        setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
@@ -51,7 +43,7 @@ function FalBalanceAlert() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ balance: val }),
       });
-      setBalance(val);
+      loadData();
     }
     setSaving(false);
     setEditing(false);
@@ -59,72 +51,131 @@ function FalBalanceAlert() {
 
   if (loading || !isAdmin) return null;
 
-  const bal = typeof balance === "number" ? balance : 0;
-  const low = bal < 10;
+  const bal = data?.balance ?? 0;
   const critical = bal < 3;
+  const low = bal < 10;
 
-  // Always show to admin — even if balance is fine, show a subtle bar
   const borderClass = critical
     ? "border-red-500/40 bg-red-500/10"
     : low
-    ? "border-yellow-400/40 bg-yellow-400/10"
-    : "border-white/10 bg-white/[.03]";
+      ? "border-yellow-400/40 bg-yellow-400/10"
+      : "border-white/10 bg-white/[.03]";
   const labelClass = critical ? "text-red-400" : low ? "text-yellow-300" : "text-white/40";
   const valueClass = critical ? "text-red-300" : low ? "text-yellow-300" : "text-[#D7FF00]";
-  const label = critical ? "fal.ai balance CRITICAL" : low ? "fal.ai balance low" : "fal.ai balance";
-  const msg = critical ? " — Recharge now!" : low ? " — Consider recharging soon." : "";
+  const label = critical
+    ? "SALDO FAL.AI CRITICO"
+    : low
+      ? "SALDO FAL.AI BAIXO"
+      : "SALDO FAL.AI";
 
   return (
-    <div className={"mx-8 mt-4 rounded-2xl border p-4 flex items-center justify-between gap-4 " + borderClass}>
-      <div className="flex-1 min-w-0">
-        <p className={"text-xs font-black uppercase tracking-wider mb-1 " + labelClass}>{label}</p>
-        {editing ? (
-          <div className="flex items-center gap-2">
-            <span className="text-white/50 text-sm">$</span>
-            <input
-              autoFocus
-              type="number"
-              step="0.01"
-              min="0"
-              value={inputVal}
-              onChange={e => setInputVal(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") saveBalance(); if (e.key === "Escape") setEditing(false); }}
-              className="bg-white/10 border border-white/20 rounded-lg px-3 py-1 text-white text-sm w-28 outline-none focus:border-[#D7FF00]/50"
-            />
-            <button
-              onClick={saveBalance}
-              disabled={saving}
-              className="bg-[#D7FF00] text-black text-xs font-black uppercase px-3 py-1 rounded-lg hover:bg-[#c8f000] transition disabled:opacity-50">
-              {saving ? "..." : "Save"}
-            </button>
-            <button
-              onClick={() => setEditing(false)}
-              className="text-white/40 text-xs font-black uppercase px-2 py-1 hover:text-white transition">
-              Cancel
-            </button>
+    <div className={"mx-4 sm:mx-8 mt-4 rounded-2xl border overflow-hidden " + borderClass}>
+      {/* Main bar */}
+      <div className="p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <p className={"text-[10px] font-black uppercase tracking-[0.2em] mb-1 " + labelClass}>{label}</p>
+          {editing ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-white/50 text-sm">$</span>
+              <input
+                autoFocus
+                type="number"
+                step="0.01"
+                min="0"
+                value={inputVal}
+                onChange={(e) => setInputVal(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveBalance(); if (e.key === "Escape") setEditing(false); }}
+                className="bg-white/10 border border-white/20 rounded-lg px-3 py-1 text-white text-sm w-28 outline-none focus:border-[#D7FF00]/50"
+              />
+              <button onClick={saveBalance} disabled={saving}
+                className="bg-[#D7FF00] text-black text-xs font-black uppercase px-3 py-1.5 rounded-lg hover:bg-[#c8f000] transition disabled:opacity-50">
+                {saving ? "..." : "Salvar"}
+              </button>
+              <button onClick={() => setEditing(false)}
+                className="text-white/40 text-xs font-bold px-2 py-1 hover:text-white transition">Cancelar</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-4 flex-wrap">
+              <p className="text-sm text-white/60">
+                Saldo estimado: <span className={"font-black text-lg " + valueClass}>${bal.toFixed(2)}</span>
+              </p>
+              {data?.todaySpent > 0 && (
+                <span className="text-xs text-white/30">
+                  Hoje: <span className="text-white/50 font-bold">${data.todaySpent.toFixed(2)}</span>
+                  <span className="text-white/20 ml-1">({data.todayCount} gens)</span>
+                </span>
+              )}
+              {data?.estimatedDaysLeft !== null && data?.estimatedDaysLeft !== undefined && (
+                <span className={"text-xs font-bold " + (data.estimatedDaysLeft <= 3 ? "text-red-400" : data.estimatedDaysLeft <= 7 ? "text-yellow-300" : "text-white/30")}>
+                  ~{data.estimatedDaysLeft} dias restantes
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {!editing && (
+            <>
+              <button onClick={() => setExpanded(!expanded)}
+                className="rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs font-black uppercase tracking-wider text-white/50 hover:text-white hover:border-white/20 transition">
+                {expanded ? "Fechar" : "Detalhes"}
+              </button>
+              <button onClick={() => setEditing(true)}
+                className="rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs font-black uppercase tracking-wider text-white/50 hover:text-white hover:border-white/20 transition">
+                Atualizar saldo
+              </button>
+            </>
+          )}
+          <a href="https://fal.ai/dashboard/billing" target="_blank" rel="noopener noreferrer"
+            className="rounded-xl bg-[#D7FF00] px-3 py-2 text-xs font-black uppercase tracking-wider text-black no-underline hover:bg-[#c8f000] transition">
+            Recarregar
+          </a>
+        </div>
+      </div>
+
+      {/* Expanded details */}
+      {expanded && data && (
+        <div className="border-t border-white/10 p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-xl bg-white/[.03] p-3">
+            <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Saldo definido</p>
+            <p className="text-white text-lg font-black mt-1">${(data.setBalance || 0).toFixed(2)}</p>
           </div>
-        ) : (
-          <p className="text-sm text-white/60">
-            Current balance: <span className={"font-black " + valueClass}>${bal.toFixed(2)}</span>{msg}
-          </p>
-        )}
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {!editing && (
-          <button
-            onClick={() => setEditing(true)}
-            className="rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs font-black uppercase tracking-wider text-white/50 hover:text-white hover:border-white/20 transition">
-            Update balance
-          </button>
-        )}
-        <a
-          href="https://fal.ai/dashboard/billing"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="rounded-xl bg-[#D7FF00] px-3 py-2 text-xs font-black uppercase tracking-wider text-black no-underline hover:bg-[#c8f000] transition">
-          fal.ai →
-        </a>
-      </div>
+          <div className="rounded-xl bg-white/[.03] p-3">
+            <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Gasto total</p>
+            <p className="text-white text-lg font-black mt-1">${(data.totalSpent || 0).toFixed(2)}</p>
+          </div>
+          <div className="rounded-xl bg-white/[.03] p-3">
+            <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Ultimos 7 dias</p>
+            <p className="text-white text-lg font-black mt-1">${(data.weekSpent || 0).toFixed(2)}</p>
+            <p className="text-white/30 text-xs">{data.weekCount || 0} gerações</p>
+          </div>
+          <div className="rounded-xl bg-white/[.03] p-3">
+            <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Media diária</p>
+            <p className="text-white text-lg font-black mt-1">${(data.avgDaily || 0).toFixed(2)}/dia</p>
+          </div>
+
+          {/* Recent generations log */}
+          {data.recentGenerations?.length > 0 && (
+            <div className="col-span-2 sm:col-span-4 rounded-xl bg-white/[.03] p-3">
+              <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-2">Ultimas gerações</p>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {data.recentGenerations.map((g, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs gap-2">
+                    <span className="text-white/40 font-mono truncate max-w-[200px] sm:max-w-[400px]">
+                      {String(g.endpoint || "").split("/").slice(-2).join("/")}
+                    </span>
+                    <span className="text-white/30 shrink-0">{g.credits_charged} cr</span>
+                    <span className="text-white/50 font-bold shrink-0">${Number(g.estimated_cost || 0).toFixed(3)}</span>
+                    <span className="text-white/20 shrink-0 text-[10px]">
+                      {g.created_at ? new Date(g.created_at + "Z").toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { fal } from "@fal-ai/client";
 import { auth } from "@clerk/nextjs/server";
 import { getMediaModel, estimateCredits } from "@/lib/mediaCapabilities";
 import { extractFirstUrl, safeErrorMessage } from "@/lib/falResultUtils";
+import { logFalSpending } from "@/lib/falSpending";
 import {
   debitGenerationCredits,
   ensureUserGenerationAccount,
@@ -103,6 +104,10 @@ export async function POST(request) {
     });
 
     const audioUrl = extractFirstUrl(result, "audio");
+
+    if (audioUrl) {
+      logFalSpending({ userId, endpoint: model.endpoint, creditsCharged: charged ? creditsRequired : 0 });
+    }
 
     if (!audioUrl) {
       const refunded = charged ? await refundGenerationCredits(userId, creditsRequired) : false;

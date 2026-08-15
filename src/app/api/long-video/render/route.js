@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { auth } from "@clerk/nextjs/server";
+import { logFalSpending } from "@/lib/falSpending";
 import {
   debitGenerationCredits,
   ensureUserGenerationAccount,
@@ -97,6 +98,10 @@ export async function POST(request) {
     else if (content?.video_url) videoUrl = content.video_url;
     else if (typeof content?.output === "string") videoUrl = content.output;
     else if (Array.isArray(content?.outputs)) videoUrl = content.outputs[0]?.url || content.outputs[0];
+
+    if (videoUrl) {
+      logFalSpending({ userId, endpoint: SCENE_ENDPOINT, creditsCharged: creditsRequired });
+    }
 
     if (!videoUrl) {
       const refunded = charged ? await refundGenerationCredits(userId, CREDITS_PER_SCENE) : false;

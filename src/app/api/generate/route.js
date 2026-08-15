@@ -3,6 +3,8 @@ import { auth } from "@clerk/nextjs/server";
 import { fal } from "@fal-ai/client";
 import { validateApiKeyFromRequest } from "@/lib/apiKeys";
 import { extractGeneratedMediaUrl } from "@/lib/generatedMediaUrl";
+import { MEDIA_MODELS } from "@/lib/mediaCapabilities";
+import { logFalSpending } from "@/lib/falSpending";
 
 import {
   debitApiCredits,
@@ -21,6 +23,25 @@ export const dynamic = "force-dynamic";
 const VIDEO_CREDITS_PER_SECOND = 24;
 const DEFAULT_SECONDS = 5;
 const MAX_SECONDS = 30;
+
+/**
+ * Per-model credit pricing. Looks up the fal endpoint in MEDIA_MODELS
+ * and returns the correct novaCredits cost, scaled by duration.
+ * Falls back to the flat rate (24 cr/s) only for unknown endpoints.
+ */
+function getModelCreditCost(endpoint, seconds) {
+  const entry = Object.values(MEDIA_MODELS).find(
+    (m) => m.endpoint === endpoint
+  );
+
+  if (!entry || !entry.novaCredits) {
+    return seconds * VIDEO_CREDITS_PER_SECOND;
+  }
+
+  const baseSeconds = entry.maxSeconds || 5;
+  const multiplier = Math.max(1, seconds / baseSeconds);
+  return Math.ceil(entry.novaCredits * multiplier);
+}
 
 
 fal.config({ credentials: process.env.FAL_KEY });
@@ -86,12 +107,15 @@ function dashboardPaywallPayload({ currentCredits, creditsRequired, seconds }) {
   };
 }
 
-function imageTrialPaywallPayload({ imageGensUsed, imageMonthlyLimit }) {
+function imageTrialPaywallPayload({ imageGensUsed, imageMonthlyLimit, reason }) {
+  const isSoftCap = reason === "image_soft_cap_no_credits";
   return {
     success: false,
-    code: "IMAGE_TRIAL_LIMIT_REACHED",
-    error: "IMAGE_TRIAL_LIMIT_REACHED",
-    message: `Not enough credits. You have used ${imageMonthlyLimit} free generations. Upgrade to continue.`,
+    code: isSoftCap ? "IMAGE_SOFT_CAP_NO_CREDITS" : "IMAGE_TRIAL_LIMIT_REACHED",
+    error: isSoftCap ? "IMAGE_SOFT_CAP_NO_CREDITS" : "IMAGE_TRIAL_LIMIT_REACHED",
+    message: isSoftCap
+      ? `You've used ${imageGensUsed} free images this month. Add credits or upgrade to continue.`
+      : `Not enough credits. You have used ${imageMonthlyLimit} free generations. Upgrade to continue.`,
     imageGensUsed,
     imageMonthlyLimit,
     plans: {
@@ -140,8 +164,8 @@ function isForbiddenOrBillingError(err) {
 // Construtor de payload puro. A checagem de FAL_KEY que morava aqui referenciava
 // endpoint/model/mode/userId, que só existem dentro do POST — era ReferenceError
 // garantido. A verificação agora acontece no início do POST, antes de cobrar.
-function generationUpgradePayload({ isImage, seconds }) {
-  const creditsRequired = isImage ? 1 : seconds * VIDEO_CREDITS_PER_SECOND;
+function generationUpgradePayload({ isImage, seconds, endpoint }) {
+  const creditsRequired = isImage ? 1 : getModelCreditCost(endpoint || "", seconds);
 
   return {
     success: false,
@@ -307,8 +331,8 @@ export async function POST(req) {
   let { endpoint = "", prompt = "", model = "", mode = "" } = body;
   endpoint = normalizeGptImageEndpoint(endpoint, body);
   const seconds = normalizeSeconds(body.seconds || body.duration);
-  const creditsRequired = seconds * VIDEO_CREDITS_PER_SECOND;
   const isImage = isImageEndpoint(endpoint) || body.type === "image";
+  const creditsRequired = isImage ? 0 : getModelCreditCost(endpoint, seconds);
 
   if (!endpoint) {
     return NextResponse.json(
@@ -341,6 +365,7 @@ export async function POST(req) {
         result?.video?.url  || result?.videos?.[0]?.url ||
         result?.image?.url  || result?.images?.[0]?.url ||
         result?.output?.url || null;
+      logFalSpending({ userId, endpoint, creditsCharged: 0 });
       return NextResponse.json(withGeneratedMediaUrls({ success: true,
         provider: "fal",
         source: "admin",
@@ -358,7 +383,7 @@ export async function POST(req) {
       });
 
       if (isForbiddenOrBillingError(err)) {
-        return NextResponse.json(generationUpgradePayload({ isImage, seconds }), { status: 402 });
+        return NextResponse.json(generationUpgradePayload({ isImage, seconds, endpoint }), { status: 402 });
       }
 
       return NextResponse.json(
@@ -404,11 +429,15 @@ export async function POST(req) {
     const imageCheck = await checkAndDebitImageGen(userId);
     if (!imageCheck.ok) {
       return NextResponse.json(
-        imageTrialPaywallPayload({ imageGensUsed: imageCheck.imageGensUsed, imageMonthlyLimit: imageCheck.imageMonthlyLimit }),
+        imageTrialPaywallPayload({
+          imageGensUsed: imageCheck.imageGensUsed,
+          imageMonthlyLimit: imageCheck.imageMonthlyLimit,
+          reason: imageCheck.reason,
+        }),
         { status: 402 }
       );
     }
-    billingWallet = "image_unlimited";
+    billingWallet = imageCheck.creditsCharged ? "image_over_cap" : "image_unlimited";
 
   } else {
     const account = await ensureUserGenerationAccount(userId);
@@ -454,6 +483,8 @@ export async function POST(req) {
       result?.image?.url  || result?.images?.[0]?.url ||
       result?.output?.url || null;
 
+    logFalSpending({ userId, endpoint, creditsCharged: isImage ? 0 : creditsRequired });
+
     return NextResponse.json(withGeneratedMediaUrls({ success: true,
       provider: "fal",
       source: isApiRequest ? "api" : "dashboard",
@@ -466,7 +497,7 @@ export async function POST(req) {
         raw: result,
       },
       billing: {
-        creditsPerSecond: isImage ? 0 : VIDEO_CREDITS_PER_SECOND,
+        creditsPerSecond: isImage ? 0 : Math.ceil(creditsRequired / seconds),
         creditsCharged: isImage ? 0 : creditsRequired,
         remainingCredits,
         wallet: billingWallet,
@@ -480,7 +511,7 @@ export async function POST(req) {
 
     if (isForbiddenOrBillingError(err)) {
       return NextResponse.json(
-        { ...generationUpgradePayload({ isImage, seconds }), refunded },
+        { ...generationUpgradePayload({ isImage, seconds, endpoint }), refunded },
         { status: 402 }
       );
     }
