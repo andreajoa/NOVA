@@ -31,6 +31,10 @@ const navGroups = [
       { href: "/dashboard/characters",         label: "Characters",     icon: "◎" },
       { href: "/dashboard/brandkit",           label: "Brand Kit",      icon: "◎" },
   ]},
+  { label: "ADMIN", collapsible: true, items: [
+      { href: "/dashboard/admin/analytics",    label: "Intelligence",   icon: "◆" },
+      { href: "/dashboard/admin/crm",          label: "CRM",            icon: "✉" },
+  ]},
   { label: "CONTA", items: [
       { href: "/dashboard/uploads",            label: "Uploads",        icon: "↑" },
       { href: "/dashboard/settings/api-keys",  label: "API",            icon: "⊙" },

@@ -14,6 +14,7 @@ const isPublicRoute = createRouteMatcher([
   // Cron do CRM: protegido por CRON_SECRET dentro da própria rota,
   // não pela sessão do Clerk (o Vercel Cron não tem sessão).
   '/api/cron(.*)',
+  '/api/analytics/event(.*)',
   '/pricing(.*)',
   '/contact(.*)',
   '/terms(.*)',
