@@ -63,7 +63,7 @@ export const PLAN_CONFIG = PLAN_CONFIG_SOURCE as Record<string, PlanConfigEntry>
 export async function createUser(clerkId: string, email: string) {
   return queryD1(
     `INSERT OR IGNORE INTO users (id, email, clerk_id, plan, credits, image_gens_used, created_at)
-     VALUES (?, ?, ?, 'trial', 10, 0, datetime('now'))`,
+     VALUES (?, ?, ?, 'trial', 150, 0, datetime('now'))`,
     [clerkId, email, clerkId]
   )
 }
@@ -194,7 +194,7 @@ export async function ensureUserGenerationAccount(userId: string) {
 
   await queryD1(
     `INSERT OR IGNORE INTO users (id, email, clerk_id, plan, credits, image_gens_used, created_at)
-     VALUES (?, ?, ?, 'trial', 10, 0, datetime('now'))`,
+     VALUES (?, ?, ?, 'trial', 150, 0, datetime('now'))`,
     [userId, '', userId]
   )
 
@@ -202,9 +202,9 @@ export async function ensureUserGenerationAccount(userId: string) {
     id: userId,
     userId,
     plan: 'trial',
-    credits: 10,
-    imageUnlimited: false,
-    imageMonthlyLimit: 10,
+    credits: PLAN_CONFIG.trial.credits,
+    imageUnlimited: PLAN_CONFIG.trial.imageUnlimited,
+    imageMonthlyLimit: PLAN_CONFIG.trial.imageMonthlyLimit,
     imageGensUsed: 0,
   }
 }

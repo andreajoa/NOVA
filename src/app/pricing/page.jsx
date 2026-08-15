@@ -117,8 +117,10 @@ const plans = [
 ];
 
 const compareRows = [
-  ["Concurrent Jobs", "1 concurrent job", "2 concurrent jobs", "6 concurrent jobs", "8 concurrent jobs", "16 concurrent jobs"],
-  ["Seedance 2.0 720p", "—", "—", "533 videos", "1600 videos", "1600 videos"],
+  ["Credits/mo", "150 (one-time)", "70", "500", "3,000", "3,000"],
+  ["Images/mo", "10", "Unlimited", "Unlimited", "Unlimited", "Unlimited"],
+  ["Concurrent Jobs", "1", "2", "6", "8", "16"],
+  ["Seedance 2.0 720p", "1 video", "—", "533 videos", "1600 videos", "1600 videos"],
   ["Seedance 2.0 Fast 720p", "—", "48 videos", "685 videos", "2057 videos", "2057 videos"],
   ["Kling 3.0 720p", "—", "112 videos", "1600 videos", "4800 videos", "4800 videos"],
   ["All models", "—", "—", "—", "✓", "✓"],
@@ -128,13 +130,14 @@ const compareRows = [
 ];
 
 const faqs = [
-  "How do credits work?",
-  "Is my subscription automatically renewed?",
-  "How many videos can I generate?",
-  "How can I purchase extra credits?",
-  "How does Unlimited work?",
-  "How does 365-Day Unlimited promo work?",
-  "Can I change my plan?",
+  { q: "How do credits work?", a: "Credits are spent when you generate videos. Each second of video costs 24 credits (a 5-second clip = 120 credits). Images use a separate quota and don't consume video credits. Unused credits do not roll over." },
+  { q: "Is my subscription automatically renewed?", a: "Yes. Plans renew monthly or annually depending on your billing cycle. You can cancel anytime from Settings — your access continues until the current period ends." },
+  { q: "How many videos can I generate?", a: "It depends on your plan and video length. Basic (70 credits) gives you about 1 video, Plus (500) about 4, and Ultra (3,000) about 25 five-second videos per month. Shorter clips and faster models cost fewer credits." },
+  { q: "How can I purchase extra credits?", a: "Go to Settings > API Keys and purchase a credit pack. Packs start at $10 for 140 credits and scale up to $100 for 1,750 credits. API credits never expire and stack on top of your plan." },
+  { q: "How does Unlimited work?", a: "Unlimited lets you generate as many videos as you want with specific models (e.g. Seedance 2.0 Fast) without spending credits. Available on Plus and above. Speed may be adjusted during peak hours." },
+  { q: "How does 365-Day Unlimited promo work?", a: "Ultra and Business annual subscribers get one full year of unlimited video generation on select premium models. This is locked in at signup and does not change if pricing changes later." },
+  { q: "Can I change my plan?", a: "Yes. Upgrade anytime and the price difference is prorated. Downgrade takes effect at the next billing cycle. Go to Settings > Billing to manage your subscription." },
+  { q: "Can I try NOVA for free?", a: "Yes. Every new account gets 150 credits (enough for 1 AI video + voice-over) and 10 image generations per month. No credit card required." },
 ];
 
 function CheckIcon({ blue = false }) {
@@ -320,7 +323,23 @@ export default function PricingPage() {
           </div>
         </div>
 
-        <div className="mt-10 grid gap-5 lg:grid-cols-4">
+        {/* Free trial banner */}
+        <div className="mt-10 mb-5 mx-auto max-w-3xl rounded-2xl border border-[#D7FF00]/20 bg-[linear-gradient(100deg,rgba(215,255,0,.06),rgba(215,255,0,.02))] px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="shrink-0 rounded-xl bg-[#D7FF00]/10 border border-[#D7FF00]/20 p-3">
+              <span className="text-2xl">&#127909;</span>
+            </div>
+            <div>
+              <p className="text-sm font-black text-white">Start free — your first video is on us</p>
+              <p className="text-xs text-white/50 mt-0.5">150 credits + 10 images/mo. Generate your first AI video, no card required.</p>
+            </div>
+          </div>
+          <Link href="/sign-up" className="shrink-0 rounded-xl bg-[#D7FF00] px-5 py-2.5 text-xs font-black uppercase tracking-wider text-black no-underline hover:bg-[#c8f000] transition">
+            Try Free
+          </Link>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-4">
           {plans.map((plan) => (
             <PlanCard key={plan.name} plan={plan} annual={annual} />
           ))}
@@ -435,19 +454,19 @@ export default function PricingPage() {
         <h2 className="text-center text-3xl font-black tracking-tight md:text-4xl">Frequently Asked Questions</h2>
 
         <div className="mt-8 space-y-3">
-          {faqs.map((question, index) => (
-            <div key={question} className="overflow-hidden rounded-xl border border-white/8 bg-white/[.035]">
+          {faqs.map((faq, index) => (
+            <div key={faq.q} className="overflow-hidden rounded-xl border border-white/8 bg-white/[.035]">
               <button
                 onClick={() => setOpenFaq(openFaq === index ? null : index)}
                 className="flex w-full items-center justify-between px-5 py-4 text-left text-sm font-black text-white"
               >
-                {question}
+                {faq.q}
                 <span className={`text-white/45 transition ${openFaq === index ? "rotate-180" : ""}`}>⌄</span>
               </button>
 
               {openFaq === index && (
                 <p className="px-5 pb-5 text-sm leading-6 text-white/45">
-                  NOVA plans are designed for AI video and image generation. Credits, Unlimited access and model availability may vary depending on the selected plan and model usage.
+                  {faq.a}
                 </p>
               )}
             </div>
@@ -502,9 +521,9 @@ export default function PricingPage() {
           <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-8">
             <p className="text-xs text-white/20">© 2026 NOVA AI. All rights reserved.</p>
             <div className="flex items-center gap-6">
-              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-wider text-white/20 transition hover:text-white">Instagram</a>
-              <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-wider text-white/20 transition hover:text-white">X / Twitter</a>
-              <a href="https://tiktok.com" target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-wider text-white/20 transition hover:text-white">TikTok</a>
+              <a href="https://instagram.com/novaai.studio" target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-wider text-white/20 transition hover:text-white">Instagram</a>
+              <a href="https://x.com/novaai_studio" target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-wider text-white/20 transition hover:text-white">X / Twitter</a>
+              <a href="https://tiktok.com/@novaai.studio" target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-wider text-white/20 transition hover:text-white">TikTok</a>
             </div>
           </div>
         </div>

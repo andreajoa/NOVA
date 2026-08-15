@@ -12,7 +12,7 @@
  * teto de 10 imagens do trial.
  */
 export const PLAN_CONFIG = {
-  trial:    { credits: 10,     imageUnlimited: false, imageMonthlyLimit: 10   },
+  trial:    { credits: 150,    imageUnlimited: false, imageMonthlyLimit: 10   },
   basic:    { credits: 70,     imageUnlimited: true,  imageMonthlyLimit: null },
   plus:     { credits: 500,    imageUnlimited: true,  imageMonthlyLimit: null },
   ultra:    { credits: 3000,   imageUnlimited: true,  imageMonthlyLimit: null },

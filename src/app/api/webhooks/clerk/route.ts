@@ -147,8 +147,12 @@ const WELCOME_HTML = `<!DOCTYPE html>
   <tr><td style="background-color:#0a0a0a;border-top:1px solid #1c1c1c;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
       <td class="px" align="center" style="padding:40px 32px 44px;">
-        <h2 style="margin:0 0 10px;color:#ffffff;font-size:22px;font-weight:900;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">GENERATE YOUR FIRST CREATIVE TODAY</h2>
-        <p style="margin:0 0 26px;color:#999999;font-size:14px;line-height:1.7;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">Upload a product photo or write a prompt — NOVA handles the rest.</p>
+        <div style="display:inline-block;background-color:rgba(200,241,53,.12);border:1px solid rgba(200,241,53,.25);border-radius:10px;padding:14px 24px;margin-bottom:22px;">
+          <p style="margin:0;color:#c8f135;font-size:13px;font-weight:800;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;text-align:center;">&#127909; YOUR FREE VIDEO IS WAITING</p>
+          <p style="margin:5px 0 0;color:#cccccc;font-size:12px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;text-align:center;">150 credits included &mdash; enough for your first AI video + voice-over. No card required.</p>
+        </div>
+        <h2 style="margin:0 0 10px;color:#ffffff;font-size:22px;font-weight:900;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">GENERATE YOUR FIRST VIDEO TODAY</h2>
+        <p style="margin:0 0 26px;color:#999999;font-size:14px;line-height:1.7;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">Upload a product photo or write a prompt — your first video is on us.</p>
         <a href="https://novvideos.online/dashboard?utm_source=email&utm_campaign=welcome&utm_content=cta" class="cta-btn" style="display:inline-block;background-color:#c8f135;color:#0a0a0a;text-decoration:none;font-weight:800;font-size:16px;padding:17px 48px;border-radius:9px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">
           Open NOVA Studio &rarr;
         </a>

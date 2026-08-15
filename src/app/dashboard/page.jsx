@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -128,6 +129,40 @@ function FalBalanceAlert() {
   );
 }
 
+function TrialBanner() {
+  const [credits, setCredits] = useState(null);
+  useEffect(() => {
+    fetch("/api/me/credits")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setCredits(d); })
+      .catch(() => {});
+  }, []);
+  if (!credits || credits.plan !== "trial") return null;
+  const used = 150 - credits.credits;
+  const pct = Math.min(100, Math.round((used / 150) * 100));
+  return (
+    <div className="mx-8 mt-4 rounded-2xl border border-[#D7FF00]/20 bg-[linear-gradient(100deg,rgba(215,255,0,.08),rgba(215,255,0,.02))] p-5">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-black text-white flex items-center gap-2">
+            <span className="text-lg">&#127909;</span> Your first video is free
+          </p>
+          <p className="text-xs text-white/50 mt-1">
+            {credits.credits} of 150 credits remaining — enough for {credits.credits >= 120 ? "1 AI video (5s)" : "images only"}.
+            {credits.credits >= 135 && " Plus a voice-over."}
+          </p>
+          <div className="mt-2 h-1.5 w-48 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full rounded-full bg-[#D7FF00] transition-all duration-500" style={{ width: `${100 - pct}%` }} />
+          </div>
+        </div>
+        <Link href="/pricing" className="shrink-0 rounded-xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 px-4 py-2 text-xs font-black uppercase tracking-wider text-[#D7FF00] no-underline hover:bg-[#D7FF00]/20 transition">
+          Upgrade for more
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 const modelCards = [
   { name: "SEEDANCE", version: "2.0 FAST", slug: "seedance",    image: "/nova/nova-seedance-fast.png",
     icons: ["Text to Video","Image to Video","Native Video","Fast Generation"] },
@@ -157,6 +192,7 @@ export default function DashboardPage() {
       </div>
 
       <FalBalanceAlert />
+      <TrialBanner />
 
       {/* Prompt bar */}
       <div className="px-8 mt-6">

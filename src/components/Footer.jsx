@@ -61,7 +61,7 @@ export default function Footer() {
         <div className="mt-12 border-t border-white/8 pt-8 flex flex-wrap items-center justify-between gap-4">
           <p className="text-white/20 text-xs">© {year} Nova AI. {s.copy}</p>
           <div className="flex items-center gap-6">
-            {[["Instagram","https://instagram.com"],["X / Twitter","https://x.com"],["TikTok","https://tiktok.com"]].map(([n,u])=>(
+            {[["Instagram","https://instagram.com/novaai.studio"],["X / Twitter","https://x.com/novaai_studio"],["TikTok","https://tiktok.com/@novaai.studio"]].map(([n,u])=>(
               <a key={n} href={u} target="_blank" rel="noopener noreferrer"
                 className="text-white/20 hover:text-white transition text-xs font-bold uppercase tracking-wider">{n}</a>
             ))}
