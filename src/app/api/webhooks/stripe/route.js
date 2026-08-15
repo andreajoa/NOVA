@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { activatePlanSubscription, addApiCredits } from "@/lib/db";
 import { markContactAsCustomer } from "@/lib/crm/db";
+import {
+  markCheckoutConverted,
+  activateAbandoned,
+  sendAbandonedEmail,
+} from "@/lib/crm/abandoned";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,6 +88,17 @@ export async function POST(request) {
       } catch (error) {
         console.error("[crm] failed to exit converted contact:", error);
       }
+
+      // Abandoned checkout: marcar como convertido (para qualquer sequência ativa)
+      try {
+        await markCheckoutConverted({
+          stripeSessionId: session.id,
+          email: session.customer_details?.email || "",
+          userId,
+        });
+      } catch (error) {
+        console.error("[abandoned] failed to mark converted:", error);
+      }
     }
   }
 
@@ -117,6 +133,67 @@ export async function POST(request) {
         }
       } catch (err) {
         console.error("[stripe webhook] renewal error:", err);
+      }
+    }
+  }
+
+  // ── Abandoned checkout: checkout expirou sem pagar ───────────────────────
+  if (event.type === "checkout.session.expired") {
+    const session = event.data.object;
+    const metadata = session.metadata || {};
+
+    // Só interessa para checkouts de plano (não API credits)
+    if (metadata.type !== "api_credits" && metadata.userId) {
+      try {
+        const { queryD1, d1Rows: d1R } = await import("@/lib/db");
+        const email = session.customer_details?.email || "";
+
+        // Se não temos email pelo Stripe, buscar no D1
+        let contactEmail = email;
+        if (!contactEmail) {
+          const userRes = await queryD1(
+            "SELECT email FROM users WHERE id = ? OR clerk_id = ? LIMIT 1",
+            [metadata.userId, metadata.userId]
+          );
+          const userRow = d1R(userRes)[0];
+          contactEmail = userRow?.email ? String(userRow.email) : "";
+        }
+
+        if (contactEmail) {
+          // Importar e gravar a tentativa (caso não tenha sido gravada no checkout)
+          const { recordCheckoutAttempt } = await import("@/lib/crm/abandoned");
+          const newId = await recordCheckoutAttempt({
+            email: contactEmail,
+            userId: metadata.userId,
+            plan: metadata.plan || "basic",
+            billing: metadata.billing || "monthly",
+            stripeSessionId: session.id,
+          });
+
+          // Se foi criado agora (ou já existia como pendente), ativar e enviar email 0
+          const { ensureCrmTables } = await import("@/lib/crm/db");
+          await ensureCrmTables();
+
+          // Buscar o registro pendente para esse email
+          const pendingRes = await queryD1(
+            `SELECT id FROM crm_abandoned
+             WHERE email = ? AND status = 'pending' LIMIT 1`,
+            [contactEmail.toLowerCase()]
+          );
+          const pending = d1R(pendingRes)[0];
+          const recordId = pending ? String(pending.id) : newId;
+
+          if (recordId) {
+            const activated = await activateAbandoned(recordId);
+            if (activated) {
+              // Enviar email 0 imediatamente (não esperar o cron)
+              await sendAbandonedEmail(activated);
+              console.log(`[abandoned] email 0 sent to ${contactEmail} (plan=${metadata.plan})`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[abandoned] expired handler error:", error);
       }
     }
   }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { auth } from "@clerk/nextjs/server";
+import { recordCheckoutAttempt } from "@/lib/crm/abandoned";
 
 const PRICE_MAP: Record<string, string> = {
   basic_monthly:    "price_1TTbBXPsIezuzlaECvxgoy59",
@@ -37,6 +38,29 @@ export async function POST(req: Request) {
       return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?subscribed=true`,
       metadata: { userId, plan, billing },
     });
+
+    // Gravar tentativa de checkout para abandoned checkout tracking.
+    // Buscar email do user no D1 (o Stripe session ainda não tem customer_details).
+    try {
+      const { queryD1, d1Rows } = await import("@/lib/db");
+      const userRes = await queryD1(
+        "SELECT email FROM users WHERE id = ? OR clerk_id = ? LIMIT 1",
+        [userId, userId]
+      );
+      const userRow = d1Rows(userRes)[0];
+      const email = userRow?.email ? String(userRow.email) : "";
+      if (email) {
+        await recordCheckoutAttempt({
+          email,
+          userId,
+          plan,
+          billing,
+          stripeSessionId: session.id,
+        });
+      }
+    } catch {
+      // Falha no tracking não pode bloquear o checkout
+    }
 
     return NextResponse.json({ clientSecret: session.client_secret });
   } catch (err: unknown) {
