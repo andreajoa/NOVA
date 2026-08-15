@@ -259,9 +259,14 @@ export function renderAbandonedEmail({ stepNumber, plan, locale, contact }) {
   const rawCopy = emailDef[loc] || emailDef.en;
   const copy = replaceInObj(rawCopy, plan);
 
-  const rawTactics = ABANDONED_TACTICS[emailDef.id]?.[loc] ||
-                     ABANDONED_TACTICS[emailDef.id]?.en || {};
+  const tacticsEntry = ABANDONED_TACTICS[emailDef.id] || {};
+  const rawTactics = tacticsEntry[loc] || tacticsEntry.en || {};
   const extra = replaceInObj(rawTactics, plan);
+
+  // Media fields live at the top level of the tactics entry (not inside en/pt)
+  const heroImage = tacticsEntry.heroImage || null;
+  const images = tacticsEntry.images || null;
+  const videoThumb = tacticsEntry.videoThumb || null;
 
   const ask = emailDef.ask || "hook";
 
@@ -290,6 +295,9 @@ export function renderAbandonedEmail({ stepNumber, plan, locale, contact }) {
     preheader: copy.preheader,
     unsubUrl,
     locale: loc,
+    heroImage,
+    images,
+    videoThumb,
   };
 
   return {

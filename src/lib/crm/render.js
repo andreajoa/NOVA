@@ -45,8 +45,14 @@ export function renderStepEmail({ step, contact }) {
   const locale = normalizeLocale(contact.locale);
   const email = step.email;
   const copy = email[locale] || email.en;
-  const extra = TACTICS[email.id]?.[locale] || TACTICS[email.id]?.en || {};
-  const ask = TACTICS[email.id]?.ask || "jab";
+  const tacticsEntry = TACTICS[email.id] || {};
+  const extra = tacticsEntry[locale] || tacticsEntry.en || {};
+  const ask = tacticsEntry.ask || "jab";
+
+  // Media fields live at the top level of the tactics entry (not inside en/pt)
+  const heroImage = tacticsEntry.heroImage || null;
+  const images = tacticsEntry.images || null;
+  const videoThumb = tacticsEntry.videoThumb || null;
 
   const firstName = String(contact.firstName || "").trim();
   const greetingName = firstName ? firstName.split(" ")[0] : "";
@@ -73,6 +79,9 @@ export function renderStepEmail({ step, contact }) {
     preheader: copy.preheader,
     unsubUrl,
     locale,
+    heroImage,
+    images,
+    videoThumb,
   };
 
   return {

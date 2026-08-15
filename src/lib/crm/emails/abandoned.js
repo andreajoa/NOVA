@@ -173,8 +173,27 @@ export const ABANDONED_EMAILS = [
  * Camada de conversão: tática, prova e P.S. — separados do copy para
  * poder visualizar o ritmo inteiro sem ler 5 e-mails completos.
  */
+const BASE = "https://www.novvideos.online";
+
 export const ABANDONED_TACTICS = {
   "ab-00-one-click": {
+    heroImage: {
+      src: `${BASE}/nova/nova-dashboard.png`,
+      alt: "NOVA AI Studio Dashboard",
+      href: `${BASE}/pricing`,
+    },
+    images: [
+      { src: `${BASE}/nova/landing/ad-sneaker.png`, alt: "AI product video — sneakers", caption: "Sneaker ad" },
+      { src: `${BASE}/nova/landing/ad-perfume.png`, alt: "AI product video — perfume", caption: "Perfume ad" },
+      { src: `${BASE}/nova/landing/ad-serum.png`, alt: "AI product video — skincare", caption: "Skincare ad" },
+      { src: `${BASE}/nova/landing/ad-watch.png`, alt: "AI product video — watch", caption: "Watch ad" },
+    ],
+    videoThumb: {
+      src: `${BASE}/nova/nova-product-ads.png`,
+      alt: "Watch how NOVA generates product ads",
+      href: `${BASE}/explore`,
+      duration: "0:45",
+    },
     en: {
       tactic: {
         label: "QUICK DIAGNOSTIC",
@@ -200,6 +219,23 @@ export const ABANDONED_TACTICS = {
   },
 
   "ab-01-cost-of-nothing": {
+    heroImage: {
+      src: `${BASE}/nova/nova-homepage-collage.png`,
+      alt: "Videos generated with NOVA AI",
+      href: `${BASE}/explore`,
+    },
+    images: [
+      { src: `${BASE}/nova/explore-v1/card-beauty.png`, alt: "Beauty product video", caption: "Beauty" },
+      { src: `${BASE}/nova/explore-v1/card-watch.png`, alt: "Watch product video", caption: "Watches" },
+      { src: `${BASE}/nova/explore-v1/card-coffee.png`, alt: "Coffee product video", caption: "Food & Drink" },
+      { src: `${BASE}/nova/explore-v1/card-lifestyle.png`, alt: "Lifestyle product video", caption: "Lifestyle" },
+    ],
+    videoThumb: {
+      src: `${BASE}/nova/nova-ugc-creatives.png`,
+      alt: "See real AI-generated product ads",
+      href: `${BASE}/explore`,
+      duration: "1:20",
+    },
     en: {
       tactic: {
         label: "THE COST-OF-NOTHING FORMULA",
@@ -225,6 +261,23 @@ export const ABANDONED_TACTICS = {
   },
 
   "ab-02-prompt-formula": {
+    heroImage: {
+      src: `${BASE}/nova/nova-seedance-pro.png`,
+      alt: "NOVA video generation studio",
+      href: `${BASE}/dashboard/generate`,
+    },
+    images: [
+      { src: `${BASE}/nova/landing/ad-headphones.png`, alt: "Headphones — generated with the 3-line formula", caption: "3-line prompt" },
+      { src: `${BASE}/nova/landing/ad-ugc-headphones.png`, alt: "UGC style ad", caption: "UGC style" },
+      { src: `${BASE}/nova/explore-v1/card-dessert.png`, alt: "Food product video", caption: "Food prompt" },
+      { src: `${BASE}/nova/explore-v1/card-gaming-chair.png`, alt: "Gaming chair product video", caption: "Furniture prompt" },
+    ],
+    videoThumb: {
+      src: `${BASE}/nova/nova-cinematic-videos.png`,
+      alt: "Watch the 3-line formula in action",
+      href: `${BASE}/dashboard/generate`,
+      duration: "0:30",
+    },
     en: {
       tactic: {
         label: "THE 3-LINE PRODUCT VIDEO FORMULA",
@@ -250,6 +303,23 @@ export const ABANDONED_TACTICS = {
   },
 
   "ab-03-offer-stack": {
+    heroImage: {
+      src: `${BASE}/nova/landing/hero-dashboard.png`,
+      alt: "NOVA AI Studio — all models, one platform",
+      href: `${BASE}/pricing`,
+    },
+    images: [
+      { src: `${BASE}/nova/model-seedance-pro.svg`, alt: "Seedance 2.0", caption: "Seedance 2.0" },
+      { src: `${BASE}/nova/model-kling.svg`, alt: "Kling 3.0", caption: "Kling 3.0" },
+      { src: `${BASE}/nova/model-veo.svg`, alt: "Veo 3.1", caption: "Veo 3.1" },
+      { src: `${BASE}/nova/model-wan.svg`, alt: "Wan 2.2", caption: "Wan 2.2" },
+    ],
+    videoThumb: {
+      src: `${BASE}/nova/nova-kling-3.png`,
+      alt: "See what 22 AI models can do",
+      href: `${BASE}/explore`,
+      duration: "1:00",
+    },
     en: {
       tactic: {
         label: "YOUR {{PLAN}} STACK",
@@ -275,6 +345,17 @@ export const ABANDONED_TACTICS = {
   },
 
   "ab-04-last-one": {
+    heroImage: {
+      src: `${BASE}/nova/nova-veo-3-1.png`,
+      alt: "NOVA AI — your plan is waiting",
+      href: `${BASE}/pricing`,
+    },
+    videoThumb: {
+      src: `${BASE}/nova/nova-wan-2-6.png`,
+      alt: "One last look at what NOVA can do",
+      href: `${BASE}/explore`,
+      duration: "0:20",
+    },
     en: {
       tactic: {
         label: "HONEST TAKE",
