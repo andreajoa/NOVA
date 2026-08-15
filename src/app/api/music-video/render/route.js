@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { writeFile, readFile, mkdir, rm } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import ffmpegStatic from "ffmpeg-static";
 import { uploadToR2 } from "@/lib/r2";
 import { saveProjectRow } from "@/lib/db";
 import { getMusicVideoJob, updateMusicVideoJob } from "@/lib/musicVideoJobs";
@@ -14,6 +15,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const execFileAsync = promisify(execFile);
+const ffmpegPath = process.env.FFMPEG_PATH || ffmpegStatic || "ffmpeg";
 
 async function downloadToFile(url, filePath) {
   const res = await fetch(url);
@@ -73,7 +75,7 @@ export async function POST(req) {
     await downloadToFile(job.audioUrl, audioPath);
     await writeFile(listPath, listLines.join("\n"));
 
-    await execFileAsync("ffmpeg", [
+    await execFileAsync(ffmpegPath, [
       "-y",
       "-f", "concat",
       "-safe", "0",

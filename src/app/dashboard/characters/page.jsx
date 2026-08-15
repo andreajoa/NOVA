@@ -329,22 +329,61 @@ export default function CharacterStudioPage() {
     videoMotion: "subtle cinematic motion and natural expression",
   });
 
+  // Carregar characters do servidor (D1) com fallback para localStorage
   useEffect(() => {
-    // Hidratação a partir do localStorage: só existe no cliente, então tem que
-    // ser depois da montagem. Ler num initializer causaria mismatch de hidratação.
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-      if (Array.isArray(saved)) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setCharacters(saved);
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (saved[0]?.id) setSelectedId(saved[0].id);
-      }
-    } catch {}
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/characters");
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && Array.isArray(data.characters) && data.characters.length > 0) {
+            setCharacters(data.characters);
+            if (data.characters[0]?.id) setSelectedId(data.characters[0].id);
+            return;
+          }
+        }
+      } catch {}
+      // Fallback: migrar localStorage para o servidor
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+        if (!cancelled && Array.isArray(saved) && saved.length > 0) {
+          setCharacters(saved);
+          if (saved[0]?.id) setSelectedId(saved[0].id);
+          // Migrar para o servidor em background
+          for (const ch of saved) {
+            fetch("/api/characters", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(ch),
+            }).catch(() => {});
+          }
+        }
+      } catch {}
+    }
+    load();
+    return () => { cancelled = true; };
   }, []);
 
+  // Sincronizar para o servidor quando characters mudam
+  const [saveTimer, setSaveTimer] = useState(null);
   useEffect(() => {
+    // Também manter localStorage como cache local
     localStorage.setItem(STORAGE_KEY, JSON.stringify(characters));
+    // Debounce server sync (500ms)
+    if (saveTimer) clearTimeout(saveTimer);
+    const timer = setTimeout(() => {
+      characters.forEach((ch) => {
+        fetch("/api/characters", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(ch),
+        }).catch(() => {});
+      });
+    }, 500);
+    setSaveTimer(timer);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [characters]);
 
   const selectedCharacter = useMemo(
@@ -621,6 +660,8 @@ export default function CharacterStudioPage() {
       const next = characters.find((item) => item.id !== id);
       setSelectedId(next?.id || "");
     }
+    // Remover do servidor
+    fetch(`/api/characters?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
   }
 
   async function mergeAllStoryClips() {

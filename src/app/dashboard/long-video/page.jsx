@@ -52,6 +52,20 @@ export default function LongVideoPage() {
   const [upgradeOffer, setUpgradeOffer] = useState(null);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const [finalUrl, setFinalUrl] = useState(null);
+  async function handleMerge() {
+    const clips = scenes.map((s) => s.videoUrl).filter(Boolean);
+    if (clips.length < 2) { setError("Need at least 2 rendered scenes to merge."); return; }
+    setMerging(true); setError("");
+    try {
+      const res = await fetch("/api/long-video/merge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clips, title: topic || "NOVA Long Video", ratio: aspectRatio }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) throw new Error(data?.error || "Merge failed.");
+      setFinalUrl(data.finalUrl);
+    } catch (err) { setError(err?.message || "Merge failed."); }
+    finally { setMerging(false); }
+  }
   async function handlePlan() {
     if (!topic.trim()) { setError("Adicione um topico."); return; }
     setPlanLoading(true); setError(""); setPlan(null); setScenes([]); setCurrentScene(-1); setDone(false); setUpgradeOffer(null);
@@ -151,7 +165,25 @@ export default function LongVideoPage() {
               </div>
             )}
             {upgradeOffer && <UpgradeBanner data={upgradeOffer} onDismiss={() => setUpgradeOffer(null)} />}
-            {done && <div className="mt-4 rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-4"><p className="text-sm font-black uppercase text-[#D7FF00]">{"All " + scenes.length + " cenas prontas."}</p></div>}
+            {done && !finalUrl && (
+              <div className="mt-4 rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 p-5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <p className="text-sm font-black uppercase text-[#D7FF00]">{"All " + scenes.length + " scenes rendered"}</p>
+                  <button onClick={handleMerge} disabled={merging} className="rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase text-black disabled:opacity-45">
+                    {merging ? "Merging..." : "Merge into final video"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {finalUrl && (
+              <div className="mt-4 rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/5 p-5">
+                <p className="text-xs font-black uppercase text-[#D7FF00] mb-3">Final video ready</p>
+                <video src={finalUrl} controls playsInline className="w-full rounded-xl border border-white/10 bg-black" style={{ maxHeight: 400 }} />
+                <a href={"/api/download?url=" + encodeURIComponent(finalUrl) + "&filename=nova-long-video"} className="mt-3 block rounded-xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 px-4 py-3 text-center text-xs font-black uppercase text-[#D7FF00] no-underline hover:bg-[#D7FF00]/20 transition">
+                  Download final video
+                </a>
+              </div>
+            )}
             <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {scenes.map((scene, i) => <SceneCard key={i} scene={scene} index={i} isRendering={renderLoading && i === currentScene} />)}
             </div>

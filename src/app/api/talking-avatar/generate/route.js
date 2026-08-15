@@ -62,32 +62,8 @@ export async function POST(request) {
 
     const admin = await isAdminUser(userId);
     if (!admin) {
-      const account = await ensureUserGenerationAccount(userId);
-      if (account.credits < creditsRequired) {
-        return NextResponse.json({
-          success: false,
-          code: "INSUFFICIENT_CREDITS",
-          error: "INSUFFICIENT_CREDITS",
-          message: "Not enough credits to generate. Upgrade to continue.",
-          currentCredits: account.credits,
-          creditsRequired,
-          creditsMissing: Math.max(0, creditsRequired - account.credits),
-          plans: {
-            annual:  { label: "Annual",  price: "$5/mo", href: "/checkout/plan?plan=basic&billing=annual" },
-            monthly: { label: "Monthly", price: "$7/mo", href: "/checkout/plan?plan=basic&billing=monthly" },
-          },
-        }, { status: 402 });
-      }
-    }
-
-    if (!audioUrl && script) {
-      audioUrl = await generateAudioFromScript({ script, voice: body.voice });
-    }
-    if (!audioUrl) {
-      return NextResponse.json({ success: false, error: "AUDIO_GENERATION_FAILED" }, { status: 502 });
-    }
-
-    if (!admin) {
+      // Debitar ANTES de qualquer geração para eliminar race condition.
+      // Se áudio ou vídeo falhar, o catch faz refund.
       const debit = await debitGenerationCredits(userId, creditsRequired);
       if (!debit.ok) {
         return NextResponse.json({
@@ -105,6 +81,14 @@ export async function POST(request) {
         }, { status: 402 });
       }
       charged = true;
+    }
+
+    if (!audioUrl && script) {
+      audioUrl = await generateAudioFromScript({ script, voice: body.voice });
+    }
+    if (!audioUrl) {
+      const refunded = charged ? await refundGenerationCredits(userId, creditsRequired) : false;
+      return NextResponse.json({ success: false, error: "AUDIO_GENERATION_FAILED", refunded }, { status: 502 });
     }
 
     const input = {
