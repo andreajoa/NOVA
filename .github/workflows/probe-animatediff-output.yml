@@ -1,0 +1,72 @@
+name: AnimateDiff Output Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/probe-animatediff-output.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Generate and resolve AnimateDiff video
+        shell: python
+        run: |
+          import json, urllib.request, urllib.error, re
+
+          base = "https://bytedance-animatediff-lightning.hf.space"
+          payload = json.dumps({"data": ["A paper airplane gliding above a sunny park, cinematic", "epiCRealism", "", 2]}).encode()
+
+          def request(url, method="GET", data=None, timeout=90):
+              headers = {"User-Agent":"NOVA-animatediff-probe/1.0","Accept":"text/event-stream, application/json"}
+              if data is not None: headers["Content-Type"] = "application/json"
+              return urllib.request.urlopen(urllib.request.Request(url,data=data,method=method,headers=headers),timeout=timeout)
+
+          root = base + "/call/generate_image"
+          with request(root,"POST",payload,45) as r:
+              submit = json.loads(r.read().decode())
+          event_id = submit["event_id"]
+          with request(root + "/" + event_id,"GET",None,150) as r:
+              text = r.read().decode("utf-8","replace")
+
+          data = None
+          for block in text.replace("\r\n","\n").split("\n\n"):
+              if "event: error" in block:
+                  raise SystemExit("AnimateDiff event error: " + block[-1000:])
+              if "event: complete" in block:
+                  line = next((x for x in block.splitlines() if x.startswith("data: ")),None)
+                  if line: data = json.loads(line[6:]); break
+          if data is None: raise SystemExit("No complete data")
+          print("COMPLETE",json.dumps(data)[:2000])
+
+          video = data[0]["video"]
+          path = video.get("path") or ""
+          returned = video.get("url") or ""
+          candidates = [
+              returned,
+              base + "/file=" + path,
+              base + "/gradio_api/file=" + path,
+              base + "/call/file=" + path,
+          ]
+          for url in candidates:
+              if not url: continue
+              try:
+                  with request(url,timeout=45) as r:
+                      ctype = r.headers.get("content-type","")
+                      first = r.read(64)
+                  print("CANDIDATE",url,"CTYPE",ctype,"FTYP",b"ftyp" in first)
+                  if "video" in ctype.lower() or b"ftyp" in first:
+                      print("ANIMATEDIFF_VIDEO_OK",url)
+                      raise SystemExit(0)
+              except urllib.error.HTTPError as exc:
+                  print("HTTP_FAIL",url,exc.code)
+              except Exception as exc:
+                  print("FAIL",url,type(exc).__name__,str(exc))
+          raise SystemExit("No working AnimateDiff file URL")
