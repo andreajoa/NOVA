@@ -13,6 +13,7 @@ on:
       - "src/app/api/generate/**"
       - "src/app/api/internal/free-video-callback/**"
       - "src/app/dashboard/free/**"
+      - "src/app/oauth/callback/huggingface/**"
       - "src/components/NovaFreeVideoStudio.jsx"
       - "src/components/NovaGenerationStudio.jsx"
       - "src/lib/cloudflareAiClient.js"
@@ -25,6 +26,7 @@ on:
       - "src/lib/novaAdminAccess.js"
       - "src/lib/privateOpenModels.js"
       - "src/lib/publicGenerationCatalog.js"
+      - "src/lib/r2.ts"
       - "src/lib/verifiedVideoRuntime.js"
       - "src/lib/zeroCostVideoClient.js"
       - "infra/modal/nova_video_worker.py"
@@ -58,6 +60,7 @@ jobs:
             src/app/api/generate/route.js \
             src/app/api/internal/free-video-callback/route.js \
             src/app/dashboard/free/page.jsx \
+            src/app/oauth/callback/huggingface/page.jsx \
             src/components/NovaFreeVideoStudio.jsx \
             src/components/NovaGenerationStudio.jsx \
             src/lib/cloudflareAiClient.js \
@@ -69,6 +72,7 @@ jobs:
             src/lib/novaAdminAccess.js \
             src/lib/privateOpenModels.js \
             src/lib/publicGenerationCatalog.js \
+            src/lib/r2.ts \
             src/lib/verifiedVideoRuntime.js \
             src/lib/zeroCostVideoClient.js
 
@@ -89,10 +93,18 @@ jobs:
           grep -q '/api/free-video-status' src/components/NovaFreeVideoStudio.jsx
           grep -q 'reserveCloudflareFreeImage' src/app/api/generate/route.js
           grep -q 'reserveVideoCapacity' src/app/api/free-video-generate/route.js
+          grep -q 'usesSharedCapacity' src/app/api/free-video-generate/route.js
+          grep -q 'persistGeneratedVideo' src/app/api/free-video-generate/route.js
+          grep -q 'uploadToR2' src/app/api/free-video-generate/route.js
           grep -q 'runVerifiedVideoRuntime' src/app/api/free-video-generate/route.js
           grep -q 'refundFreeGeneration' src/app/api/internal/free-video-callback/route.js
           grep -q 'isNovaAdminUser' src/lib/db.ts
           grep -q 'BUILT_IN_ADMIN_EMAIL_HASHES' src/lib/novaAdminAccess.js
+
+          if grep -q 'useSearchParams' src/app/oauth/callback/huggingface/page.jsx; then
+            echo 'OAuth callback must not read search params during prerender.'
+            exit 1
+          fi
 
           if grep -Eqi '@cf/|fal-ai|fal\.run|huggingface\.co|modal\.' src/lib/publicGenerationCatalog.js; then
             echo 'Provider/model detail leaked into public generation catalog.'
