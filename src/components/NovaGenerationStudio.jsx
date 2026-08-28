@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { publicGenerationModels as novaModels } from "@/lib/publicGenerationCatalog";
-import { extractGeneratedMediaUrl, isVideoUrl } from "@/lib/generatedMediaUrl";
 import {
   getVideoResolutionOptions,
   normalizeVideoResolutionForModel,
@@ -224,16 +223,29 @@ export default function NovaGenerationStudio({
   const modeEntries = Object.entries(model?.modes || {});
   const isBrandedFree = model?.tier === "free";
   const freeBucket = isImage ? freeUsage?.image : freeUsage?.video;
+  const freeVideoDurations = freeUsage?.video?.durations;
   const premiumDurations = useMemo(() => premiumDurationOptions(modelKey, model), [modelKey, model]);
-  const durationOptions = isBrandedFree && !isImage
-    ? (freeUsage?.video?.durations || [5])
-    : premiumDurations;
+  const durationOptions = useMemo(
+    () => isBrandedFree && !isImage
+      ? (Array.isArray(freeVideoDurations) && freeVideoDurations.length ? freeVideoDurations : [5])
+      : premiumDurations,
+    [isBrandedFree, isImage, freeVideoDurations, premiumDurations]
+  );
   const videoResolutionOptions = useMemo(
     () => getVideoResolutionOptions(modelKey, modeKey),
     [modelKey, modeKey]
   );
   const needsImage = Boolean(modeData?.needsImage);
   const resultUrls = result ? collectUrls(result) : [];
+  const effectiveImageResolution = isBrandedFree && isImage ? "1K" : imageResolution;
+  const effectiveImageCount = isBrandedFree && isImage ? 1 : imageCount;
+  const effectiveSeconds = durationOptions.includes(seconds) ? seconds : (durationOptions[0] || 5);
+  const normalizedVideoResolution = !isImage && videoResolutionOptions.length
+    ? normalizeVideoResolutionForModel(modelKey, modeKey, videoResolution)
+    : videoResolution;
+  const effectiveVideoResolution = isBrandedFree && !isImage
+    ? "480p"
+    : (normalizedVideoResolution || videoResolution);
 
   async function refreshFreeUsage() {
     try {
@@ -246,31 +258,32 @@ export default function NovaGenerationStudio({
   }
 
   useEffect(() => {
-    refreshFreeUsage();
-    const params = new URLSearchParams(window.location.search);
-    const queryPrompt = params.get("prompt");
-    if (queryPrompt) setPrompt(queryPrompt);
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      const params = new URLSearchParams(window.location.search);
+      const queryPrompt = params.get("prompt");
+      if (!cancelled && queryPrompt) setPrompt(queryPrompt);
+
+      try {
+        const res = await fetch("/api/free-usage", { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok && data?.success) setFreeUsage(data);
+      } catch {
+        // Quota enforcement remains server-side even if the counter cannot render.
+      }
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
-    if (isBrandedFree && isImage) {
-      setImageResolution("1K");
-      setImageCount(1);
-    }
-    if (isBrandedFree && !isImage) {
-      setVideoResolution("480p");
-    }
-  }, [isBrandedFree, isImage, modelKey]);
-
-  useEffect(() => {
-    if (!durationOptions.includes(seconds)) setSeconds(durationOptions[0] || 5);
-  }, [durationOptions, seconds]);
-
-  useEffect(() => {
-    if (isImage || !videoResolutionOptions.length) return;
-    const normalized = normalizeVideoResolutionForModel(modelKey, modeKey, videoResolution);
-    if (normalized && normalized !== videoResolution) setVideoResolution(normalized);
-  }, [isImage, modelKey, modeKey, videoResolution, videoResolutionOptions]);
+    return () => {
+      if (assetPreview) URL.revokeObjectURL(assetPreview);
+    };
+  }, [assetPreview]);
 
   function selectModel(nextModelKey) {
     const nextModel = getModel(nextModelKey);
@@ -328,16 +341,14 @@ export default function NovaGenerationStudio({
         ...(isImage
           ? {
               aspect_ratio: imageRatio,
-              image_size: imageSizeFrom(imageRatio, imageResolution),
-              num_images: isBrandedFree ? 1 : imageCount,
+              image_size: imageSizeFrom(imageRatio, effectiveImageResolution),
+              num_images: effectiveImageCount,
             }
           : {
               aspect_ratio: videoRatio,
-              resolution: isBrandedFree
-                ? "480p"
-                : normalizeVideoResolutionForModel(modelKey, modeKey, videoResolution),
-              duration: seconds,
-              seconds,
+              resolution: effectiveVideoResolution,
+              duration: effectiveSeconds,
+              seconds: effectiveSeconds,
             }),
       };
 
@@ -377,7 +388,7 @@ export default function NovaGenerationStudio({
     );
   }
 
-  const quotaExhausted = isBrandedFree && freeBucket && freeBucket.remaining <= 0;
+  const quotaExhausted = Boolean(isBrandedFree && freeBucket && freeBucket.remaining <= 0);
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#020303] text-white">
@@ -482,7 +493,7 @@ export default function NovaGenerationStudio({
                       <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Resolução</p>
                       <div className="grid grid-cols-3 gap-2">
                         {(isBrandedFree ? ["1K"] : PREMIUM_IMAGE_RESOLUTIONS).map((item) => (
-                          <OptionButton key={item} active={imageResolution === item} onClick={() => setImageResolution(item)}>{item}</OptionButton>
+                          <OptionButton key={item} active={effectiveImageResolution === item} onClick={() => setImageResolution(item)}>{item}</OptionButton>
                         ))}
                       </div>
                     </div>
@@ -490,7 +501,7 @@ export default function NovaGenerationStudio({
                       <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Quantidade</p>
                       <div className="grid grid-cols-3 gap-2">
                         {(isBrandedFree ? [1] : PREMIUM_IMAGE_COUNTS).map((item) => (
-                          <OptionButton key={item} active={imageCount === item} onClick={() => setImageCount(item)}>{item}</OptionButton>
+                          <OptionButton key={item} active={effectiveImageCount === item} onClick={() => setImageCount(item)}>{item}</OptionButton>
                         ))}
                       </div>
                     </div>
@@ -502,7 +513,7 @@ export default function NovaGenerationStudio({
                         <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Resolução</p>
                         <div className="grid grid-cols-3 gap-2">
                           {videoResolutionOptions.map(([key, item]) => (
-                            <OptionButton key={key} active={videoResolution === key} onClick={() => setVideoResolution(key)}>{item.label || key}</OptionButton>
+                            <OptionButton key={key} active={effectiveVideoResolution === key} onClick={() => setVideoResolution(key)}>{item.label || key}</OptionButton>
                           ))}
                         </div>
                       </div>
@@ -511,7 +522,7 @@ export default function NovaGenerationStudio({
                       <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Duração</p>
                       <div className="grid grid-cols-3 gap-2">
                         {durationOptions.map((item) => (
-                          <OptionButton key={item} active={seconds === item} onClick={() => setSeconds(item)}>{item}s</OptionButton>
+                          <OptionButton key={item} active={effectiveSeconds === item} onClick={() => setSeconds(item)}>{item}s</OptionButton>
                         ))}
                       </div>
                     </div>
@@ -532,7 +543,7 @@ export default function NovaGenerationStudio({
                     ? `Esta geração usa 0 créditos. Restam ${freeBucket?.remaining ?? "—"} de ${freeBucket?.limit ?? "—"} hoje.`
                     : isImage
                       ? "Cada imagem será uma variação única do mesmo prompt."
-                      : `Vídeo de ${seconds}s usa aproximadamente ${seconds * 24} créditos.`}
+                      : `Vídeo de ${effectiveSeconds}s usa aproximadamente ${effectiveSeconds * 24} créditos.`}
                 </div>
 
                 <button
@@ -546,8 +557,8 @@ export default function NovaGenerationStudio({
                     : quotaExhausted
                       ? "Limite diário utilizado"
                       : isBrandedFree
-                        ? isImage ? "GERAR IMAGEM GRÁTIS" : `GERAR VÍDEO GRÁTIS · ${seconds}s`
-                        : isImage ? `Gerar imagens · ${imageCount}` : `Gerar vídeo · ${seconds}s`}
+                        ? isImage ? "GERAR IMAGEM GRÁTIS" : `GERAR VÍDEO GRÁTIS · ${effectiveSeconds}s`
+                        : isImage ? `Gerar imagens · ${effectiveImageCount}` : `Gerar vídeo · ${effectiveSeconds}s`}
                 </button>
               </div>
             </aside>
@@ -580,7 +591,7 @@ export default function NovaGenerationStudio({
                   : `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(fileName)}`;
 
                 return (
-                  <div key={index} className="mx-auto w-full max-w-[920px] overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-3">
+                  <div key={`${url}-${index}`} className="mx-auto w-full max-w-[920px] overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-3">
                     {isImage ? (
                       <img src={url} alt={`Generated ${index + 1}`} className="max-h-[70vh] w-full rounded-xl object-contain" />
                     ) : (
