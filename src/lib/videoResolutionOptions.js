@@ -1,4 +1,13 @@
 export const VIDEO_RESOLUTION_OPTIONS_BY_MODEL_MODE = {
+  "wan21-free": {
+    "text-to-video": [
+      ["480p", { label: "480p · FREE" }],
+    ],
+    "image-to-video": [
+      ["480p", { label: "480p · FREE" }],
+    ],
+  },
+
   wan: {
     "text-to-video": [
       ["480p", { label: "480p" }],
