@@ -2,10 +2,6 @@ const CLOUDFLARE_AI_BASE = "https://api.cloudflare.com/client/v4/accounts";
 const DEFAULT_NOVA_IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell";
 const LEGACY_FREE_IMAGE_BASE = "https://image.pollinations.ai/prompt";
 
-// Keep the NOVA included image route usable even when a dedicated Cloudflare
-// Workers AI account has not been attached to this deployment yet. The route
-// reads this env var after importing this module, so a safe default keeps the
-// server-side NOVA alias configured without exposing an engine to the browser.
 if (!process.env.NOVA_IMAGE_FREE_ENGINE_MODEL) {
   process.env.NOVA_IMAGE_FREE_ENGINE_MODEL = DEFAULT_NOVA_IMAGE_MODEL;
 }
@@ -54,7 +50,7 @@ async function runAnonymousFreeImage({ prompt, seed } = {}) {
 
     const bytes = Buffer.from(await response.arrayBuffer());
     if (!bytes.length) throw new Error("NOVA fallback image engine returned an empty image");
-    if (bytes.length > 4_000_000) throw new Error("NOVA fallback image output is too large");
+    if (bytes.length > 8_000_000) throw new Error("NOVA fallback image output is too large");
 
     return {
       images: [
@@ -70,18 +66,12 @@ async function runAnonymousFreeImage({ prompt, seed } = {}) {
 }
 
 export function canUseCloudflareWorkersAI() {
-  // A dedicated Workers AI account is preferred, but the server-side anonymous
-  // fallback keeps NOVA IMAGEM FREE operational on deployments without it.
   return true;
 }
 
-export async function runCloudflareImage({ model, prompt, steps = 4, seed } = {}) {
+async function runPrimaryCloudflareImage({ model, prompt, steps = 4, seed } = {}) {
   const creds = credentials();
-
-  if (!creds) {
-    return runAnonymousFreeImage({ prompt, seed });
-  }
-
+  if (!creds) throw new Error("Cloudflare Workers AI credentials are not configured");
   if (!model || !String(model).startsWith("@cf/")) {
     throw new Error("Invalid Cloudflare-hosted model");
   }
@@ -133,4 +123,17 @@ export async function runCloudflareImage({ model, prompt, steps = 4, seed } = {}
       },
     ],
   };
+}
+
+export async function runCloudflareImage({ model, prompt, steps = 4, seed } = {}) {
+  try {
+    return await runPrimaryCloudflareImage({ model, prompt, steps, seed });
+  } catch (primaryError) {
+    console.error("[NOVA_IMAGE] primary engine failed; using free fallback", {
+      message: primaryError?.message || String(primaryError),
+      status: primaryError?.status || null,
+    });
+
+    return runAnonymousFreeImage({ prompt, seed });
+  }
 }
