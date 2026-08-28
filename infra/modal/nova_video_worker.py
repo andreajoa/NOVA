@@ -1,21 +1,24 @@
 """Private-engine adapter for NOVA VIDEO.
 
-The public NOVA repository intentionally contains no underlying model identifier
-or provider-facing product name. Deployment configuration is supplied through a
-private Modal Secret named `nova-video-engine`:
+The public NOVA repository intentionally contains no underlying model identifier.
+Deployment configuration is supplied through a private Modal Secret named
+`nova-video-engine`:
 
-  NOVA_VIDEO_MODEL_REPO=<private approved model repository id>
+  NOVA_VIDEO_T2V_MODEL_REPO=<private approved text-to-video repository id>
+  NOVA_VIDEO_I2V_MODEL_REPO=<private approved image-to-video repository id>
   NOVA_VIDEO_WORKER_SECRET=<same value used by the NOVA server>
   NOVA_VIDEO_STEPS=<optional inference steps>
 
 The HTTP endpoint only acknowledges jobs. GPU generation continues in a durable
-background invocation and writes the MP4 directly to NOVA's pre-signed R2 target.
+background invocation, writes the MP4 directly to NOVA's pre-signed R2 target,
+and calls NOVA back when the job completes or fails.
 """
 
 from __future__ import annotations
 
 import hmac
 import os
+import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -64,7 +67,6 @@ def _dimensions(aspect_ratio: str) -> tuple[int, int]:
 
 
 def _frames_for_duration(seconds: int) -> int:
-    # 24 fps and an 8n+1 frame count is accepted by the approved NOVA engine.
     return (max(5, min(10, int(seconds))) * 24) + 1
 
 
@@ -75,12 +77,77 @@ def _authorized(request_secret: str | None) -> bool:
     return hmac.compare_digest(str(request_secret or ""), expected)
 
 
+def _download(url: str, destination: Path) -> None:
+    import requests
+
+    if not url.startswith("https://"):
+        raise ValueError("Only HTTPS media URLs are accepted")
+    with requests.get(url, stream=True, timeout=60) as response:
+        response.raise_for_status()
+        with destination.open("wb") as handle:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    handle.write(chunk)
+
+
+def _extract_last_frame(video_path: Path, frame_path: Path) -> None:
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-sseof",
+            "-0.15",
+            "-i",
+            str(video_path),
+            "-frames:v",
+            "1",
+            str(frame_path),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _concat_videos(first: Path, second: Path, output: Path) -> None:
+    list_file = output.with_suffix(".txt")
+    list_file.write_text(
+        f"file '{first.as_posix()}'\nfile '{second.as_posix()}'\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(list_file),
+            "-an",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
+            str(output),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 @app.cls(
     image=worker_image,
     gpu="L4",
     volumes={str(MODEL_CACHE): model_volume},
     secrets=[engine_secret],
-    timeout=10 * 60,
+    timeout=12 * 60,
     scaledown_window=60,
     max_containers=2,
 )
@@ -90,15 +157,30 @@ class NovaVideoEngine:
         import torch
         from diffusers import DiffusionPipeline
 
-        model_repo = os.environ.get("NOVA_VIDEO_MODEL_REPO", "").strip()
-        if not model_repo:
-            raise RuntimeError("NOVA video engine is not configured")
+        t2v_repo = os.environ.get("NOVA_VIDEO_T2V_MODEL_REPO", "").strip()
+        i2v_repo = os.environ.get("NOVA_VIDEO_I2V_MODEL_REPO", "").strip()
+        if not t2v_repo or not i2v_repo:
+            raise RuntimeError("NOVA video engine repositories are not configured")
 
-        self.pipe = DiffusionPipeline.from_pretrained(
-            model_repo,
+        self.t2v = DiffusionPipeline.from_pretrained(
+            t2v_repo,
             torch_dtype=torch.bfloat16,
         ).to("cuda")
+        self.i2v_repo = i2v_repo
+        self.i2v = None
         model_volume.commit()
+
+    def _image_pipeline(self):
+        if self.i2v is None:
+            import torch
+            from diffusers import DiffusionPipeline
+
+            self.i2v = DiffusionPipeline.from_pretrained(
+                self.i2v_repo,
+                torch_dtype=torch.bfloat16,
+            ).to("cuda")
+            model_volume.commit()
+        return self.i2v
 
     @modal.method()
     def generate(self, payload: dict) -> dict:
@@ -147,7 +229,7 @@ class NovaVideoEngine:
                 raise ValueError("Prompt is required")
             if not upload_url or not public_url:
                 raise ValueError("NOVA output target is required")
-            if task not in {"text-to-video", "image-to-video"}:
+            if task not in {"text-to-video", "image-to-video", "continue-video"}:
                 raise ValueError("Unsupported NOVA video task")
 
             generator = None
@@ -164,24 +246,45 @@ class NovaVideoEngine:
                 "generator": generator,
             }
 
-            if task == "image-to-video":
-                image_url = str(payload.get("image_url") or "")
-                if not image_url.startswith(("http://", "https://")):
-                    raise ValueError("A public reference image URL is required")
-                request_args["image"] = load_image(image_url)
-
-            frames = self.pipe(**request_args).frames[0]
-
+            source_video = None
             with tempfile.TemporaryDirectory() as tmpdir:
-                output_path = Path(tmpdir) / "nova-video.mp4"
-                export_to_video(frames, output_path, fps=24)
+                tmp = Path(tmpdir)
+
+                if task == "image-to-video":
+                    image_url = str(payload.get("image_url") or "")
+                    if not image_url.startswith("https://"):
+                        raise ValueError("A public HTTPS reference image is required")
+                    request_args["image"] = load_image(image_url)
+                    pipeline = self._image_pipeline()
+                elif task == "continue-video":
+                    source_url = str(payload.get("source_video_url") or "")
+                    if not source_url.startswith("https://"):
+                        raise ValueError("A NOVA source video is required")
+                    source_video = tmp / "source.mp4"
+                    last_frame = tmp / "last-frame.png"
+                    _download(source_url, source_video)
+                    _extract_last_frame(source_video, last_frame)
+                    request_args["image"] = load_image(str(last_frame))
+                    pipeline = self._image_pipeline()
+                else:
+                    pipeline = self.t2v
+
+                frames = pipeline(**request_args).frames[0]
+                segment_path = tmp / "segment.mp4"
+                export_to_video(frames, segment_path, fps=24)
+
+                output_path = segment_path
+                if source_video is not None:
+                    combined_path = tmp / "combined.mp4"
+                    _concat_videos(source_video, segment_path, combined_path)
+                    output_path = combined_path
 
                 with output_path.open("rb") as handle:
                     response = requests.put(
                         upload_url,
                         data=handle,
                         headers={"Content-Type": "video/mp4"},
-                        timeout=120,
+                        timeout=180,
                     )
                 response.raise_for_status()
 
@@ -205,7 +308,12 @@ def api():
 
     @web.get("/health")
     async def health():
-        return {"ok": True}
+        configured = bool(
+            os.environ.get("NOVA_VIDEO_T2V_MODEL_REPO")
+            and os.environ.get("NOVA_VIDEO_I2V_MODEL_REPO")
+            and os.environ.get("NOVA_VIDEO_WORKER_SECRET")
+        )
+        return {"ok": configured}
 
     @web.post("/")
     async def generate_video(request: Request):
