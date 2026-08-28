@@ -6,10 +6,22 @@ import { extractGeneratedMediaUrl } from "@/lib/generatedMediaUrl";
 import { resolveGenerationSelection } from "@/lib/generationCatalog";
 import {
   checkAndDebitFreeGeneration,
+  getFreeGenerationPolicy,
   refundFreeGeneration,
 } from "@/lib/freeGenerationQuota";
+import {
+  reserveCloudflareFreeImage,
+  refundCloudflareFreeImage,
+} from "@/lib/freeProviderBudget";
+import {
+  canUseCloudflareWorkersAI,
+  runCloudflareImage,
+} from "@/lib/cloudflareAiClient";
+import {
+  canUseZeroCostVideoWorker,
+  runZeroCostVideo,
+} from "@/lib/zeroCostVideoClient";
 import { freeImageDimensions } from "@/lib/openModelWorkflows";
-import { runOnRunPod, shouldUseRunPod } from "@/lib/runpodClient";
 import {
   debitApiCredits,
   debitGenerationCredits,
@@ -33,35 +45,23 @@ function normalizeSeconds(value) {
   return Math.max(1, Math.min(MAX_SECONDS, Math.ceil(n)));
 }
 
-function getFalErrorDetails(err) {
+function providerErrorDetails(err) {
   return {
     name: err?.name || null,
+    code: err?.code || null,
     message: err?.message || String(err),
     status: err?.status || err?.statusCode || err?.response?.status || null,
-    body: err?.body || err?.response?.body || err?.response?.data || null,
     cause: err?.cause?.message || null,
   };
 }
 
-function falEnvStatus() {
-  const key = process.env.FAL_KEY || "";
+function publicMediaPayload(payload) {
+  const mediaUrl = extractGeneratedMediaUrl(payload) || null;
   return {
-    exists: Boolean(key),
-    length: key.length,
-    hasColon: key.includes(":"),
-    prefix: key ? `${key.slice(0, 8)}...` : null,
-  };
-}
-
-function withGeneratedMediaUrls(payload, rawOutput = null) {
-  const mediaUrl = extractGeneratedMediaUrl(payload) || extractGeneratedMediaUrl(rawOutput);
-  return {
-    ...payload,
     mediaUrl,
-    videoUrl: payload?.videoUrl || mediaUrl,
-    url: payload?.url || mediaUrl,
-    outputUrl: payload?.outputUrl || mediaUrl,
-    rawOutput: payload?.rawOutput || rawOutput || payload?.rawOutput,
+    videoUrl: mediaUrl,
+    url: mediaUrl,
+    outputUrl: mediaUrl,
   };
 }
 
@@ -98,21 +98,35 @@ function imageTrialPaywallPayload({ imageGensUsed, imageMonthlyLimit }) {
   };
 }
 
-function freeLimitPayload({ kind, used, limit }) {
-  const noun = kind === "video" ? "video" : "image";
+function freeDailyLimitPayload({ kind, used, limit, resetAt }) {
+  const noun = kind === "video" ? "vídeos" : "imagens";
   return {
     success: false,
-    code: "FREE_MODEL_LIMIT_REACHED",
-    error: "FREE_MODEL_LIMIT_REACHED",
-    message: `You used your ${limit} free ${noun}${limit === 1 ? "" : "s"} for this month. Upgrade for more generations and premium models.`,
+    code: "FREE_MODEL_DAILY_LIMIT_REACHED",
+    error: "FREE_MODEL_DAILY_LIMIT_REACHED",
+    message: `Você atingiu o limite de ${limit} ${noun} incluídos hoje. Seu limite renova diariamente.`,
     kind,
     freeUsed: used,
     freeLimit: limit,
     freeRemaining: Math.max(0, limit - used),
+    resetAt,
     plans: {
       annual: { label: "Annual", price: "$5/mo", href: "/checkout/plan?plan=basic&billing=annual" },
       monthly: { label: "Monthly", price: "$7/mo", href: "/checkout/plan?plan=basic&billing=monthly" },
     },
+  };
+}
+
+function freeDurationPayload(policy) {
+  return {
+    success: false,
+    code: "FREE_VIDEO_DURATION_NOT_ALLOWED",
+    error: "FREE_VIDEO_DURATION_NOT_ALLOWED",
+    message: policy.paid
+      ? "NOVA VIDEO FREE permite vídeos de 5 ou 10 segundos no seu plano."
+      : "NOVA VIDEO FREE permite vídeos de 5 segundos no plano gratuito.",
+    allowedDurations: policy.videoDurations,
+    maxSeconds: policy.maxVideoSeconds,
   };
 }
 
@@ -184,49 +198,40 @@ function normalizeResolutionForEndpoint(endpoint, value) {
   return value;
 }
 
-function normalizeWan21Aspect(value, imageToVideo = false) {
+function normalizeFreeVideoAspect(value, imageToVideo = false) {
   const raw = String(value || "");
   if (imageToVideo && raw === "1:1") return "1:1";
   if (raw === "9:16") return "9:16";
   return "16:9";
 }
 
-function buildFreeInput(selection, body, prompt) {
+function buildFreeInput(selection, body, prompt, seconds) {
   if (selection.type === "image") {
     const dimensions = freeImageDimensions(body.aspect_ratio || "1:1");
-    const input = {
+    return {
       prompt,
       image_size: dimensions,
       num_images: 1,
       seed: Number.isFinite(Number(body.seed)) ? Number(body.seed) : undefined,
-      enable_safety_checker: true,
-      output_format: "png",
+      output_format: "jpg",
       aspect_ratio: body.aspect_ratio || "1:1",
+      num_inference_steps: 4,
     };
-
-    if (selection.modelKey === "flux-schnell") input.num_inference_steps = 4;
-    if (selection.modelKey === "z-image-turbo") input.num_inference_steps = 8;
-    if (body.image_url) input.image_url = body.image_url;
-    if (body.strength != null) input.strength = Number(body.strength);
-    return input;
   }
 
-  if (selection.modelKey === "wan21-free") {
+  if (selection.modelKey === "nova-video-free") {
     const imageToVideo = selection.modeKey === "image-to-video";
     return {
+      task: imageToVideo ? "image-to-video" : "text-to-video",
       prompt,
       ...(body.negative_prompt && { negative_prompt: body.negative_prompt }),
       ...(imageToVideo && body.image_url && { image_url: body.image_url }),
-      num_frames: 81,
+      num_frames: (seconds * 16) + 1,
       frames_per_second: 16,
       resolution: "480p",
-      aspect_ratio: normalizeWan21Aspect(body.aspect_ratio, imageToVideo),
-      num_inference_steps: 30,
-      enable_safety_checker: true,
-      enable_prompt_expansion: false,
-      ...(selection.modeKey === "text-to-video" && { turbo_mode: true }),
-      ...(selection.modeKey === "image-to-video" && { acceleration: "regular" }),
-      duration: 5,
+      aspect_ratio: normalizeFreeVideoAspect(body.aspect_ratio, imageToVideo),
+      duration: seconds,
+      seed: Number.isFinite(Number(body.seed)) ? Number(body.seed) : undefined,
     };
   }
 
@@ -250,20 +255,8 @@ function buildStandardInput(selection, body, prompt, seconds) {
 }
 
 function normalizeFalInput(selection, input) {
-  const endpoint = selection.endpoint;
   let safe = { ...input };
-
-  if (selection.modelKey === "wan21-free") {
-    delete safe.duration;
-    if (selection.modeKey === "image-to-video") delete safe.turbo_mode;
-  }
-
-  if (selection.modelKey === "z-image-turbo" || selection.modelKey === "flux-schnell") {
-    delete safe.aspect_ratio;
-    delete safe.negative_prompt;
-  }
-
-  safe = normalizeGptImageInput(endpoint, safe);
+  safe = normalizeGptImageInput(selection.endpoint, safe);
   return Object.fromEntries(Object.entries(safe).filter(([, value]) => value !== undefined));
 }
 
@@ -279,23 +272,55 @@ function mediaExists(value, seen = new Set()) {
 }
 
 async function executeGeneration(selection, input) {
-  const target = selection.runpodTarget || selection.endpoint;
+  if (selection.engine === "nova-native-image") {
+    const configuredModel = process.env.NOVA_IMAGE_FREE_ENGINE_MODEL;
+    if (!configuredModel || !canUseCloudflareWorkersAI()) {
+      const error = new Error("NOVA image free engine is not configured");
+      error.code = "NOVA_FREE_ENGINE_NOT_CONFIGURED";
+      throw error;
+    }
 
-  if (selection.model?.providerPreference === "runpod" && shouldUseRunPod(target)) {
+    const budget = await reserveCloudflareFreeImage();
+    if (!budget.ok) {
+      const error = new Error("NOVA free image capacity is exhausted for today");
+      error.code = "NOVA_FREE_CAPACITY_EXHAUSTED";
+      error.resetAt = budget.resetAt;
+      throw error;
+    }
+
     try {
-      const output = await runOnRunPod(target, input);
-      if (!mediaExists(output)) throw new Error("RunPod completed without a media output");
-      return { provider: "runpod", output, raw: output };
-    } catch (error) {
-      console.warn("[NOVA_OPEN_MODEL] RunPod failed; falling back to fal.ai", {
-        model: selection.modelKey,
-        mode: selection.modeKey,
-        error: error?.message || String(error),
+      const output = await runCloudflareImage({
+        model: configuredModel,
+        prompt: input.prompt,
+        steps: 4,
+        seed: input.seed,
       });
+      if (!mediaExists(output)) throw new Error("NOVA image engine returned no media");
+      return { provider: "nova", output };
+    } catch (error) {
+      await refundCloudflareFreeImage().catch(() => {});
+      throw error;
     }
   }
 
-  if (!process.env.FAL_KEY) {
+  if (selection.engine === "nova-zero-cost-video") {
+    if (!canUseZeroCostVideoWorker()) {
+      const error = new Error("NOVA zero-cost video engine is not configured");
+      error.code = "NOVA_FREE_VIDEO_ENGINE_NOT_CONFIGURED";
+      throw error;
+    }
+    const output = await runZeroCostVideo(input);
+    if (!mediaExists(output)) throw new Error("NOVA video engine returned no media");
+    return { provider: "nova", output };
+  }
+
+  if (selection.zeroCostOnly) {
+    const error = new Error("NOVA zero-cost generation engine is unavailable");
+    error.code = "NOVA_ZERO_COST_ENGINE_UNAVAILABLE";
+    throw error;
+  }
+
+  if (!process.env.FAL_KEY || !selection.endpoint) {
     throw new Error("No generation provider is currently available for this model.");
   }
 
@@ -304,7 +329,7 @@ async function executeGeneration(selection, input) {
     logs: true,
   });
   const output = falResult?.data ?? falResult;
-  if (!mediaExists(output)) throw new Error("fal.ai completed without a media output");
+  if (!mediaExists(output)) throw new Error("Generation provider completed without a media output");
   return { provider: "fal", output, raw: falResult };
 }
 
@@ -348,12 +373,26 @@ export async function POST(req) {
     );
   }
 
-  const requestedSeconds = normalizeSeconds(body.seconds || body.duration);
-  const seconds = selection.isFree && selection.type === "video" ? 5 : requestedSeconds;
-  const creditsRequired = seconds * VIDEO_CREDITS_PER_SECOND;
   const isImage = selection.type === "image";
   const adminCheck = !isApiRequest && (await isAdminUser(userId));
+  const dashboardAccount = !isApiRequest
+    ? await ensureUserGenerationAccount(userId)
+    : null;
+  const freePolicy = selection.isFree
+    ? getFreeGenerationPolicy(dashboardAccount?.plan || "trial")
+    : null;
 
+  const requestedSeconds = normalizeSeconds(body.seconds || body.duration);
+  let seconds = requestedSeconds;
+
+  if (selection.isFree && selection.type === "video") {
+    if (!freePolicy.videoDurations.includes(requestedSeconds)) {
+      return NextResponse.json(freeDurationPayload(freePolicy), { status: 400 });
+    }
+    seconds = requestedSeconds;
+  }
+
+  const creditsRequired = seconds * VIDEO_CREDITS_PER_SECOND;
   let remainingCredits = null;
   let billingWallet = "dashboard";
   let freeQuotaDebit = null;
@@ -380,18 +419,23 @@ export async function POST(req) {
       remainingCredits = debit.remainingBalance;
       billingWallet = "api";
     } else if (selection.isFree) {
-      freeQuotaDebit = await checkAndDebitFreeGeneration(userId, selection.freeQuotaKind);
+      freeQuotaDebit = await checkAndDebitFreeGeneration(
+        userId,
+        selection.freeQuotaKind,
+        dashboardAccount?.plan || "trial"
+      );
       if (!freeQuotaDebit.ok) {
         return NextResponse.json(
-          freeLimitPayload({
+          freeDailyLimitPayload({
             kind: selection.freeQuotaKind,
             used: freeQuotaDebit.used,
             limit: freeQuotaDebit.limit,
+            resetAt: freeQuotaDebit.resetAt,
           }),
           { status: 402 }
         );
       }
-      billingWallet = "free_open";
+      billingWallet = "nova_included";
     } else if (isImage) {
       const imageCheck = await checkAndDebitImageGen(userId);
       if (!imageCheck.ok) {
@@ -405,7 +449,7 @@ export async function POST(req) {
       }
       billingWallet = "image_plan";
     } else {
-      const account = await ensureUserGenerationAccount(userId);
+      const account = dashboardAccount || await ensureUserGenerationAccount(userId);
       if (account.credits < creditsRequired) {
         return NextResponse.json(
           dashboardPaywallPayload({ currentCredits: account.credits, creditsRequired, seconds }),
@@ -431,66 +475,93 @@ export async function POST(req) {
   }
 
   const generationInput = selection.isFree
-    ? buildFreeInput(selection, body, prompt)
+    ? buildFreeInput(selection, body, prompt, seconds)
     : buildStandardInput(selection, body, prompt, seconds);
 
   try {
     const execution = await executeGeneration(selection, generationInput);
     const outputUrl = extractGeneratedMediaUrl(execution.output) || null;
+    const mediaFields = publicMediaPayload(execution.output);
 
-    return NextResponse.json(
-      withGeneratedMediaUrls(
-        {
-          success: true,
-          provider: execution.provider,
-          source: adminCheck ? "admin" : isApiRequest ? "api" : "dashboard",
-          data: {
-            type: selection.type,
-            url: outputUrl,
-            model: selection.modelKey,
-            mode: selection.modeKey,
-            seconds: isImage ? null : seconds,
-            raw: execution.output,
-          },
-          billing: {
-            creditsPerSecond: isImage ? 0 : VIDEO_CREDITS_PER_SECOND,
-            creditsCharged:
-              adminCheck || (!isApiRequest && selection.isFree)
+    const responsePayload = {
+      success: true,
+      provider: selection.isFree ? "nova" : execution.provider,
+      source: adminCheck ? "admin" : isApiRequest ? "api" : "dashboard",
+      ...mediaFields,
+      data: {
+        type: selection.type,
+        url: outputUrl,
+        model: selection.modelKey,
+        mode: selection.modeKey,
+        seconds: isImage ? null : seconds,
+        ...(!selection.isFree && { raw: execution.output }),
+      },
+      billing: {
+        creditsPerSecond: isImage ? 0 : VIDEO_CREDITS_PER_SECOND,
+        creditsCharged:
+          adminCheck || (!isApiRequest && selection.isFree)
+            ? 0
+            : isApiRequest
+              ? (isImage ? 1 : creditsRequired)
+              : isImage
                 ? 0
-                : isApiRequest
-                  ? (isImage ? 1 : creditsRequired)
-                  : isImage
-                    ? 0
-                    : creditsRequired,
-            remainingCredits,
-            wallet: billingWallet,
-            freeModel: selection.isFree,
-            ...(freeQuotaDebit && {
-              freeUsed: freeQuotaDebit.used,
-              freeLimit: freeQuotaDebit.limit,
-              freeRemaining: freeQuotaDebit.remaining,
-            }),
-          },
-        },
-        execution.raw
-      )
-    );
+                : creditsRequired,
+        remainingCredits,
+        wallet: billingWallet,
+        freeModel: selection.isFree,
+        ...(freeQuotaDebit && {
+          freeUsed: freeQuotaDebit.used,
+          freeLimit: freeQuotaDebit.limit,
+          freeRemaining: freeQuotaDebit.remaining,
+          resetAt: freeQuotaDebit.resetAt,
+        }),
+      },
+    };
+
+    if (!selection.isFree && execution.raw) {
+      responsePayload.rawOutput = execution.raw;
+    }
+
+    return NextResponse.json(responsePayload);
   } catch (err) {
     if (freeQuotaDebit?.ok && !isApiRequest && !adminCheck) {
       await refundFreeGeneration(userId, selection.freeQuotaKind).catch((refundError) => {
-        console.error("[NOVA_OPEN_MODEL] failed to refund free quota", refundError);
+        console.error("[NOVA_FREE] failed to refund daily quota", refundError);
       });
     }
 
     console.error("NOVA generation error", {
-      model: selection.modelKey,
+      modelAlias: selection.modelKey,
       mode: selection.modeKey,
-      endpoint: selection.endpoint,
       type: selection.type,
       freeModel: selection.isFree,
-      falEnv: falEnvStatus(),
-      error: getFalErrorDetails(err),
+      error: providerErrorDetails(err),
     });
+
+    if (err?.code === "NOVA_FREE_CAPACITY_EXHAUSTED") {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "NOVA_FREE_CAPACITY_EXHAUSTED",
+          error: "NOVA_FREE_CAPACITY_EXHAUSTED",
+          message: "A capacidade gratuita de hoje foi utilizada. Tente novamente após a renovação diária.",
+          resetAt: err.resetAt || freePolicy?.resetAt || null,
+        },
+        { status: 429 }
+      );
+    }
+
+    if (err?.code === "NOVA_FREE_VIDEO_ENGINE_NOT_CONFIGURED") {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "NOVA_FREE_VIDEO_TEMPORARILY_UNAVAILABLE",
+          error: "NOVA_FREE_VIDEO_TEMPORARILY_UNAVAILABLE",
+          message: "NOVA VIDEO FREE ainda não está disponível neste ambiente.",
+        },
+        { status: 503 }
+      );
+    }
 
     return NextResponse.json(
       {
