@@ -1,137 +1,108 @@
-# NOVA Free/Open Models
+# NOVA Included Generation
 
-This feature adds a controlled free acquisition layer without removing NOVA's premium catalog.
+This feature adds a branded acquisition layer without exposing the inference engine behind each NOVA experience.
 
-## Product strategy
+## Public product names
 
-Free users can start creating immediately with lower-cost open-weight models. Premium models, higher resolution, larger volume and paid-plan credits remain the monetization path.
+Only these names are presented to users:
 
-Default free starter pool (shared across the free models and lifetime-based per account):
+- `NOVA IMAGEM FREE`
+- `NOVA VIDEO FREE`
 
-- Images: 10 starter generations per signed-in account.
-- Video: 1 starter generation per signed-in account.
-- Free image output: one image per request, capped around 1 MP / 1K.
-- Free video output: Wan 2.1, 5 seconds, 480p, 81 frames.
-- NOVA API requests are never free: API-key requests keep using the API credit wallet.
-- Admin requests bypass the user quota.
-- A failed free generation is refunded to the user's free quota.
+The browser receives only NOVA model aliases (`nova-image-free`, `nova-video-free`). Provider endpoints and underlying model identifiers must remain server-side deployment configuration.
 
-Override the acquisition budget with environment variables:
+## Daily allowances
 
-```bash
-NOVA_FREE_IMAGE_LIMIT=10
-NOVA_FREE_VIDEO_LIMIT=1
-```
+### Trial / free account
 
-The default limits are lifetime starter allowances rather than monthly allowances. That prevents a non-paying account from creating recurring provider cost forever and makes the free models a conversion funnel instead of a permanent subsidy.
+- NOVA IMAGEM FREE: 10 images per UTC day.
+- NOVA VIDEO FREE: 3 videos per UTC day.
+- Included video duration: 5 seconds.
+- Included video resolution: 480p.
 
-## Models
+### Paid plans
 
-### Image
+- NOVA IMAGEM FREE: 10 images per UTC day by default.
+- NOVA VIDEO FREE: 10 videos per UTC day.
+- Included video durations: 5 or 10 seconds.
+- Included video resolution: 480p.
+- Paid users keep their normal premium credits/models in addition to this included pool.
 
-- `flux-schnell` — FLUX.1 Schnell · FREE
-  - Preferred provider: RunPod when configured.
-  - High-availability fallback: `fal-ai/flux/schnell`.
-  - 4 inference steps, one image, ~1K max in the free path.
+All counters reset at 00:00 UTC. Failed included generations refund the user's daily allowance.
 
-- `z-image-turbo` — Z-Image Turbo · FREE
-  - Text-to-image: `fal-ai/z-image/turbo`.
-  - Image-to-image: `fal-ai/z-image/turbo/image-to-image`.
-  - RunPod hook is available through `RUNPOD_ENDPOINT_Z_IMAGE` for a compatible NOVA worker.
-
-### Video
-
-- `wan21-free` — Wan 2.1 · FREE
-  - Text-to-video fallback: `fal-ai/wan-t2v`.
-  - Image-to-video fallback: `fal-ai/wan-i2v`.
-  - Free route forces 480p / 81 frames / ~5 seconds.
-  - RunPod hook is available through `RUNPOD_ENDPOINT_WAN21` for a compatible NOVA worker.
-
-Wan 2.2 remains in the premium catalog deliberately. The free model is the acquisition experience; Wan 2.2, Seedance, Kling, Veo and the other premium models remain upgrade incentives.
-
-## Provider routing and reliability
-
-The browser no longer decides which provider endpoint the server executes. It sends `model` and `mode`; `/api/generate` resolves the approved endpoint from NOVA's server-side model catalog.
-
-For free/open models the order is:
-
-1. RunPod, if the compatible endpoint and `RUNPOD_API_KEY` are configured.
-2. fal.ai fallback, using `FAL_KEY`.
-3. If neither provider can return media, the request fails with HTTP 503 and the dashboard free quota is refunded.
-
-This gives NOVA a migration path from acquisition spend on fal.ai to lower-cost self-hosted inference without changing the UI or model IDs.
-
-## FLUX Schnell on RunPod
-
-The repository includes the official RunPod/ComfyUI-compatible FLUX Schnell workflow in code (`src/lib/openModelWorkflows.js`). It uses the model filenames from RunPod's official `worker-comfyui` FLUX.1 Schnell build:
-
-- `flux1-schnell.safetensors`
-- `t5xxl_fp8_e4m3fn.safetensors`
-- `clip_l.safetensors`
-- `ae.safetensors`
-
-Configure:
+Override policy without changing source:
 
 ```bash
-RUNPOD_API_KEY=...
-RUNPOD_ENDPOINT_FLUX_SCHNELL=...
+NOVA_FREE_IMAGE_DAILY_LIMIT=10
+NOVA_FREE_VIDEO_DAILY_LIMIT=3
+NOVA_FREE_VIDEO_MAX_SECONDS=5
+NOVA_PAID_IMAGE_DAILY_LIMIT=10
+NOVA_PAID_VIDEO_DAILY_LIMIT=10
+NOVA_PAID_FREE_VIDEO_MAX_SECONDS=10
 ```
 
-The RunPod Serverless endpoint should use the official ComfyUI FLUX Schnell worker/build or an equivalent image containing those exact model files and standard ComfyUI nodes.
+## Image zero-cost protection
 
-Keep minimum workers at 0 while traffic is small so idle GPU time does not erase NOVA's margin. Increase warm workers only after real demand justifies it.
-
-## Optional custom RunPod workers
-
-These variables are supported for compatible NOVA workers:
+The included image route is configured through server-only environment variables. Do not hard-code the underlying model identifier in client code or public documentation.
 
 ```bash
-RUNPOD_ENDPOINT_Z_IMAGE=...
-RUNPOD_ENDPOINT_WAN21=...
+NOVA_IMAGE_FREE_ENGINE_MODEL=...
+CLOUDFLARE_ACCOUNT_ID=...
+CLOUDFLARE_AI_API_TOKEN=...
 ```
 
-The generic NOVA worker input contracts are:
+`CLOUDFLARE_AI_API_TOKEN` is optional when the existing `CLOUDFLARE_API_TOKEN` already has the required Workers AI permission.
 
-Image:
+NOVA also applies a conservative application-level daily capacity cap to protect the account-level free inference allocation:
+
+```bash
+NOVA_CLOUDFLARE_IMAGE_DAILY_CAP=150
+```
+
+When that shared capacity is exhausted, NOVA stops the included image route until the daily reset instead of silently using a paid fallback.
+
+## Video zero-cost requirement
+
+`NOVA VIDEO FREE` is intentionally configured as zero-cost-only. It never silently falls back to a metered paid inference API.
+
+The production zero-cost video worker is configured only through environment variables:
+
+```bash
+NOVA_ZERO_COST_VIDEO_URL=...
+NOVA_ZERO_COST_VIDEO_SECRET=...
+```
+
+Until a production-capable zero-cost video worker is configured and tested, the route returns a controlled unavailable response. This is deliberate: NOVA must not create hidden inference spend just to keep the FREE badge online.
+
+Expected worker contract:
 
 ```json
 {
-  "model": "z-image-turbo",
-  "task": "text-to-image",
-  "prompt": "...",
-  "width": 1024,
-  "height": 1024,
-  "num_outputs": 1
+  "input": {
+    "task": "text-to-video",
+    "prompt": "...",
+    "duration": 5,
+    "resolution": "480p",
+    "aspect_ratio": "16:9",
+    "num_frames": 81,
+    "frames_per_second": 16
+  }
 }
 ```
 
-Video:
+For image-to-video the worker also receives `image_url`. Paid-plan included video may request 10 seconds and receives the corresponding frame count.
 
-```json
-{
-  "model": "wan21-free",
-  "task": "text-to-video",
-  "prompt": "...",
-  "duration": 5,
-  "resolution": "480p",
-  "aspect_ratio": "16:9",
-  "num_frames": 81,
-  "frames_per_second": 16
-}
-```
+## Security / white-label rules
 
-If these custom endpoints are absent or fail, the server automatically falls back to fal.ai.
+- Client components import `publicGenerationCatalog.js`, which contains no provider endpoints.
+- `/api/generate` resolves the private engine server-side.
+- The client does not send provider endpoints.
+- Included generation responses report the provider as `nova`.
+- Included responses do not expose raw provider payloads.
+- Generated filenames use NOVA names.
+- Legacy provider-facing free IDs are rejected by server-side selection.
+- Do not put the real underlying free engine/model ID in public source files, browser bundles, API docs, errors or analytics visible to end users.
 
-## Profit protection
+## Product funnel
 
-The free limits are intentionally separate from NOVA's paid credit wallet. Do not advertise them as unlimited.
-
-The default fallback acquisition cost is tightly bounded because:
-
-- FLUX Schnell free generation is capped to one ~1 MP image.
-- Z-Image Turbo free generation is capped to one ~1 MP image.
-- Wan 2.1 free video is capped to one 480p starter generation per account by default.
-- API/Claude usage still consumes purchased API credits.
-- Premium video remains credit-priced.
-
-Monitor conversion and provider spend before increasing the free limits.
+The included routes are acquisition/retention benefits, not replacements for the premium catalog. Users can start creating without credits, while paid plans continue to monetize higher-end models, higher resolution, larger volume and premium credits.
