@@ -50,42 +50,6 @@ function findImageUrl(value) {
   return null;
 }
 
-async function fetchImageAsDataUrl(imageUrl) {
-  const { controller, timer } = withTimeout(25000);
-  try {
-    const response = await fetch(imageUrl, {
-      method: "GET",
-      cache: "no-store",
-      signal: controller.signal,
-      headers: {
-        Accept: "image/avif,image/webp,image/png,image/jpeg,image/*",
-        "User-Agent": "NOVA-free-image/2.0",
-      },
-    });
-    if (!response.ok) throw new Error(`NOVA image download failed (${response.status})`);
-
-    const contentType = (response.headers.get("content-type") || "image/webp").split(";")[0];
-    if (!contentType.toLowerCase().startsWith("image/")) {
-      throw new Error("NOVA image runtime returned non-image content");
-    }
-
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (!bytes.length) throw new Error("NOVA image runtime returned an empty image");
-    if (bytes.length > 8_000_000) throw new Error("NOVA image output is too large");
-
-    return {
-      images: [
-        {
-          url: `data:${contentType};base64,${bytes.toString("base64")}`,
-          content_type: contentType,
-        },
-      ],
-    };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 async function runVerifiedFreeImage({ prompt, seed } = {}) {
   const actualSeed = Number.isFinite(Number(seed)) ? Number(seed) : Math.floor(Math.random() * 2_000_000_000);
   const submitUrl = `${HF_IMAGE_BASE}/gradio_api/call/${HF_IMAGE_API}`;
@@ -97,7 +61,7 @@ async function runVerifiedFreeImage({ prompt, seed } = {}) {
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        "User-Agent": "NOVA-free-image/2.0",
+        "User-Agent": "NOVA-free-image/2.1",
       },
       body: JSON.stringify({
         data: [
@@ -140,7 +104,7 @@ async function runVerifiedFreeImage({ prompt, seed } = {}) {
       signal: resultTimeout.controller.signal,
       headers: {
         Accept: "text/event-stream, application/json",
-        "User-Agent": "NOVA-free-image/2.0",
+        "User-Agent": "NOVA-free-image/2.1",
       },
     });
   } finally {
@@ -173,11 +137,17 @@ async function runVerifiedFreeImage({ prompt, seed } = {}) {
   const imageUrl = findImageUrl(completedData);
   if (!imageUrl) throw new Error("NOVA free image runtime returned no image URL");
 
-  return fetchImageAsDataUrl(imageUrl);
+  return {
+    images: [
+      {
+        url: imageUrl,
+        content_type: imageUrl.includes(".png") ? "image/png" : imageUrl.includes(".jpg") || imageUrl.includes(".jpeg") ? "image/jpeg" : "image/webp",
+      },
+    ],
+  };
 }
 
 export function canUseCloudflareWorkersAI() {
-  // The NOVA alias always has the verified public fallback available server-side.
   return true;
 }
 
