@@ -8,15 +8,15 @@ import {
   markFreeVideoJobCompleted,
   markFreeVideoJobFailed,
 } from "@/lib/freeVideoJobs";
-import {
-  isZeroCostFallbackPollUrl,
-  pollZeroCostFallbackJob,
-} from "@/lib/zeroCostVideoClient";
+import { isZeroCostFallbackPollUrl } from "@/lib/zeroCostVideoClient";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 90;
 
 const STALE_JOB_SECONDS = 15 * 60;
+const FALLBACK_POLL_TIMEOUT_MS = 55_000;
+const FALLBACK_VIDEO_BASE = "https://lightricks-ltx-2-3.hf.space";
 
 async function mediaExists(url) {
   const controller = new AbortController();
@@ -30,6 +30,103 @@ async function mediaExists(url) {
     return response.ok;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function findVideo(value) {
+  if (typeof value === "string") {
+    if (/^https?:\/\//i.test(value) && (/\.mp4(?:\?|#|$)/i.test(value) || /file=/i.test(value))) {
+      return value;
+    }
+    if (value.startsWith("/") && (/\.mp4(?:\?|#|$)/i.test(value) || /file=/i.test(value))) {
+      return `${FALLBACK_VIDEO_BASE}${value}`;
+    }
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findVideo(item);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  if (value && typeof value === "object") {
+    for (const key of ["url", "path", "video", "value"]) {
+      if (key in value) {
+        const found = findVideo(value[key]);
+        if (found) return found;
+      }
+    }
+    for (const item of Object.values(value)) {
+      const found = findVideo(item);
+      if (found) return found;
+    }
+  }
+
+  return null;
+}
+
+async function pollFallbackUntilResult(pollUrl) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FALLBACK_POLL_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(pollUrl, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        Accept: "text/event-stream, application/json",
+        "User-Agent": "NOVA-free-video-status/2.0",
+      },
+    });
+
+    if (!response.ok) {
+      if ([404, 408, 425, 429, 500, 502, 503, 504].includes(response.status)) {
+        return { status: "processing" };
+      }
+      return { status: "failed", errorCode: `UPSTREAM_${response.status}` };
+    }
+
+    const text = await response.text();
+    const blocks = text.replace(/\r\n/g, "\n").split("\n\n");
+
+    for (const block of blocks) {
+      if (block.includes("event: error")) {
+        return { status: "failed", errorCode: "UPSTREAM_GENERATION_ERROR" };
+      }
+
+      if (!block.includes("event: complete")) continue;
+
+      const dataLine = block.split("\n").find((line) => line.startsWith("data: "));
+      if (!dataLine) {
+        return { status: "failed", errorCode: "UPSTREAM_EMPTY_RESULT" };
+      }
+
+      let data;
+      try {
+        data = JSON.parse(dataLine.slice(6));
+      } catch {
+        return { status: "failed", errorCode: "UPSTREAM_INVALID_RESULT" };
+      }
+
+      const videoUrl = findVideo(data);
+      if (!videoUrl) {
+        return { status: "failed", errorCode: "UPSTREAM_NO_VIDEO" };
+      }
+
+      return { status: "completed", videoUrl };
+    }
+
+    return { status: "processing" };
+  } catch (error) {
+    if (error?.name === "AbortError") return { status: "processing" };
+    console.error("[NOVA_VIDEO] fallback status poll error", error?.message || error);
+    return { status: "processing" };
   } finally {
     clearTimeout(timer);
   }
@@ -61,7 +158,7 @@ export async function GET(req) {
   }
 
   if (job.status === "processing" && isZeroCostFallbackPollUrl(job.publicUrl)) {
-    const upstream = await pollZeroCostFallbackJob(job.publicUrl);
+    const upstream = await pollFallbackUntilResult(job.publicUrl);
 
     if (upstream.status === "completed" && upstream.videoUrl) {
       await markFreeVideoJobCompleted(job.id, upstream.videoUrl);
