@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - feat/free-open-image-video
     paths:
       - "infra/modal/**"
       - ".github/workflows/deploy-nova-video.yml"
