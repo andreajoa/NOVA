@@ -11,6 +11,21 @@ function UsagePill({ remaining, limit }) {
   );
 }
 
+function AvailabilityPill({ available }) {
+  return (
+    <span
+      className={
+        "rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] " +
+        (available
+          ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+          : "border-white/10 bg-white/[.04] text-white/35")
+      }
+    >
+      {available ? "Online" : "Em preparação"}
+    </span>
+  );
+}
+
 export default function FreeGenerationHub() {
   const [usage, setUsage] = useState(null);
 
@@ -21,8 +36,19 @@ export default function FreeGenerationHub() {
       .catch(() => {});
   }, []);
 
-  const image = usage?.image || { remaining: 10, limit: 10, resolution: "1K" };
-  const video = usage?.video || { remaining: 3, limit: 3, durations: [5], resolution: "480p" };
+  const image = usage?.image || {
+    remaining: 10,
+    limit: 10,
+    resolution: "1K",
+    available: false,
+  };
+  const video = usage?.video || {
+    remaining: 3,
+    limit: 3,
+    durations: [5],
+    resolution: "480p",
+    available: false,
+  };
 
   return (
     <main className="min-h-screen bg-[#020303] text-white">
@@ -49,19 +75,28 @@ export default function FreeGenerationHub() {
             <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#D7FF00]/10 blur-3xl" />
             <div className="relative">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="rounded-full bg-[#D7FF00] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-black">FREE</span>
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full bg-[#D7FF00] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-black">FREE</span>
+                  <AvailabilityPill available={image.available} />
+                </div>
                 <UsagePill remaining={image.remaining} limit={image.limit} />
               </div>
               <p className="mt-8 text-xs font-black uppercase tracking-[0.2em] text-[#D7FF00]">Imagem</p>
               <h2 className="mt-3 text-4xl font-black uppercase tracking-[-0.06em]">NOVA IMAGEM FREE</h2>
               <p className="mt-4 text-sm leading-7 text-white/48">Text to Image · {image.resolution || "1K"} · 1 imagem por geração · 0 créditos.</p>
-              <Link
-                href="/dashboard/models/nova-image-free/text-to-image"
-                className="mt-8 flex min-h-16 items-center justify-between rounded-2xl bg-[#D7FF00] px-5 text-sm font-black uppercase tracking-[0.12em] text-black no-underline"
-              >
-                <span>Gerar imagem grátis</span>
-                <span>→</span>
-              </Link>
+              {image.available ? (
+                <Link
+                  href="/dashboard/models/nova-image-free/text-to-image"
+                  className="mt-8 flex min-h-16 items-center justify-between rounded-2xl bg-[#D7FF00] px-5 text-sm font-black uppercase tracking-[0.12em] text-black no-underline"
+                >
+                  <span>Gerar imagem grátis</span>
+                  <span>→</span>
+                </Link>
+              ) : (
+                <div className="mt-8 flex min-h-16 items-center rounded-2xl border border-white/10 bg-white/[.035] px-5 text-sm font-black uppercase tracking-[0.12em] text-white/30">
+                  Geração de imagem em preparação
+                </div>
+              )}
             </div>
           </article>
 
@@ -69,7 +104,10 @@ export default function FreeGenerationHub() {
             <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-cyan-400/10 blur-3xl" />
             <div className="relative">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="rounded-full bg-[#D7FF00] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-black">FREE</span>
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full bg-[#D7FF00] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-black">FREE</span>
+                  <AvailabilityPill available={video.available} />
+                </div>
                 <UsagePill remaining={video.remaining} limit={video.limit} />
               </div>
               <p className="mt-8 text-xs font-black uppercase tracking-[0.2em] text-cyan-300">Vídeo</p>
@@ -78,20 +116,26 @@ export default function FreeGenerationHub() {
                 {video.resolution || "480p"} · duração disponível: {(video.durations || [5]).map((n) => `${n}s`).join(" ou ")} · 0 créditos.
               </p>
 
-              <div className="mt-8 grid gap-3 sm:grid-cols-2">
-                <Link
-                  href="/dashboard/models/nova-video-free/text-to-video"
-                  className="flex min-h-16 items-center justify-between rounded-2xl bg-[#D7FF00] px-5 text-xs font-black uppercase tracking-[0.11em] text-black no-underline"
-                >
-                  <span>Text to Video</span><span>→</span>
-                </Link>
-                <Link
-                  href="/dashboard/models/nova-video-free/image-to-video"
-                  className="flex min-h-16 items-center justify-between rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 px-5 text-xs font-black uppercase tracking-[0.11em] text-[#D7FF00] no-underline"
-                >
-                  <span>Image to Video</span><span>→</span>
-                </Link>
-              </div>
+              {video.available ? (
+                <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                  <Link
+                    href="/dashboard/models/nova-video-free/text-to-video"
+                    className="flex min-h-16 items-center justify-between rounded-2xl bg-[#D7FF00] px-5 text-xs font-black uppercase tracking-[0.11em] text-black no-underline"
+                  >
+                    <span>Text to Video</span><span>→</span>
+                  </Link>
+                  <Link
+                    href="/dashboard/models/nova-video-free/image-to-video"
+                    className="flex min-h-16 items-center justify-between rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 px-5 text-xs font-black uppercase tracking-[0.11em] text-[#D7FF00] no-underline"
+                  >
+                    <span>Image to Video</span><span>→</span>
+                  </Link>
+                </div>
+              ) : (
+                <div className="mt-8 flex min-h-16 items-center rounded-2xl border border-white/10 bg-white/[.035] px-5 text-sm font-black uppercase tracking-[0.12em] text-white/30">
+                  Geração de vídeo em preparação
+                </div>
+              )}
             </div>
           </article>
         </section>
