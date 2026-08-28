@@ -122,7 +122,7 @@ export const publicGenerationModels = {
       description: "Gere vídeo sem gastar créditos. Text to Video ou Image to Video.",
       tier: "free",
       badge: "FREE",
-      image: "/nova/nova-wan-2-6.png",
+      image: "/nova/models-v2/card-motorbike.png",
       modes: {
         "text-to-video": { label: "Text to Video", needsImage: false },
         "image-to-video": { label: "Image to Video", needsImage: true },
