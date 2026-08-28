@@ -136,10 +136,9 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
   }
 
   useEffect(() => {
-    setHfConnected(Boolean(activeHfToken()));
-
     let cancelled = false;
     const timer = window.setTimeout(async () => {
+      if (!cancelled) setHfConnected(Boolean(activeHfToken()));
       try {
         const response = await fetch("/api/free-usage", { cache: "no-store" });
         const payload = await response.json().catch(() => ({}));
@@ -275,9 +274,19 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
       }
 
       setShowHfConnect(false);
+      await refreshUsage();
+
+      if (payload?.processing === false && payload?.videoUrl) {
+        setResultUrl(payload.videoUrl);
+        setTotalSeconds((current) => continueFrom ? current + seconds : seconds);
+        setStatus("Vídeo pronto.");
+        setLoading(false);
+        setJobId("");
+        return;
+      }
+
       setJobId(payload.jobId);
       setStatus("Vídeo na fila de geração...");
-      await refreshUsage();
       await pollJob(payload.jobId, seconds, !continueFrom);
     } catch (err) {
       setLoading(false);
