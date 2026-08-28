@@ -11,7 +11,6 @@ export const privateOpenModels = {
       providerPreference: "cloudflare-workers-ai",
       cloudflareModel: "@cf/black-forest-labs/flux-1-schnell",
       zeroCostOnly: true,
-      runpodTarget: "flux-schnell",
       modes: {
         "text-to-image": {
           label: "Text to Image",
@@ -27,11 +26,9 @@ export const privateOpenModels = {
       description: "Geração de vídeo incluída no NOVA.",
       tier: "free",
       freeQuotaKind: "video",
-      providerPreference: "runpod",
-      runpodTarget: "wan21-free",
-      // There is currently no Cloudflare-hosted zero-cost video model in Workers AI.
-      // Keep this strict so NOVA never silently spends on fal.ai for the branded FREE route.
+      providerPreference: "nova-zero-cost-video",
       zeroCostOnly: true,
+      // Provider/model identity remains server-side. The worker URL itself is configured only by environment.
       modes: {
         "text-to-video": {
           label: "Text to Video",
