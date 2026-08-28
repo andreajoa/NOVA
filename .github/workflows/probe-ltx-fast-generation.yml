@@ -1,0 +1,80 @@
+name: LTX Fast Generation Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/probe-ltx-fast-generation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Generate LTX Fast 5s video
+        shell: python
+        run: |
+          import json, urllib.request, urllib.error
+          base="https://lightricks-ltx-video-distilled.hf.space"
+          api="text_to_video"
+          data=[
+            "A small sailboat moving gently across a calm lake at sunset, cinematic natural motion",
+            "worst quality, blurry, jittery, distorted",
+            None,
+            None,
+            384,
+            512,
+            "text-to-video",
+            5,
+            9,
+            42,
+            False,
+            1,
+            False,
+          ]
+          payload=json.dumps({"data":data}).encode()
+          def req(url,method="GET",data=None,timeout=120):
+            h={"User-Agent":"NOVA-ltx-fast-gen/1.0","Accept":"text/event-stream, application/json"}
+            if data is not None:h["Content-Type"]="application/json"
+            return urllib.request.urlopen(urllib.request.Request(url,data=data,method=method,headers=h),timeout=timeout)
+          root=base+"/gradio_api/call/"+api
+          with req(root,"POST",payload,45) as r: submit=json.loads(r.read().decode())
+          print("SUBMIT",submit)
+          eid=submit.get("event_id")
+          if not eid: raise SystemExit("No event_id")
+          with req(root+"/"+eid,timeout=240) as r:text=r.read().decode("utf-8","replace")
+          dataout=None
+          for block in text.replace("\r\n","\n").split("\n\n"):
+            if "event: error" in block: raise SystemExit("EVENT_ERROR "+block[-1500:])
+            if "event: complete" in block:
+              line=next((x for x in block.splitlines() if x.startswith("data: ")),None)
+              if line:dataout=json.loads(line[6:]);break
+          print("COMPLETE",json.dumps(dataout)[:3000])
+          if not dataout:raise SystemExit("No complete data")
+          def find(v):
+            if isinstance(v,str) and v.startswith("http") and (".mp4" in v or "file=" in v):return v
+            if isinstance(v,dict):
+              for k in ("url","path","video","value"):
+                if k in v:
+                  x=find(v[k]);
+                  if x:return x
+              for x0 in v.values():
+                x=find(x0)
+                if x:return x
+            if isinstance(v,list):
+              for x0 in v:
+                x=find(x0)
+                if x:return x
+            return None
+          video=find(dataout)
+          if not video:raise SystemExit("No video url")
+          print("VIDEO_URL",video)
+          with req(video,timeout=60) as r:
+            ctype=r.headers.get("content-type","");first=r.read(64)
+          if "video" not in ctype.lower() and b"ftyp" not in first:raise SystemExit("Invalid video")
+          print("LTX_FAST_VIDEO_OK")
