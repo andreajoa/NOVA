@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-function UsagePill({ remaining, limit }) {
+function UsagePill({ remaining, limit, unlimited }) {
   return (
     <span className="rounded-full border border-[#D7FF00]/30 bg-[#D7FF00]/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-[#D7FF00]">
-      {remaining ?? "—"} / {limit ?? "—"} hoje
+      {unlimited ? "Ilimitado" : `${remaining ?? "—"} / ${limit ?? "—"} hoje`}
     </span>
   );
 }
@@ -39,12 +39,14 @@ export default function FreeGenerationHub() {
   const image = usage?.image || {
     remaining: 10,
     limit: 10,
+    unlimited: false,
     resolution: "1K",
     available: false,
   };
   const video = usage?.video || {
     remaining: 3,
     limit: 3,
+    unlimited: false,
     durations: [5],
     resolution: "480p",
     available: false,
@@ -63,9 +65,16 @@ export default function FreeGenerationHub() {
               Escolha imagem ou vídeo. As gerações incluídas usam 0 créditos e renovam diariamente.
             </p>
             {usage && (
-              <p className="mt-3 text-xs text-white/30">
-                Plano atual: <span className="font-black uppercase text-white/55">{usage.plan}</span>
-              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-white/30">
+                <span>
+                  Plano atual: <span className="font-black uppercase text-white/55">{usage.plan}</span>
+                </span>
+                {usage.admin && (
+                  <span className="rounded-full border border-[#D7FF00]/30 bg-[#D7FF00]/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-[#D7FF00]">
+                    Admin · acesso ilimitado
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </section>
@@ -79,7 +88,7 @@ export default function FreeGenerationHub() {
                   <span className="rounded-full bg-[#D7FF00] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-black">FREE</span>
                   <AvailabilityPill available={image.available} />
                 </div>
-                <UsagePill remaining={image.remaining} limit={image.limit} />
+                <UsagePill remaining={image.remaining} limit={image.limit} unlimited={image.unlimited} />
               </div>
               <p className="mt-8 text-xs font-black uppercase tracking-[0.2em] text-[#D7FF00]">Imagem</p>
               <h2 className="mt-3 text-4xl font-black uppercase tracking-[-0.06em]">NOVA IMAGEM FREE</h2>
@@ -108,7 +117,7 @@ export default function FreeGenerationHub() {
                   <span className="rounded-full bg-[#D7FF00] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-black">FREE</span>
                   <AvailabilityPill available={video.available} />
                 </div>
-                <UsagePill remaining={video.remaining} limit={video.limit} />
+                <UsagePill remaining={video.remaining} limit={video.limit} unlimited={video.unlimited} />
               </div>
               <p className="mt-8 text-xs font-black uppercase tracking-[0.2em] text-cyan-300">Vídeo</p>
               <h2 className="mt-3 text-4xl font-black uppercase tracking-[-0.06em]">NOVA VIDEO FREE</h2>
