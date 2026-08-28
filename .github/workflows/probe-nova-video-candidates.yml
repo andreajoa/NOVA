@@ -1,0 +1,49 @@
+name: NOVA Video Candidate Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/probe-nova-video-candidates.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect candidate Gradio APIs
+        shell: python
+        run: |
+          import json, urllib.request, urllib.error
+
+          spaces = {
+              "cogvideox2b": "https://zai-org-cogvideox-2b-space.hf.space",
+              "animatediff_lightning": "https://bytedance-animatediff-lightning.hf.space",
+          }
+
+          for name, base in spaces.items():
+              print(f"===== {name} =====")
+              ok = False
+              for suffix in ("/gradio_api/info", "/info"):
+                  url = base + suffix
+                  try:
+                      req = urllib.request.Request(url, headers={"User-Agent": "NOVA-candidate-probe/1.0"})
+                      with urllib.request.urlopen(req, timeout=40) as r:
+                          text = r.read().decode("utf-8", "replace")
+                      data = json.loads(text)
+                      named = data.get("named_endpoints") or data.get("named_endpoints", {})
+                      print("INFO_URL", url)
+                      print("NAMED_ENDPOINTS", json.dumps(named, ensure_ascii=False)[:20000])
+                      ok = True
+                      break
+                  except Exception as exc:
+                      print("INFO_ERROR", url, type(exc).__name__, str(exc)[:500])
+              if not ok:
+                  raise SystemExit(f"Could not inspect {name}")
+
+          print("NOVA_VIDEO_CANDIDATE_INFO_OK")
