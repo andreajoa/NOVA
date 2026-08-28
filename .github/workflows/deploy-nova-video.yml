@@ -31,23 +31,27 @@ jobs:
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-          NOVA_VIDEO_MODEL_REPO: ${{ secrets.NOVA_VIDEO_MODEL_REPO }}
+          NOVA_VIDEO_T2V_MODEL_REPO: ${{ secrets.NOVA_VIDEO_T2V_MODEL_REPO }}
+          NOVA_VIDEO_I2V_MODEL_REPO: ${{ secrets.NOVA_VIDEO_I2V_MODEL_REPO }}
           NOVA_VIDEO_WORKER_SECRET: ${{ secrets.NOVA_VIDEO_WORKER_SECRET }}
         run: |
           test -n "$MODAL_TOKEN_ID" || (echo "MODAL_TOKEN_ID is missing" && exit 1)
           test -n "$MODAL_TOKEN_SECRET" || (echo "MODAL_TOKEN_SECRET is missing" && exit 1)
-          test -n "$NOVA_VIDEO_MODEL_REPO" || (echo "NOVA_VIDEO_MODEL_REPO is missing" && exit 1)
+          test -n "$NOVA_VIDEO_T2V_MODEL_REPO" || (echo "NOVA_VIDEO_T2V_MODEL_REPO is missing" && exit 1)
+          test -n "$NOVA_VIDEO_I2V_MODEL_REPO" || (echo "NOVA_VIDEO_I2V_MODEL_REPO is missing" && exit 1)
           test -n "$NOVA_VIDEO_WORKER_SECRET" || (echo "NOVA_VIDEO_WORKER_SECRET is missing" && exit 1)
 
       - name: Create or update private engine secret
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-          NOVA_VIDEO_MODEL_REPO: ${{ secrets.NOVA_VIDEO_MODEL_REPO }}
+          NOVA_VIDEO_T2V_MODEL_REPO: ${{ secrets.NOVA_VIDEO_T2V_MODEL_REPO }}
+          NOVA_VIDEO_I2V_MODEL_REPO: ${{ secrets.NOVA_VIDEO_I2V_MODEL_REPO }}
           NOVA_VIDEO_WORKER_SECRET: ${{ secrets.NOVA_VIDEO_WORKER_SECRET }}
         run: |
           modal secret create --force nova-video-engine \
-            NOVA_VIDEO_MODEL_REPO="$NOVA_VIDEO_MODEL_REPO" \
+            NOVA_VIDEO_T2V_MODEL_REPO="$NOVA_VIDEO_T2V_MODEL_REPO" \
+            NOVA_VIDEO_I2V_MODEL_REPO="$NOVA_VIDEO_I2V_MODEL_REPO" \
             NOVA_VIDEO_WORKER_SECRET="$NOVA_VIDEO_WORKER_SECRET" \
             NOVA_VIDEO_STEPS="8"
 
