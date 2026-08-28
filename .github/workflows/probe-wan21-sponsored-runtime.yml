@@ -1,0 +1,132 @@
+name: Wan2.1 Independent Runtime Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/probe-wan21-sponsored-runtime.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Inspect and generate with Wan2.1 public runtime
+        shell: python
+        run: |
+          import json, time, urllib.request, urllib.error
+
+          base = "https://wan-ai-wan2-1.hf.space"
+
+          def request(url, method="GET", data=None, timeout=90):
+              headers = {
+                  "User-Agent": "NOVA-wan21-runtime-probe/1.0",
+                  "Accept": "text/event-stream, application/json",
+              }
+              if data is not None:
+                  headers["Content-Type"] = "application/json"
+              req = urllib.request.Request(url, data=data, method=method, headers=headers)
+              return urllib.request.urlopen(req, timeout=timeout)
+
+          info = None
+          for suffix in ("/gradio_api/info", "/info"):
+              try:
+                  with request(base + suffix, timeout=45) as r:
+                      info = json.loads(r.read().decode("utf-8", "replace"))
+                  print("INFO_URL", base + suffix)
+                  print("NAMED_ENDPOINTS", json.dumps(info.get("named_endpoints") or {}, ensure_ascii=False)[:30000])
+                  break
+              except Exception as exc:
+                  print("INFO_FAIL", suffix, type(exc).__name__, str(exc)[:500])
+          if info is None:
+              raise SystemExit("Could not inspect Wan2.1 runtime")
+
+          named = info.get("named_endpoints") or {}
+          candidates = []
+          for name in named.keys():
+              low = name.lower()
+              if "t2v" in low or "generation" in low or "generate" in low:
+                  candidates.append(name.lstrip("/"))
+          print("CANDIDATES", candidates)
+
+          # Probe direct synchronous t2v endpoint first. Gradio data mirrors:
+          # prompt, resolution, watermark, seed.
+          api_names = []
+          for preferred in ("t2v_generation", "t2v_generation_async"):
+              if any(x.endswith(preferred) or x == preferred for x in candidates):
+                  api_names.append(preferred)
+          api_names += [x for x in candidates if x not in api_names]
+
+          payload = json.dumps({
+              "data": [
+                  "A small red kite moving gently over a sunny beach, cinematic natural motion",
+                  "1280*720",
+                  False,
+                  42,
+              ]
+          }).encode()
+
+          errors = []
+          for api in api_names:
+              for prefix in ("/gradio_api/call/", "/call/"):
+                  root = base + prefix + api
+                  try:
+                      with request(root, "POST", payload, 60) as r:
+                          text = r.read().decode("utf-8", "replace")
+                      parsed = json.loads(text)
+                      event_id = parsed.get("event_id")
+                      if not event_id:
+                          errors.append(f"{root}: no event_id {text[:300]}")
+                          continue
+                      print("SUBMIT_OK", root, event_id)
+                      with request(root + "/" + event_id, timeout=480) as r:
+                          stream = r.read().decode("utf-8", "replace")
+                      print("STREAM_TAIL", stream[-4000:])
+                      for block in stream.replace("\r\n", "\n").split("\n\n"):
+                          if "event: error" in block:
+                              errors.append(f"{root}: event error {block[-1000:]}")
+                              break
+                          if "event: complete" not in block:
+                              continue
+                          line = next((x for x in block.splitlines() if x.startswith("data: ")), None)
+                          if not line:
+                              continue
+                          data = json.loads(line[6:])
+                          print("COMPLETE_DATA", json.dumps(data)[:3000])
+                          def find_video(v):
+                              if isinstance(v, str) and v.startswith("http"):
+                                  return v if ("video" in v.lower() or ".mp4" in v.lower()) else None
+                              if isinstance(v, list):
+                                  for item in v:
+                                      found = find_video(item)
+                                      if found: return found
+                              if isinstance(v, dict):
+                                  for item in v.values():
+                                      found = find_video(item)
+                                      if found: return found
+                              return None
+                          video = find_video(data)
+                          if not video:
+                              errors.append(f"{root}: complete but no video")
+                              break
+                          try:
+                              with request(video, timeout=60) as vr:
+                                  ctype = vr.headers.get("content-type", "")
+                                  first = vr.read(64)
+                              print("VIDEO_CHECK", ctype, b"ftyp" in first, video)
+                              if "video" in ctype.lower() or b"ftyp" in first:
+                                  print("WAN21_INDEPENDENT_RUNTIME_OK")
+                                  raise SystemExit(0)
+                          except Exception as exc:
+                              errors.append(f"video fetch: {type(exc).__name__}: {exc}")
+                  except SystemExit:
+                      raise
+                  except Exception as exc:
+                      errors.append(f"{root}: {type(exc).__name__}: {exc}")
+
+          raise SystemExit("WAN21_RUNTIME_FAILED\n" + "\n".join(errors[-20:]))
