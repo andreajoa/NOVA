@@ -11,7 +11,6 @@ export function findGenerationModel(modelKey) {
 
   const imageModel = falModels.image?.[modelKey];
   if (imageModel) {
-    // Provider-facing legacy free entries must not remain callable public model IDs.
     if (imageModel.tier === "free") return null;
     return { type: "image", modelKey, model: imageModel, privateEngine: false };
   }
@@ -26,6 +25,11 @@ export function findGenerationModel(modelKey) {
 }
 
 export function resolveGenerationSelection({ model: modelKey, mode: requestedMode, body = {} } = {}) {
+  // NOVA VIDEO uses its dedicated asynchronous dashboard endpoint. Keeping it
+  // out of the generic endpoint prevents accidental synchronous execution,
+  // provider leaks and API-key abuse of the included video pool.
+  if (modelKey === "nova-video-free") return null;
+
   const found = findGenerationModel(modelKey);
   if (!found) return null;
 
