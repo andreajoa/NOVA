@@ -15,6 +15,7 @@ const MENU_GROUPS = [
       {
         title: "Generate",
         items: [
+          { label: "Generate Free Now", href: "/dashboard/free", path: "/dashboard/free", accent: true },
           { label: "Generate Image",  href: "/dashboard/models",    path: "/dashboard/models"    },
           { label: "Generate Video",   href: "/dashboard/generate",  path: "/dashboard/generate"  },
           { label: "Character & Story Studio", href: "/dashboard/characters", path: "/dashboard/characters" },
@@ -107,6 +108,7 @@ function groupIsActive(pathname, group) {
 
 function MenuItem({ item, pathname, closeMenu }) {
   const active = isActivePath(pathname, item);
+  const accented = Boolean(item.accent);
 
   return (
     <Link
@@ -116,14 +118,16 @@ function MenuItem({ item, pathname, closeMenu }) {
         "group block rounded-xl border px-4 py-3 no-underline transition",
         active
           ? "border-[#D7FF00]/60 bg-[#D7FF00]/10"
-          : "border-white/8 bg-white/[.025] hover:border-[#D7FF00]/35 hover:bg-[#D7FF00]/5",
+          : accented
+            ? "border-[#D7FF00]/35 bg-[#D7FF00]/10 hover:bg-[#D7FF00]/15"
+            : "border-white/8 bg-white/[.025] hover:border-[#D7FF00]/35 hover:bg-[#D7FF00]/5",
       ].join(" ")}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className={active ? "text-sm font-black text-[#D7FF00]" : "text-sm font-black text-white/80 group-hover:text-white"}>
+        <span className={active || accented ? "text-sm font-black text-[#D7FF00]" : "text-sm font-black text-white/80 group-hover:text-white"}>
           {item.label}
         </span>
-        <span className={active ? "text-[#D7FF00]" : "text-white/25 group-hover:text-[#D7FF00]"}>
+        <span className={active || accented ? "text-[#D7FF00]" : "text-white/25 group-hover:text-[#D7FF00]"}>
           →
         </span>
       </div>
@@ -231,6 +235,13 @@ export default function TopNav() {
               </button>
             );
           })}
+
+          <Link
+            href="/dashboard/free"
+            className="ml-2 rounded-xl border border-[#D7FF00]/35 bg-[#D7FF00]/10 px-4 py-2 text-[11px] font-black uppercase tracking-[.14em] text-[#D7FF00] no-underline transition hover:bg-[#D7FF00] hover:text-black"
+          >
+            Generate Free Now
+          </Link>
         </div>
 
         <div className="flex items-center gap-2 md:gap-3">
@@ -291,6 +302,14 @@ export default function TopNav() {
       {mobileOpen && (
         <div className="border-t border-white/10 bg-[#050505] px-4 pb-5 lg:hidden">
           <div className="mx-auto max-w-[760px] space-y-5 pt-4">
+            <Link
+              href="/dashboard/free"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center justify-between rounded-2xl bg-[#D7FF00] px-5 py-4 text-xs font-black uppercase tracking-[.14em] text-black no-underline"
+            >
+              <span>Generate Free Now</span><span>→</span>
+            </Link>
+
             {MENU_GROUPS.map((group) => (
               <div key={group.key} className="rounded-2xl border border-white/10 bg-white/[.025] p-4">
                 <p className="text-xs font-black uppercase tracking-[.18em] text-[#D7FF00]">
