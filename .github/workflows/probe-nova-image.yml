@@ -1,0 +1,109 @@
+name: NOVA Image Runtime Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/probe-nova-image.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Probe public image runtime
+        shell: python
+        run: |
+          import json, urllib.request, urllib.error, time
+
+          base = "https://stabilityai-stable-diffusion-3-5-large.hf.space"
+
+          def req(url, method="GET", data=None, timeout=30, headers=None):
+              h = {"User-Agent": "NOVA-image-probe/1.0", "Accept": "application/json"}
+              if headers: h.update(headers)
+              r = urllib.request.Request(url, data=data, method=method, headers=h)
+              return urllib.request.urlopen(r, timeout=timeout)
+
+          with req(base + "/gradio_api/info", timeout=30) as r:
+              info = json.loads(r.read().decode())
+          print("NAMED_ENDPOINTS", json.dumps(list((info.get("named_endpoints") or {}).keys())))
+
+          names = list((info.get("named_endpoints") or {}).keys())
+          if not names:
+              raise SystemExit("NO_NAMED_ENDPOINTS")
+
+          # Prefer the actual inference endpoint, otherwise use the first public endpoint.
+          endpoint = next((n for n in names if "infer" in n.lower() or "predict" in n.lower()), names[0])
+          api = endpoint.lstrip("/")
+          payload = json.dumps({"data": [
+              "A red apple on a white studio background, product photography",
+              "",
+              42,
+              False,
+              512,
+              512,
+              4.5,
+              20
+          ]}).encode()
+
+          submit_urls = [base + f"/gradio_api/call/{api}", base + f"/call/{api}"]
+          event_id = None
+          root = None
+          errors = []
+          for url in submit_urls:
+              try:
+                  with req(url, method="POST", data=payload, timeout=45, headers={"Content-Type":"application/json"}) as r:
+                      text = r.read().decode("utf-8", "replace")
+                  parsed = json.loads(text)
+                  if parsed.get("event_id"):
+                      event_id = parsed["event_id"]
+                      root = url
+                      print("SUBMIT_OK", endpoint)
+                      break
+                  errors.append(url + ": " + text[:300])
+              except Exception as exc:
+                  errors.append(url + ": " + repr(exc))
+
+          if not event_id:
+              # Try legacy direct predict endpoint.
+              try:
+                  with req(base + "/api/predict", method="POST", data=payload, timeout=120, headers={"Content-Type":"application/json"}) as r:
+                      text = r.read().decode("utf-8", "replace")
+                  parsed = json.loads(text)
+                  print("LEGACY_STATUS_OK")
+                  data = parsed.get("data")
+                  if data:
+                      print("NOVA_IMAGE_RUNTIME_OK")
+                      raise SystemExit(0)
+                  errors.append("legacy: " + text[:500])
+              except SystemExit:
+                  raise
+              except Exception as exc:
+                  errors.append("legacy: " + repr(exc))
+              raise SystemExit("SUBMIT_FAILED\n" + "\n".join(errors))
+
+          result_url = root + "/" + event_id
+          deadline = time.time() + 5 * 60
+          while time.time() < deadline:
+              try:
+                  with req(result_url, timeout=70, headers={"Accept":"text/event-stream, application/json"}) as r:
+                      text = r.read().decode("utf-8", "replace")
+                  if "event: error" in text:
+                      raise SystemExit("GENERATION_ERROR\n" + text[-3000:])
+                  if "event: complete" in text:
+                      print("COMPLETE_EVENT")
+                      print(text[-2500:])
+                      print("NOVA_IMAGE_RUNTIME_OK")
+                      raise SystemExit(0)
+              except SystemExit:
+                  raise
+              except Exception as exc:
+                  print("POLL_RETRY", repr(exc))
+              time.sleep(3)
+
+          raise SystemExit("GENERATION_TIMEOUT")
