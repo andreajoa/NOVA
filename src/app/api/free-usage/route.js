@@ -39,8 +39,8 @@ export async function GET() {
       resetAt: null,
       image: {
         used: 0,
-        limit: null,
-        remaining: null,
+        limit: "Ilimitado",
+        remaining: "Ilimitado",
         unlimited: true,
         resolution: "1K",
         credits: 0,
@@ -48,8 +48,8 @@ export async function GET() {
       },
       video: {
         used: 0,
-        limit: null,
-        remaining: null,
+        limit: "Ilimitado",
+        remaining: "Ilimitado",
         unlimited: true,
         maxSeconds: 10,
         durations: [5, 10],
