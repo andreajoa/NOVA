@@ -1,5 +1,6 @@
 const LTX_PROVIDER = {
   id: "ltx23",
+  quotaFamily: "hf-zerogpu",
   base: "https://lightricks-ltx-2-3.hf.space",
   api: "generate_video",
   tasks: new Set(["text-to-video", "image-to-video"]),
@@ -24,8 +25,38 @@ const LTX_PROVIDER = {
   },
 };
 
+const LTX_FAST_PROVIDER = {
+  id: "ltx-fast",
+  quotaFamily: "hf-zerogpu",
+  base: "https://lightricks-ltx-video-distilled.hf.space",
+  tasks: new Set(["text-to-video", "image-to-video"]),
+  maxSeconds: 8.5,
+  apiFor(input) {
+    return input.task === "image-to-video" ? "image_to_video" : "text_to_video";
+  },
+  buildData({ input, image, seed }) {
+    const { height, width } = dimensionsForFastAspect(input.aspect_ratio);
+    return [
+      String(input.prompt || "").trim(),
+      String(input.negative_prompt || "").trim(),
+      input.task === "image-to-video" ? image : null,
+      null,
+      height,
+      width,
+      input.task === "image-to-video" ? "image-to-video" : "text-to-video",
+      Math.min(8.5, Number(input.duration || 5)),
+      9,
+      seed,
+      false,
+      1,
+      false,
+    ];
+  },
+};
+
 const WAN_T2V_PROVIDER = {
   id: "wan22-fast-t2v",
+  quotaFamily: "hf-zerogpu",
   base: "https://zerogpu-aoti-wan2-2-fp8da-aoti.hf.space",
   api: "generate_video",
   tasks: new Set(["text-to-video"]),
@@ -46,6 +77,7 @@ const WAN_T2V_PROVIDER = {
 
 const WAN_I2V_PROVIDER = {
   id: "wan22-fast-i2v",
+  quotaFamily: "hf-zerogpu",
   base: "https://zerogpu-aoti-wan2-2-fp8da-aoti-faster.hf.space",
   api: "generate_video",
   tasks: new Set(["image-to-video"]),
@@ -77,17 +109,28 @@ function dimensionsForAspect(aspect) {
   return { height: 512, width: 768 };
 }
 
+function dimensionsForFastAspect(aspect) {
+  if (aspect === "9:16") return { height: 512, width: 384 };
+  if (aspect === "1:1") return { height: 384, width: 384 };
+  return { height: 384, width: 512 };
+}
+
 function providerPool(input) {
   const seconds = Number(input.duration || 5);
 
   if (input.task === "image-to-video" && seconds <= WAN_I2V_PROVIDER.maxSeconds) {
-    return [WAN_I2V_PROVIDER, LTX_PROVIDER];
+    return [WAN_I2V_PROVIDER, LTX_PROVIDER, LTX_FAST_PROVIDER];
   }
 
   if (input.task === "text-to-video" && seconds <= WAN_T2V_PROVIDER.maxSeconds) {
-    // Wan's 2-step path reserves about half the ZeroGPU time of the previous
-    // 4-step path, so it is the preferred no-cost engine for 5s generations.
-    return [WAN_T2V_PROVIDER, LTX_PROVIDER];
+    // Prefer the lowest-cost verified route first, then two separate LTX
+    // runtimes. All three are independent Spaces even though they may share
+    // the caller's Hugging Face ZeroGPU allowance.
+    return [WAN_T2V_PROVIDER, LTX_PROVIDER, LTX_FAST_PROVIDER];
+  }
+
+  if (seconds <= LTX_FAST_PROVIDER.maxSeconds) {
+    return [LTX_PROVIDER, LTX_FAST_PROVIDER];
   }
 
   return [LTX_PROVIDER];
@@ -157,6 +200,7 @@ function isSharedZeroGpuQuotaError(error) {
 function normalizeProviderError(error, provider) {
   const wrapped = new Error(`[${provider.id}] ${error?.message || String(error)}`);
   wrapped.cause = error;
+  wrapped.quotaFamily = provider.quotaFamily || "unknown";
   if (isSharedZeroGpuQuotaError(error)) {
     wrapped.code = "NOVA_ZERO_GPU_QUOTA_EXHAUSTED";
   } else {
@@ -213,7 +257,7 @@ async function uploadReference(provider, reference, hfToken) {
       body: form,
       cache: "no-store",
       signal: uploadTimeout.controller.signal,
-      headers: requestHeaders(hfToken, { "User-Agent": "NOVA-free-video-pool/1.1" }),
+      headers: requestHeaders(hfToken, { "User-Agent": "NOVA-free-video-pool/1.2" }),
     });
   } finally {
     clearTimeout(uploadTimeout.timer);
@@ -238,11 +282,14 @@ async function submitJob(provider, input, reference, hfToken) {
     ? Number(input.seed)
     : Math.floor(Math.random() * 2_000_000_000);
   const payload = JSON.stringify({ data: provider.buildData({ input, image, seed }) });
+  const api = typeof provider.apiFor === "function" ? provider.apiFor(input) : provider.api;
+
+  if (!api) throw new Error("NOVA free video provider has no API endpoint");
 
   const errors = [];
   for (const root of [
-    `${provider.base}/gradio_api/call/${provider.api}`,
-    `${provider.base}/call/${provider.api}`,
+    `${provider.base}/gradio_api/call/${api}`,
+    `${provider.base}/call/${api}`,
   ]) {
     const submitTimeout = withTimeout(45000);
     try {
@@ -253,7 +300,7 @@ async function submitJob(provider, input, reference, hfToken) {
         headers: requestHeaders(hfToken, {
           "Content-Type": "application/json",
           Accept: "application/json",
-          "User-Agent": "NOVA-free-video-pool/1.1",
+          "User-Agent": "NOVA-free-video-pool/1.2",
         }),
         body: payload,
       });
@@ -289,7 +336,7 @@ async function waitForResult(provider, pollUrl, hfToken) {
       signal: resultTimeout.controller.signal,
       headers: requestHeaders(hfToken, {
         Accept: "text/event-stream, application/json",
-        "User-Agent": "NOVA-free-video-pool/1.1",
+        "User-Agent": "NOVA-free-video-pool/1.2",
       }),
     });
   } finally {
@@ -333,7 +380,7 @@ async function verifyVideo(url, hfToken) {
       signal: timeout.controller.signal,
       headers: requestHeaders(hfToken, {
         Range: "bytes=0-63",
-        "User-Agent": "NOVA-free-video-pool/1.1",
+        "User-Agent": "NOVA-free-video-pool/1.2",
       }),
     });
     if (!response.ok && response.status !== 206) {
@@ -369,8 +416,14 @@ export async function runVerifiedVideoRuntime(input = {}, options = {}) {
   const reference = input.image_url ? await readReferenceImage(input.image_url) : null;
   const providers = providerPool(input);
   const failures = [];
+  let exhaustedQuotaFamily = null;
+  let quotaError = null;
 
   for (const provider of providers) {
+    if (exhaustedQuotaFamily && provider.quotaFamily === exhaustedQuotaFamily) {
+      continue;
+    }
+
     try {
       return await runProvider(provider, input, reference, hfToken);
     } catch (error) {
@@ -380,18 +433,19 @@ export async function runVerifiedVideoRuntime(input = {}, options = {}) {
       console.warn("[NOVA_VIDEO] free engine attempt failed", {
         engine: provider.id,
         code: normalized.code,
+        quotaFamily: provider.quotaFamily || "unknown",
         authenticatedHfQuota: Boolean(hfToken),
         message: normalized.message.slice(0, 500),
       });
 
-      // ZeroGPU quota belongs to the caller. If a personal HF token is present,
-      // the user's own free quota is being consumed; otherwise the stricter
-      // unauthenticated pool is in use. Switching Spaces cannot reset that quota.
       if (normalized.code === "NOVA_ZERO_GPU_QUOTA_EXHAUSTED") {
-        throw normalized;
+        exhaustedQuotaFamily = provider.quotaFamily || "hf-zerogpu";
+        quotaError = normalized;
       }
     }
   }
+
+  if (quotaError) throw quotaError;
 
   const error = new Error(`All NOVA free video engines failed: ${failures.join(" | ").slice(0, 1500)}`);
   error.code = "NOVA_FREE_VIDEO_POOL_UNAVAILABLE";
