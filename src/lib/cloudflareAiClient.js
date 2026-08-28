@@ -1,6 +1,7 @@
 const CLOUDFLARE_AI_BASE = "https://api.cloudflare.com/client/v4/accounts";
 const DEFAULT_NOVA_IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell";
-const LEGACY_FREE_IMAGE_BASE = "https://image.pollinations.ai/prompt";
+const HF_IMAGE_BASE = "https://stabilityai-stable-diffusion-3-5-large.hf.space";
+const HF_IMAGE_API = "infer";
 
 if (!process.env.NOVA_IMAGE_FREE_ENGINE_MODEL) {
   process.env.NOVA_IMAGE_FREE_ENGINE_MODEL = DEFAULT_NOVA_IMAGE_MODEL;
@@ -13,50 +14,70 @@ function credentials() {
   return { accountId, apiToken };
 }
 
-function fallbackImageUrl({ prompt, seed }) {
-  const query = new URLSearchParams({
-    width: "1024",
-    height: "1024",
-    nologo: "true",
-    enhance: "true",
-    safe: "true",
-  });
-  if (Number.isFinite(Number(seed))) query.set("seed", String(Number(seed)));
-  return `${LEGACY_FREE_IMAGE_BASE}/${encodeURIComponent(String(prompt || "").slice(0, 1800))}?${query.toString()}`;
+function withTimeout(ms) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return { controller, timer };
 }
 
-async function runAnonymousFreeImage({ prompt, seed } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 55000);
+function findImageUrl(value) {
+  if (typeof value === "string") {
+    if (/^https?:\/\//i.test(value) && /\.(png|jpe?g|webp|avif)(\?|#|$)/i.test(value)) return value;
+    if (value.startsWith("/") && /\.(png|jpe?g|webp|avif)(\?|#|$)/i.test(value)) {
+      return `${HF_IMAGE_BASE}${value}`;
+    }
+    return null;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findImageUrl(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (value && typeof value === "object") {
+    for (const key of ["url", "path", "image", "value"]) {
+      if (key in value) {
+        const found = findImageUrl(value[key]);
+        if (found) return found;
+      }
+    }
+    for (const item of Object.values(value)) {
+      const found = findImageUrl(item);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+async function fetchImageAsDataUrl(imageUrl) {
+  const { controller, timer } = withTimeout(25000);
   try {
-    const response = await fetch(fallbackImageUrl({ prompt, seed }), {
+    const response = await fetch(imageUrl, {
       method: "GET",
       cache: "no-store",
       signal: controller.signal,
       headers: {
         Accept: "image/avif,image/webp,image/png,image/jpeg,image/*",
-        "User-Agent": "NOVA-free-image/1.0",
+        "User-Agent": "NOVA-free-image/2.0",
       },
     });
+    if (!response.ok) throw new Error(`NOVA image download failed (${response.status})`);
 
-    if (!response.ok) {
-      throw new Error(`NOVA fallback image engine failed (${response.status})`);
-    }
-
-    const contentType = response.headers.get("content-type") || "image/jpeg";
+    const contentType = (response.headers.get("content-type") || "image/webp").split(";")[0];
     if (!contentType.toLowerCase().startsWith("image/")) {
-      throw new Error("NOVA fallback image engine returned a non-image response");
+      throw new Error("NOVA image runtime returned non-image content");
     }
 
     const bytes = Buffer.from(await response.arrayBuffer());
-    if (!bytes.length) throw new Error("NOVA fallback image engine returned an empty image");
-    if (bytes.length > 8_000_000) throw new Error("NOVA fallback image output is too large");
+    if (!bytes.length) throw new Error("NOVA image runtime returned an empty image");
+    if (bytes.length > 8_000_000) throw new Error("NOVA image output is too large");
 
     return {
       images: [
         {
-          url: `data:${contentType.split(";")[0]};base64,${bytes.toString("base64")}`,
-          content_type: contentType.split(";")[0],
+          url: `data:${contentType};base64,${bytes.toString("base64")}`,
+          content_type: contentType,
         },
       ],
     };
@@ -65,7 +86,98 @@ async function runAnonymousFreeImage({ prompt, seed } = {}) {
   }
 }
 
+async function runVerifiedFreeImage({ prompt, seed } = {}) {
+  const actualSeed = Number.isFinite(Number(seed)) ? Number(seed) : Math.floor(Math.random() * 2_000_000_000);
+  const submitUrl = `${HF_IMAGE_BASE}/gradio_api/call/${HF_IMAGE_API}`;
+  const { controller, timer } = withTimeout(45000);
+  let submitResponse;
+  try {
+    submitResponse = await fetch(submitUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "User-Agent": "NOVA-free-image/2.0",
+      },
+      body: JSON.stringify({
+        data: [
+          String(prompt || "").slice(0, 1800),
+          "",
+          actualSeed,
+          false,
+          1024,
+          1024,
+          4.5,
+          20,
+        ],
+      }),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const submitText = await submitResponse.text();
+  let submitPayload = {};
+  try {
+    submitPayload = submitText ? JSON.parse(submitText) : {};
+  } catch {
+    submitPayload = {};
+  }
+
+  if (!submitResponse.ok || !submitPayload?.event_id) {
+    throw new Error(`NOVA free image queue rejected the job (${submitResponse.status})`);
+  }
+
+  const resultUrl = `${submitUrl}/${encodeURIComponent(submitPayload.event_id)}`;
+  const resultTimeout = withTimeout(70000);
+  let resultResponse;
+  try {
+    resultResponse = await fetch(resultUrl, {
+      method: "GET",
+      cache: "no-store",
+      signal: resultTimeout.controller.signal,
+      headers: {
+        Accept: "text/event-stream, application/json",
+        "User-Agent": "NOVA-free-image/2.0",
+      },
+    });
+  } finally {
+    clearTimeout(resultTimeout.timer);
+  }
+
+  if (!resultResponse.ok) {
+    throw new Error(`NOVA free image queue failed (${resultResponse.status})`);
+  }
+
+  const text = await resultResponse.text();
+  if (text.includes("event: error")) {
+    throw new Error("NOVA free image runtime reported a generation error");
+  }
+
+  const blocks = text.replace(/\r\n/g, "\n").split("\n\n");
+  let completedData = null;
+  for (const block of blocks) {
+    if (!block.includes("event: complete")) continue;
+    const dataLine = block.split("\n").find((line) => line.startsWith("data: "));
+    if (!dataLine) continue;
+    try {
+      completedData = JSON.parse(dataLine.slice(6));
+    } catch {
+      completedData = null;
+    }
+    if (completedData) break;
+  }
+
+  const imageUrl = findImageUrl(completedData);
+  if (!imageUrl) throw new Error("NOVA free image runtime returned no image URL");
+
+  return fetchImageAsDataUrl(imageUrl);
+}
+
 export function canUseCloudflareWorkersAI() {
+  // The NOVA alias always has the verified public fallback available server-side.
   return true;
 }
 
@@ -83,15 +195,22 @@ async function runPrimaryCloudflareImage({ model, prompt, steps = 4, seed } = {}
   };
   if (Number.isFinite(Number(seed))) input.seed = Number(seed);
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${creds.apiToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(input),
-    cache: "no-store",
-  });
+  const { controller, timer } = withTimeout(30000);
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${creds.apiToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(input),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   const text = await response.text();
   let json = {};
@@ -105,7 +224,6 @@ async function runPrimaryCloudflareImage({ model, prompt, steps = 4, seed } = {}
     const details = json?.errors?.[0]?.message || json?.messages?.[0]?.message || text || `HTTP ${response.status}`;
     const error = new Error(`Cloudflare Workers AI failed: ${details}`);
     error.status = response.status;
-    error.cloudflare = json;
     throw error;
   }
 
@@ -129,11 +247,10 @@ export async function runCloudflareImage({ model, prompt, steps = 4, seed } = {}
   try {
     return await runPrimaryCloudflareImage({ model, prompt, steps, seed });
   } catch (primaryError) {
-    console.error("[NOVA_IMAGE] primary engine failed; using free fallback", {
+    console.error("[NOVA_IMAGE] primary engine failed; switching to verified fallback", {
       message: primaryError?.message || String(primaryError),
       status: primaryError?.status || null,
     });
-
-    return runAnonymousFreeImage({ prompt, seed });
+    return runVerifiedFreeImage({ prompt, seed });
   }
 }
