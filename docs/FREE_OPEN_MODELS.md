@@ -6,10 +6,10 @@ This feature adds a controlled free acquisition layer without removing NOVA's pr
 
 Free users can start creating immediately with lower-cost open-weight models. Premium models, higher resolution, larger volume and paid-plan credits remain the monetization path.
 
-Default free pool (shared across the free models):
+Default free starter pool (shared across the free models and lifetime-based per account):
 
-- Images: 10 generations per signed-in user per UTC month.
-- Video: 1 generation per signed-in user per UTC month.
+- Images: 10 starter generations per signed-in account.
+- Video: 1 starter generation per signed-in account.
 - Free image output: one image per request, capped around 1 MP / 1K.
 - Free video output: Wan 2.1, 5 seconds, 480p, 81 frames.
 - NOVA API requests are never free: API-key requests keep using the API credit wallet.
@@ -19,9 +19,11 @@ Default free pool (shared across the free models):
 Override the acquisition budget with environment variables:
 
 ```bash
-NOVA_FREE_IMAGE_MONTHLY_LIMIT=10
-NOVA_FREE_VIDEO_MONTHLY_LIMIT=1
+NOVA_FREE_IMAGE_LIMIT=10
+NOVA_FREE_VIDEO_LIMIT=1
 ```
+
+The default limits are lifetime starter allowances rather than monthly allowances. That prevents a non-paying account from creating recurring provider cost forever and makes the free models a conversion funnel instead of a permanent subsidy.
 
 ## Models
 
@@ -128,7 +130,7 @@ The default fallback acquisition cost is tightly bounded because:
 
 - FLUX Schnell free generation is capped to one ~1 MP image.
 - Z-Image Turbo free generation is capped to one ~1 MP image.
-- Wan 2.1 free video is capped to one 480p generation per month by default.
+- Wan 2.1 free video is capped to one 480p starter generation per account by default.
 - API/Claude usage still consumes purchased API credits.
 - Premium video remains credit-priced.
 
