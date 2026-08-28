@@ -18,9 +18,15 @@ import {
   isZeroCostVideoWorkerHealthy,
   runZeroCostVideo,
 } from "@/lib/zeroCostVideoClient";
+import {
+  createFreeVideoJob,
+  markFreeVideoJobCompleted,
+} from "@/lib/freeVideoJobs";
+import { runVerifiedVideoRuntime } from "@/lib/verifiedVideoRuntime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 90;
 
 const ALLOWED_MODES = new Set(["text-to-video", "image-to-video", "continue-video"]);
 
@@ -101,29 +107,29 @@ export async function POST(req) {
     if (!sourceVideoUrl) {
       return NextResponse.json({ success: false, error: "Invalid NOVA source video." }, { status: 400 });
     }
-  }
 
-  if (!canUseZeroCostVideoWorker()) {
-    return NextResponse.json(
-      {
-        success: false,
-        code: "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE",
-        message: "NOVA VIDEO está em preparação neste ambiente.",
-      },
-      { status: 503 }
-    );
-  }
+    if (!canUseZeroCostVideoWorker()) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE",
+          message: "A continuação de vídeo ainda não está disponível neste ambiente.",
+        },
+        { status: 503 }
+      );
+    }
 
-  const healthy = await isZeroCostVideoWorkerHealthy();
-  if (!healthy) {
-    return NextResponse.json(
-      {
-        success: false,
-        code: "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE",
-        message: "NOVA VIDEO está temporariamente indisponível.",
-      },
-      { status: 503 }
-    );
+    const healthy = await isZeroCostVideoWorkerHealthy();
+    if (!healthy) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE",
+          message: "O motor de continuação de vídeo está temporariamente indisponível.",
+        },
+        { status: 503 }
+      );
+    }
   }
 
   let capacity = null;
@@ -177,18 +183,43 @@ export async function POST(req) {
   };
 
   try {
-    const job = await runZeroCostVideo(input, {
-      userId,
-      quotaDebited: Boolean(quota?.ok),
-      origin: req.nextUrl.origin,
-    });
+    let jobId;
+    let videoUrl = null;
+    let processing = true;
+
+    if (mode === "text-to-video" || mode === "image-to-video") {
+      // Keep submit + SSE completion in the same server request. The public
+      // Gradio queue is verified live, but its result stream must be consumed
+      // by the same flow that submitted the event; deferring that stream to a
+      // later browser poll caused valid generations to be marked as failed.
+      const generated = await runVerifiedVideoRuntime(input);
+      videoUrl = generated.videoUrl;
+
+      const completedJob = await createFreeVideoJob({
+        userId,
+        publicUrl: videoUrl,
+        quotaDebited: Boolean(quota?.ok),
+      });
+      await markFreeVideoJobCompleted(completedJob.id, videoUrl);
+      jobId = completedJob.id;
+      processing = false;
+    } else {
+      const queuedJob = await runZeroCostVideo(input, {
+        userId,
+        quotaDebited: Boolean(quota?.ok),
+        origin: req.nextUrl.origin,
+      });
+      jobId = queuedJob.jobId;
+      processing = true;
+    }
 
     return NextResponse.json(
       {
         success: true,
         provider: "nova",
-        processing: true,
-        jobId: job.jobId,
+        processing,
+        jobId,
+        ...(videoUrl && { videoUrl, url: videoUrl }),
         mode,
         seconds: duration,
         billing: {
@@ -203,7 +234,7 @@ export async function POST(req) {
           }),
         },
       },
-      { status: 202 }
+      { status: processing ? 202 : 200 }
     );
   } catch (error) {
     if (quota?.ok) {
@@ -212,15 +243,16 @@ export async function POST(req) {
     if (capacity?.ok) {
       await refundVideoCapacity(capacity.units).catch(() => {});
     }
-    console.error("[NOVA_VIDEO] failed to enqueue", {
+    console.error("[NOVA_VIDEO] generation failed", {
       mode,
       message: error?.message || String(error),
+      name: error?.name || null,
     });
     return NextResponse.json(
       {
         success: false,
         code: "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE",
-        message: "Não foi possível iniciar este vídeo agora. Tente novamente.",
+        message: "Não foi possível concluir este vídeo agora. Tente novamente.",
       },
       { status: 503 }
     );
