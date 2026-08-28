@@ -56,13 +56,18 @@ export function getFreeGenerationPolicy(plan = "trial") {
     ? positiveIntFromEnv("NOVA_PAID_FREE_VIDEO_MAX_SECONDS", base.maxVideoSeconds)
     : positiveIntFromEnv("NOVA_FREE_VIDEO_MAX_SECONDS", base.maxVideoSeconds);
 
+  const normalizedMaxVideoSeconds = Math.max(
+    5,
+    Math.min(10, maxVideoSeconds || base.maxVideoSeconds)
+  );
+
   return {
     paid,
     plan: String(plan || "trial"),
     imageDailyLimit,
     videoDailyLimit,
-    maxVideoSeconds: Math.max(5, Math.min(10, maxVideoSeconds || base.maxVideoSeconds)),
-    videoDurations: paid && maxVideoSeconds >= 10 ? [5, 10] : [5],
+    maxVideoSeconds: normalizedMaxVideoSeconds,
+    videoDurations: paid && normalizedMaxVideoSeconds >= 10 ? [5, 10] : [5],
     period: utcPeriod(),
     resetAt: nextUtcReset(),
   };
