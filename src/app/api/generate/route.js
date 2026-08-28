@@ -17,10 +17,6 @@ import {
   canUseCloudflareWorkersAI,
   runCloudflareImage,
 } from "@/lib/cloudflareAiClient";
-import {
-  canUseZeroCostVideoWorker,
-  runZeroCostVideo,
-} from "@/lib/zeroCostVideoClient";
 import { freeImageDimensions } from "@/lib/openModelWorkflows";
 import {
   debitApiCredits,
@@ -117,19 +113,6 @@ function freeDailyLimitPayload({ kind, used, limit, resetAt }) {
   };
 }
 
-function freeDurationPayload(policy) {
-  return {
-    success: false,
-    code: "FREE_VIDEO_DURATION_NOT_ALLOWED",
-    error: "FREE_VIDEO_DURATION_NOT_ALLOWED",
-    message: policy.paid
-      ? "NOVA VIDEO FREE permite vídeos de 5 ou 10 segundos no seu plano."
-      : "NOVA VIDEO FREE permite vídeos de 5 segundos no plano gratuito.",
-    allowedDurations: policy.videoDurations,
-    maxSeconds: policy.maxVideoSeconds,
-  };
-}
-
 function apiCreditsPayload({ currentBalance, creditsRequired, seconds }) {
   return {
     success: false,
@@ -198,44 +181,19 @@ function normalizeResolutionForEndpoint(endpoint, value) {
   return value;
 }
 
-function normalizeFreeVideoAspect(value, imageToVideo = false) {
-  const raw = String(value || "");
-  if (imageToVideo && raw === "1:1") return "1:1";
-  if (raw === "9:16") return "9:16";
-  return "16:9";
-}
+function buildFreeInput(selection, body, prompt) {
+  if (selection.type !== "image") return { prompt };
 
-function buildFreeInput(selection, body, prompt, seconds) {
-  if (selection.type === "image") {
-    const dimensions = freeImageDimensions(body.aspect_ratio || "1:1");
-    return {
-      prompt,
-      image_size: dimensions,
-      num_images: 1,
-      seed: Number.isFinite(Number(body.seed)) ? Number(body.seed) : undefined,
-      output_format: "jpg",
-      aspect_ratio: body.aspect_ratio || "1:1",
-      num_inference_steps: 4,
-    };
-  }
-
-  if (selection.modelKey === "nova-video-free") {
-    const imageToVideo = selection.modeKey === "image-to-video";
-    return {
-      task: imageToVideo ? "image-to-video" : "text-to-video",
-      prompt,
-      ...(body.negative_prompt && { negative_prompt: body.negative_prompt }),
-      ...(imageToVideo && body.image_url && { image_url: body.image_url }),
-      num_frames: (seconds * 16) + 1,
-      frames_per_second: 16,
-      resolution: "480p",
-      aspect_ratio: normalizeFreeVideoAspect(body.aspect_ratio, imageToVideo),
-      duration: seconds,
-      seed: Number.isFinite(Number(body.seed)) ? Number(body.seed) : undefined,
-    };
-  }
-
-  return { prompt };
+  const dimensions = freeImageDimensions(body.aspect_ratio || "1:1");
+  return {
+    prompt,
+    image_size: dimensions,
+    num_images: 1,
+    seed: Number.isFinite(Number(body.seed)) ? Number(body.seed) : undefined,
+    output_format: "jpg",
+    aspect_ratio: body.aspect_ratio || "1:1",
+    num_inference_steps: 4,
+  };
 }
 
 function buildStandardInput(selection, body, prompt, seconds) {
@@ -303,17 +261,6 @@ async function executeGeneration(selection, input) {
     }
   }
 
-  if (selection.engine === "nova-zero-cost-video") {
-    if (!canUseZeroCostVideoWorker()) {
-      const error = new Error("NOVA zero-cost video engine is not configured");
-      error.code = "NOVA_FREE_VIDEO_ENGINE_NOT_CONFIGURED";
-      throw error;
-    }
-    const output = await runZeroCostVideo(input);
-    if (!mediaExists(output)) throw new Error("NOVA video engine returned no media");
-    return { provider: "nova", output };
-  }
-
   if (selection.zeroCostOnly) {
     const error = new Error("NOVA zero-cost generation engine is unavailable");
     error.code = "NOVA_ZERO_COST_ENGINE_UNAVAILABLE";
@@ -366,6 +313,30 @@ export async function POST(req) {
     );
   }
 
+  if (isApiRequest && selection.isFree) {
+    return NextResponse.json(
+      {
+        success: false,
+        code: "NOVA_INCLUDED_MODEL_DASHBOARD_ONLY",
+        error: "NOVA_INCLUDED_MODEL_DASHBOARD_ONLY",
+        message: "As gerações incluídas do NOVA estão disponíveis somente no dashboard.",
+      },
+      { status: 403 }
+    );
+  }
+
+  if (selection.modelKey === "nova-video-free") {
+    return NextResponse.json(
+      {
+        success: false,
+        code: "NOVA_VIDEO_DEDICATED_FLOW_REQUIRED",
+        error: "NOVA_VIDEO_DEDICATED_FLOW_REQUIRED",
+        message: "Use o fluxo dedicado do NOVA VIDEO para iniciar esta geração.",
+      },
+      { status: 409 }
+    );
+  }
+
   if (selection.mode?.needsImage && !body.image_url && !body.image_urls?.length) {
     return NextResponse.json(
       { success: false, error: "This generation mode requires a reference image." },
@@ -382,16 +353,7 @@ export async function POST(req) {
     ? getFreeGenerationPolicy(dashboardAccount?.plan || "trial")
     : null;
 
-  const requestedSeconds = normalizeSeconds(body.seconds || body.duration);
-  let seconds = requestedSeconds;
-
-  if (selection.isFree && selection.type === "video") {
-    if (!freePolicy.videoDurations.includes(requestedSeconds)) {
-      return NextResponse.json(freeDurationPayload(freePolicy), { status: 400 });
-    }
-    seconds = requestedSeconds;
-  }
-
+  const seconds = normalizeSeconds(body.seconds || body.duration);
   const creditsRequired = seconds * VIDEO_CREDITS_PER_SECOND;
   let remainingCredits = null;
   let billingWallet = "dashboard";
@@ -475,7 +437,7 @@ export async function POST(req) {
   }
 
   const generationInput = selection.isFree
-    ? buildFreeInput(selection, body, prompt, seconds)
+    ? buildFreeInput(selection, body, prompt)
     : buildStandardInput(selection, body, prompt, seconds);
 
   try {
@@ -548,18 +510,6 @@ export async function POST(req) {
           resetAt: err.resetAt || freePolicy?.resetAt || null,
         },
         { status: 429 }
-      );
-    }
-
-    if (err?.code === "NOVA_FREE_VIDEO_ENGINE_NOT_CONFIGURED") {
-      return NextResponse.json(
-        {
-          success: false,
-          code: "NOVA_FREE_VIDEO_TEMPORARILY_UNAVAILABLE",
-          error: "NOVA_FREE_VIDEO_TEMPORARILY_UNAVAILABLE",
-          message: "NOVA VIDEO FREE ainda não está disponível neste ambiente.",
-        },
-        { status: 503 }
       );
     }
 
