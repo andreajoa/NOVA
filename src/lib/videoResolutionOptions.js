@@ -1,4 +1,13 @@
 export const VIDEO_RESOLUTION_OPTIONS_BY_MODEL_MODE = {
+  "nova-video-free": {
+    "text-to-video": [
+      ["480p", { label: "480p · INCLUDED" }],
+    ],
+    "image-to-video": [
+      ["480p", { label: "480p · INCLUDED" }],
+    ],
+  },
+
   wan: {
     "text-to-video": [
       ["480p", { label: "480p" }],

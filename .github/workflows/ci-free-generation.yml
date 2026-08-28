@@ -1,0 +1,104 @@
+name: NOVA Included Generation CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - feat/free-open-image-video
+    paths:
+      - "src/app/api/free-usage/**"
+      - "src/app/api/free-video-generate/**"
+      - "src/app/api/free-video-status/**"
+      - "src/app/api/generate/**"
+      - "src/app/api/internal/free-video-callback/**"
+      - "src/app/dashboard/free/**"
+      - "src/components/NovaFreeVideoStudio.jsx"
+      - "src/components/NovaGenerationStudio.jsx"
+      - "src/lib/cloudflareAiClient.js"
+      - "src/lib/db.ts"
+      - "src/lib/freeGenerationQuota.js"
+      - "src/lib/freeProviderBudget.js"
+      - "src/lib/freeVideoCapacity.js"
+      - "src/lib/freeVideoJobs.js"
+      - "src/lib/generationCatalog.js"
+      - "src/lib/novaAdminAccess.js"
+      - "src/lib/privateOpenModels.js"
+      - "src/lib/publicGenerationCatalog.js"
+      - "src/lib/zeroCostVideoClient.js"
+      - "infra/modal/nova_video_worker.py"
+      - ".github/workflows/ci-free-generation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint included generation files
+        run: |
+          npx eslint \
+            src/app/api/free-usage/route.js \
+            src/app/api/free-video-generate/route.js \
+            src/app/api/free-video-status/route.js \
+            src/app/api/generate/route.js \
+            src/app/api/internal/free-video-callback/route.js \
+            src/app/dashboard/free/page.jsx \
+            src/components/NovaFreeVideoStudio.jsx \
+            src/components/NovaGenerationStudio.jsx \
+            src/lib/cloudflareAiClient.js \
+            src/lib/freeGenerationQuota.js \
+            src/lib/freeProviderBudget.js \
+            src/lib/freeVideoCapacity.js \
+            src/lib/freeVideoJobs.js \
+            src/lib/generationCatalog.js \
+            src/lib/novaAdminAccess.js \
+            src/lib/privateOpenModels.js \
+            src/lib/publicGenerationCatalog.js \
+            src/lib/zeroCostVideoClient.js
+
+      - name: Validate TypeScript database module
+        run: npx tsc --noEmit --pretty false
+
+      - name: Validate video worker syntax
+        run: python -m py_compile infra/modal/nova_video_worker.py
+
+      - name: Validate NOVA free-generation contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          grep -q 'NOVA_VIDEO_DEDICATED_FLOW_REQUIRED' src/app/api/generate/route.js
+          grep -q 'NOVA_INCLUDED_MODEL_DASHBOARD_ONLY' src/app/api/generate/route.js
+          grep -q '/api/free-video-generate' src/components/NovaFreeVideoStudio.jsx
+          grep -q '/api/free-video-status' src/components/NovaFreeVideoStudio.jsx
+          grep -q 'reserveCloudflareFreeImage' src/app/api/generate/route.js
+          grep -q 'reserveVideoCapacity' src/app/api/free-video-generate/route.js
+          grep -q 'refundFreeGeneration' src/app/api/internal/free-video-callback/route.js
+          grep -q 'isNovaAdminUser' src/lib/db.ts
+          grep -q 'BUILT_IN_ADMIN_EMAIL_HASHES' src/lib/novaAdminAccess.js
+
+          if grep -Eqi '@cf/|fal-ai|fal\.run|huggingface\.co|modal\.' src/lib/publicGenerationCatalog.js; then
+            echo 'Provider/model detail leaked into public generation catalog.'
+            exit 1
+          fi
+
+          if grep -Eqi 'gmail\.com|outlook\.com|hotmail\.com|yahoo\.com' src/lib/novaAdminAccess.js; then
+            echo 'Plaintext admin email found in public source.'
+            exit 1
+          fi
+
+          echo 'NOVA included generation contracts: OK'

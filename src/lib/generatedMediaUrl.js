@@ -5,6 +5,11 @@ export function extractGeneratedMediaUrl(payload) {
   function addFromString(value) {
     if (!value || typeof value !== "string") return;
 
+    if (/^data:(image|video)\//i.test(value)) {
+      urls.push(value);
+      return;
+    }
+
     const matches = value.match(/https?:\/\/[^\s"'<>\\]+/g) || [];
 
     for (const raw of matches.length ? matches : [value]) {
@@ -43,6 +48,8 @@ export function extractGeneratedMediaUrl(payload) {
       "media_url",
       "outputUrl",
       "output_url",
+      "image",
+      "images",
       "file",
       "content",
       "result",
@@ -64,7 +71,9 @@ export function extractGeneratedMediaUrl(payload) {
   const unique = [...new Set(urls)];
 
   return (
+    unique.find((url) => /^data:video\//i.test(url)) ||
     unique.find((url) => /\.(mp4|webm|mov)(\?|#|$)/i.test(url)) ||
+    unique.find((url) => /^data:image\//i.test(url)) ||
     unique.find((url) => /video/i.test(url)) ||
     unique.find((url) => /\.(png|jpg|jpeg|webp)(\?|#|$)/i.test(url)) ||
     unique[0] ||
@@ -73,5 +82,6 @@ export function extractGeneratedMediaUrl(payload) {
 }
 
 export function isVideoUrl(url) {
-  return /\.(mp4|webm|mov)(\?|#|$)/i.test(String(url || "")) || /video/i.test(String(url || ""));
+  const value = String(url || "");
+  return /^data:video\//i.test(value) || /\.(mp4|webm|mov)(\?|#|$)/i.test(value) || /video/i.test(value);
 }

@@ -22,6 +22,29 @@ body {
   color: #050505;
 }
 
+/* NOVA prompt/input interaction hardening.
+   Generator fields must always accept focus, caret placement, selection and typing,
+   even when decorative positioned layers exist in the same section. */
+textarea,
+input:not([type="file"]):not([type="checkbox"]):not([type="radio"]),
+select {
+  position: relative;
+  z-index: 10;
+  pointer-events: auto !important;
+}
+
+textarea,
+input:not([type="file"]):not([type="checkbox"]):not([type="radio"]) {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  caret-color: currentColor;
+}
+
+textarea {
+  cursor: text;
+  touch-action: manipulation;
+}
+
 @keyframes marquee {
   from {
     transform: translateX(0);

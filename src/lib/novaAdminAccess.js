@@ -1,6 +1,8 @@
-const BUILT_IN_ADMIN_EMAILS = [
-  "anamacielboutique@gmail.com",
-];
+import { createHash } from "node:crypto";
+
+const BUILT_IN_ADMIN_EMAIL_HASHES = new Set([
+  "091aa1ecc824eae1215d77ee7551d0648e7f726c18c89587b5b7d9e1c09f6352",
+]);
 
 function splitList(value = "") {
   return String(value || "")
@@ -13,9 +15,12 @@ function normalizeEmail(email = "") {
   return String(email || "").trim().toLowerCase();
 }
 
+function emailHash(email = "") {
+  return createHash("sha256").update(normalizeEmail(email)).digest("hex");
+}
+
 export function novaAdminEmails() {
   return [
-    ...BUILT_IN_ADMIN_EMAILS,
     ...splitList(process.env.NOVA_ADMIN_EMAILS),
     ...splitList(process.env.OWNER_EMAIL),
   ]
@@ -30,7 +35,7 @@ export function novaAdminUserIds() {
 export function isNovaAdminEmail(email) {
   const clean = normalizeEmail(email);
   if (!clean) return false;
-  return novaAdminEmails().includes(clean);
+  return novaAdminEmails().includes(clean) || BUILT_IN_ADMIN_EMAIL_HASHES.has(emailHash(clean));
 }
 
 export function isNovaAdminUserId(userId) {

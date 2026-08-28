@@ -1,0 +1,76 @@
+name: Deploy NOVA Video Engine
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - feat/free-open-image-video
+    paths:
+      - "infra/modal/**"
+      - ".github/workflows/deploy-nova-video.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate worker syntax
+        run: python -m py_compile infra/modal/nova_video_worker.py
+
+      - name: Check deployment configuration
+        id: config
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          NOVA_VIDEO_T2V_MODEL_REPO: ${{ secrets.NOVA_VIDEO_T2V_MODEL_REPO }}
+          NOVA_VIDEO_I2V_MODEL_REPO: ${{ secrets.NOVA_VIDEO_I2V_MODEL_REPO }}
+          NOVA_VIDEO_WORKER_SECRET: ${{ secrets.NOVA_VIDEO_WORKER_SECRET }}
+        run: |
+          if [ -n "$MODAL_TOKEN_ID" ] && \
+             [ -n "$MODAL_TOKEN_SECRET" ] && \
+             [ -n "$NOVA_VIDEO_T2V_MODEL_REPO" ] && \
+             [ -n "$NOVA_VIDEO_I2V_MODEL_REPO" ] && \
+             [ -n "$NOVA_VIDEO_WORKER_SECRET" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "NOVA VIDEO deployment configuration is present."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "NOVA VIDEO deployment credentials are not configured; syntax validation passed and deployment is skipped."
+          fi
+
+      - name: Install Modal
+        if: steps.config.outputs.configured == 'true'
+        run: pip install --upgrade modal
+
+      - name: Create or update private engine secret
+        if: steps.config.outputs.configured == 'true'
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          NOVA_VIDEO_T2V_MODEL_REPO: ${{ secrets.NOVA_VIDEO_T2V_MODEL_REPO }}
+          NOVA_VIDEO_I2V_MODEL_REPO: ${{ secrets.NOVA_VIDEO_I2V_MODEL_REPO }}
+          NOVA_VIDEO_WORKER_SECRET: ${{ secrets.NOVA_VIDEO_WORKER_SECRET }}
+        run: |
+          modal secret create --force nova-video-engine \
+            NOVA_VIDEO_T2V_MODEL_REPO="$NOVA_VIDEO_T2V_MODEL_REPO" \
+            NOVA_VIDEO_I2V_MODEL_REPO="$NOVA_VIDEO_I2V_MODEL_REPO" \
+            NOVA_VIDEO_WORKER_SECRET="$NOVA_VIDEO_WORKER_SECRET" \
+            NOVA_VIDEO_STEPS="8"
+
+      - name: Deploy NOVA video engine
+        if: steps.config.outputs.configured == 'true'
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: modal deploy infra/modal/nova_video_worker.py
