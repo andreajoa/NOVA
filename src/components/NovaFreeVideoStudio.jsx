@@ -59,6 +59,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
       : [5];
     return values.filter((n) => n === 5 || n === 10);
   }, [videoUsage]);
+  const effectiveDuration = durations.includes(duration) ? duration : (durations[0] || 5);
 
   const unlimited = Boolean(usage?.admin || videoUsage?.unlimited);
   const exhausted = !unlimited && Number(videoUsage?.remaining ?? 1) <= 0;
@@ -74,21 +75,33 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
   }
 
   useEffect(() => {
-    refreshUsage();
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch("/api/free-usage", { cache: "no-store" });
+        const payload = await response.json().catch(() => ({}));
+        if (!cancelled && response.ok && payload?.success) setUsage(payload);
+      } catch {
+        // Server-side quota enforcement remains authoritative.
+      }
+    }, 0);
+
     return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
       pollToken.current += 1;
-      if (referencePreview) URL.revokeObjectURL(referencePreview);
     };
   }, []);
 
   useEffect(() => {
-    if (!durations.includes(duration)) setDuration(durations[0] || 5);
-  }, [durations, duration]);
+    return () => {
+      if (referencePreview) URL.revokeObjectURL(referencePreview);
+    };
+  }, [referencePreview]);
 
   function selectReference(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (referencePreview) URL.revokeObjectURL(referencePreview);
     setReferenceFile(file);
     setReferencePreview(URL.createObjectURL(file));
     setError("");
@@ -139,7 +152,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
     }
   }
 
-  async function startGeneration({ continueFrom = "", seconds = duration } = {}) {
+  async function startGeneration({ continueFrom = "", seconds = effectiveDuration } = {}) {
     if (!prompt.trim() && !continuePrompt.trim()) {
       setError("Descreva o vídeo que você quer criar.");
       return;
@@ -271,7 +284,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Duração desta geração</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               {durations.map((item) => (
-                <Choice key={item} active={duration === item} onClick={() => setDuration(item)} disabled={loading}>{item}s</Choice>
+                <Choice key={item} active={effectiveDuration === item} onClick={() => setDuration(item)} disabled={loading}>{item}s</Choice>
               ))}
             </div>
 
@@ -294,7 +307,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
               disabled={loading || exhausted || !prompt.trim()}
               className="mt-5 min-h-16 w-full rounded-2xl bg-[#D7FF00] px-5 text-sm font-black uppercase tracking-[0.13em] text-black disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {loading ? (status || "Gerando...") : exhausted ? "Limite diário utilizado" : `Gerar vídeo · ${duration}s`}
+              {loading ? (status || "Gerando...") : exhausted ? "Limite diário utilizado" : `Gerar vídeo · ${effectiveDuration}s`}
             </button>
 
             {jobId && <p className="mt-3 text-center text-xs text-white/35">Processando com segurança. Você pode manter esta página aberta.</p>}
