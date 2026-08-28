@@ -25,6 +25,7 @@ on:
       - "src/lib/novaAdminAccess.js"
       - "src/lib/privateOpenModels.js"
       - "src/lib/publicGenerationCatalog.js"
+      - "src/lib/verifiedVideoRuntime.js"
       - "src/lib/zeroCostVideoClient.js"
       - "infra/modal/nova_video_worker.py"
       - ".github/workflows/ci-free-generation.yml"
@@ -68,6 +69,7 @@ jobs:
             src/lib/novaAdminAccess.js \
             src/lib/privateOpenModels.js \
             src/lib/publicGenerationCatalog.js \
+            src/lib/verifiedVideoRuntime.js \
             src/lib/zeroCostVideoClient.js
 
       - name: Validate TypeScript database module
@@ -87,6 +89,7 @@ jobs:
           grep -q '/api/free-video-status' src/components/NovaFreeVideoStudio.jsx
           grep -q 'reserveCloudflareFreeImage' src/app/api/generate/route.js
           grep -q 'reserveVideoCapacity' src/app/api/free-video-generate/route.js
+          grep -q 'runVerifiedVideoRuntime' src/app/api/free-video-generate/route.js
           grep -q 'refundFreeGeneration' src/app/api/internal/free-video-callback/route.js
           grep -q 'isNovaAdminUser' src/lib/db.ts
           grep -q 'BUILT_IN_ADMIN_EMAIL_HASHES' src/lib/novaAdminAccess.js
