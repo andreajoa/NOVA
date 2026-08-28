@@ -101,19 +101,28 @@ export async function getFreeVideoJob({ jobId, userId, admin = false }) {
   };
 }
 
-export async function markFreeVideoJobCompleted(jobId) {
+export async function markFreeVideoJobCompleted(jobId, publicUrl = "") {
   if (!jobId) return false;
   await ensureTable();
-  await queryD1(
-    `UPDATE nova_included_video_jobs
-     SET status = 'completed', error_code = NULL, updated_at = ?
-     WHERE id = ? AND status = 'processing'`,
-    [nowSeconds(), jobId]
-  );
+  if (publicUrl) {
+    await queryD1(
+      `UPDATE nova_included_video_jobs
+       SET status = 'completed', public_url = ?, error_code = NULL, updated_at = ?
+       WHERE id = ? AND status = 'processing'`,
+      [String(publicUrl), nowSeconds(), jobId]
+    );
+  } else {
+    await queryD1(
+      `UPDATE nova_included_video_jobs
+       SET status = 'completed', error_code = NULL, updated_at = ?
+       WHERE id = ? AND status = 'processing'`,
+      [nowSeconds(), jobId]
+    );
+  }
   return true;
 }
 
-export async function failStaleFreeVideoJob(jobId) {
+export async function markFreeVideoJobFailed(jobId, errorCode = "GENERATION_FAILED") {
   if (!jobId) return { ok: false };
   await ensureTable();
 
@@ -132,11 +141,11 @@ export async function failStaleFreeVideoJob(jobId) {
   await queryD1(
     `UPDATE nova_included_video_jobs
      SET status = 'failed',
-         error_code = 'JOB_TIMEOUT',
+         error_code = ?,
          quota_refunded = ?,
          updated_at = ?
      WHERE id = ? AND status = 'processing'`,
-    [shouldRefund ? 1 : 0, nowSeconds(), jobId]
+    [String(errorCode || "GENERATION_FAILED").slice(0, 120), shouldRefund ? 1 : 0, nowSeconds(), jobId]
   );
 
   return {
@@ -144,6 +153,10 @@ export async function failStaleFreeVideoJob(jobId) {
     userId: String(row.user_id),
     shouldRefund,
   };
+}
+
+export async function failStaleFreeVideoJob(jobId) {
+  return markFreeVideoJobFailed(jobId, "JOB_TIMEOUT");
 }
 
 export async function finalizeFreeVideoJob({ jobId, callbackToken, status, errorCode = null }) {
