@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const ASPECTS = ["16:9", "9:16", "1:1"];
+const HF_TOKEN_KEY = "nova_hf_access_token";
+const HF_EXPIRY_KEY = "nova_hf_token_expiry";
+const HF_VERIFIER_KEY = "nova_hf_pkce_verifier";
+const HF_STATE_KEY = "nova_hf_oauth_state";
+const HF_RETURN_KEY = "nova_hf_return_to";
 
 async function uploadReference(file) {
   const form = new FormData();
@@ -14,6 +19,36 @@ async function uploadReference(file) {
   const url = payload?.url || payload?.publicUrl || payload?.fileUrl || payload?.location;
   if (!url) throw new Error("O upload terminou sem uma URL pública.");
   return url;
+}
+
+function base64Url(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return window.btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function randomUrlSafe(byteLength = 48) {
+  const bytes = new Uint8Array(byteLength);
+  window.crypto.getRandomValues(bytes);
+  return base64Url(bytes);
+}
+
+async function pkceChallenge(verifier) {
+  const bytes = new TextEncoder().encode(verifier);
+  const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+  return base64Url(new Uint8Array(digest));
+}
+
+function activeHfToken() {
+  if (typeof window === "undefined") return "";
+  const token = sessionStorage.getItem(HF_TOKEN_KEY) || "";
+  const expiry = Number(sessionStorage.getItem(HF_EXPIRY_KEY) || 0);
+  if (!token || !token.startsWith("hf_") || (expiry && Date.now() >= expiry)) {
+    sessionStorage.removeItem(HF_TOKEN_KEY);
+    sessionStorage.removeItem(HF_EXPIRY_KEY);
+    return "";
+  }
+  return token;
 }
 
 function Choice({ active, children, onClick, disabled = false }) {
@@ -50,6 +85,8 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
   const [resultUrl, setResultUrl] = useState("");
   const [totalSeconds, setTotalSeconds] = useState(0);
   const [continuePrompt, setContinuePrompt] = useState("");
+  const [hfConnected, setHfConnected] = useState(false);
+  const [showHfConnect, setShowHfConnect] = useState(false);
   const pollToken = useRef(0);
 
   const videoUsage = usage?.video;
@@ -74,7 +111,33 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
     }
   }
 
+  async function activatePersonalFreeGpu() {
+    const verifier = randomUrlSafe(48);
+    const state = randomUrlSafe(32);
+    const challenge = await pkceChallenge(verifier);
+    const origin = window.location.origin;
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+
+    sessionStorage.setItem(HF_VERIFIER_KEY, verifier);
+    sessionStorage.setItem(HF_STATE_KEY, state);
+    sessionStorage.setItem(HF_RETURN_KEY, returnTo);
+
+    const params = new URLSearchParams({
+      client_id: `${origin}/.well-known/oauth-cimd`,
+      redirect_uri: `${origin}/oauth/callback/huggingface`,
+      response_type: "code",
+      scope: "openid profile",
+      state,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+    });
+
+    window.location.assign(`https://huggingface.co/oauth/authorize?${params.toString()}`);
+  }
+
   useEffect(() => {
+    setHfConnected(Boolean(activeHfToken()));
+
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       try {
@@ -169,6 +232,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
     pollToken.current += 1;
     setLoading(true);
     setError("");
+    setShowHfConnect(false);
     setStatus(continueFrom ? "Preparando continuação..." : "Preparando geração...");
 
     try {
@@ -178,6 +242,8 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
         imageUrl = await uploadReference(referenceFile);
       }
 
+      const hfToken = activeHfToken();
+      setHfConnected(Boolean(hfToken));
       const requestMode = continueFrom ? "continue-video" : mode;
       const response = await fetch("/api/free-video-generate", {
         method: "POST",
@@ -189,6 +255,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
           aspect_ratio: aspectRatio,
           duration: seconds,
           seconds,
+          ...(hfToken && { hf_token: hfToken }),
           ...(imageUrl && { image_url: imageUrl }),
           ...(continueFrom && { source_video_url: continueFrom }),
         }),
@@ -197,9 +264,17 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
 
       if (!response.ok || !payload?.success || !payload?.jobId) {
         if (response.status === 402) await refreshUsage();
+        if (
+          payload?.code === "NOVA_FREE_VIDEO_ENGINE_QUOTA_REACHED" &&
+          payload?.canConnectPersonalFreeGpu &&
+          !hfToken
+        ) {
+          setShowHfConnect(true);
+        }
         throw new Error(payload?.message || payload?.error || "Não foi possível iniciar o vídeo.");
       }
 
+      setShowHfConnect(false);
       setJobId(payload.jobId);
       setStatus("Vídeo na fila de geração...");
       await refreshUsage();
@@ -222,8 +297,15 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
       <div className="mx-auto max-w-[1400px] px-4 py-6 md:px-6 md:py-9">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <Link href="/dashboard/free" className="text-xs font-black uppercase tracking-[0.14em] text-white/35 no-underline hover:text-white">← Gerar Grátis</Link>
-          <div className="rounded-full border border-[#D7FF00]/25 bg-[#D7FF00]/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-[#D7FF00]">
-            {unlimited ? "Admin · Ilimitado" : `${videoUsage?.remaining ?? "—"} / ${videoUsage?.limit ?? "—"} hoje`}
+          <div className="flex flex-wrap items-center gap-2">
+            {hfConnected && (
+              <div className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-cyan-200">
+                GPU pessoal grátis ativa
+              </div>
+            )}
+            <div className="rounded-full border border-[#D7FF00]/25 bg-[#D7FF00]/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-[#D7FF00]">
+              {unlimited ? "Admin · Ilimitado" : `${videoUsage?.remaining ?? "—"} / ${videoUsage?.limit ?? "—"} hoje`}
+            </div>
           </div>
         </div>
 
@@ -315,7 +397,18 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
         </section>
 
         {error && (
-          <div className="mt-5 rounded-2xl border border-red-500/25 bg-red-500/10 p-5 text-sm text-red-200">{error}</div>
+          <div className="mt-5 rounded-2xl border border-red-500/25 bg-red-500/10 p-5 text-sm text-red-200">
+            <p>{error}</p>
+            {showHfConnect && (
+              <button
+                type="button"
+                onClick={activatePersonalFreeGpu}
+                className="mt-4 rounded-xl bg-[#D7FF00] px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-black"
+              >
+                Ativar capacidade gratuita pessoal
+              </button>
+            )}
+          </div>
         )}
 
         {resultUrl && (
