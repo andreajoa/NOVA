@@ -1,0 +1,127 @@
+name: NOVA Video Runtime Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/free-open-image-video
+    paths:
+      - ".github/workflows/probe-nova-video.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Probe zero-cost video generation
+        shell: python
+        run: |
+          import base64, json, time, urllib.request, urllib.error
+
+          base = base64.b64decode("aHR0cHM6Ly9saWdodHJpY2tzLWx0eC0yLTMuaGYuc3BhY2U=").decode()
+          api = "generate_video"
+          payload = json.dumps({
+              "data": [None, "A calm ocean wave moving gently at sunset, cinematic camera, natural motion", 1.0, False, 42, False, 512, 768]
+          }).encode()
+
+          def request(url, method="GET", data=None, timeout=30):
+              req = urllib.request.Request(
+                  url,
+                  data=data,
+                  method=method,
+                  headers={
+                      "Content-Type": "application/json",
+                      "Accept": "text/event-stream, application/json",
+                      "User-Agent": "NOVA-runtime-probe/1.0",
+                  },
+              )
+              return urllib.request.urlopen(req, timeout=timeout)
+
+          event_id = None
+          root = None
+          errors = []
+          for candidate in (f"{base}/gradio_api/call/{api}", f"{base}/call/{api}"):
+              try:
+                  with request(candidate, method="POST", data=payload, timeout=45) as response:
+                      body = response.read().decode("utf-8", "replace")
+                  parsed = json.loads(body)
+                  if parsed.get("event_id"):
+                      event_id = parsed["event_id"]
+                      root = candidate
+                      print("SUBMIT_OK")
+                      break
+                  errors.append(f"{candidate}: no event_id: {body[:300]}")
+              except Exception as exc:
+                  errors.append(f"{candidate}: {type(exc).__name__}: {exc}")
+
+          if not event_id:
+              raise SystemExit("SUBMIT_FAILED\n" + "\n".join(errors))
+
+          result_url = f"{root}/{event_id}"
+          deadline = time.time() + 11 * 60
+          complete_data = None
+          last_event = ""
+          while time.time() < deadline:
+              try:
+                  with request(result_url, timeout=95) as response:
+                      text = response.read().decode("utf-8", "replace")
+                  last_event = text[-3000:]
+                  blocks = text.replace("\r\n", "\n").split("\n\n")
+                  for block in blocks:
+                      if "event: error" in block:
+                          raise SystemExit("GENERATION_ERROR\n" + block[-2000:])
+                      if "event: complete" in block:
+                          for line in block.splitlines():
+                              if line.startswith("data: "):
+                                  complete_data = json.loads(line[6:])
+                                  break
+                  if complete_data is not None:
+                      break
+              except TimeoutError:
+                  pass
+              except urllib.error.URLError as exc:
+                  if isinstance(getattr(exc, "reason", None), TimeoutError):
+                      pass
+                  else:
+                      print("POLL_RETRY", type(exc).__name__, str(exc)[:200])
+              time.sleep(2)
+
+          if complete_data is None:
+              raise SystemExit("GENERATION_TIMEOUT\n" + last_event)
+
+          def find_video(value):
+              if isinstance(value, str):
+                  if value.startswith("http") and (".mp4" in value or "file=" in value):
+                      return value
+                  return None
+              if isinstance(value, list):
+                  for item in value:
+                      found = find_video(item)
+                      if found: return found
+              if isinstance(value, dict):
+                  for key in ("url", "path", "video", "value"):
+                      if key in value:
+                          found = find_video(value[key])
+                          if found: return found
+                  for item in value.values():
+                      found = find_video(item)
+                      if found: return found
+              return None
+
+          video = find_video(complete_data)
+          if not video:
+              raise SystemExit("NO_VIDEO_OUTPUT\n" + json.dumps(complete_data)[:3000])
+
+          if video.startswith("/"):
+              video = base + video
+
+          with request(video, timeout=45) as response:
+              content_type = response.headers.get("content-type", "")
+              first = response.read(64)
+          if "video" not in content_type.lower() and b"ftyp" not in first:
+              raise SystemExit(f"BAD_VIDEO_RESPONSE content-type={content_type}")
+
+          print("NOVA_VIDEO_RUNTIME_OK")
