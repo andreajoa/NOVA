@@ -1,0 +1,133 @@
+name: NOVA Video Candidate Generation Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/probe-nova-video-generation-candidates.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Generate with candidate engines
+        shell: python
+        run: |
+          import json, time, urllib.request, urllib.error
+
+          def req(url, method="GET", data=None, timeout=45):
+              headers = {
+                  "User-Agent": "NOVA-candidate-generation-probe/1.0",
+                  "Accept": "text/event-stream, application/json",
+              }
+              if data is not None:
+                  headers["Content-Type"] = "application/json"
+              request = urllib.request.Request(url, data=data, method=method, headers=headers)
+              return urllib.request.urlopen(request, timeout=timeout)
+
+          def find_video(value, base):
+              if isinstance(value, str):
+                  if value.startswith("http") and (".mp4" in value or "file=" in value): return value
+                  if value.startswith("/") and (".mp4" in value or "file=" in value): return base + value
+                  return None
+              if isinstance(value, list):
+                  for item in value:
+                      found = find_video(item, base)
+                      if found: return found
+              if isinstance(value, dict):
+                  for key in ("url", "path", "video", "value"):
+                      if key in value:
+                          found = find_video(value[key], base)
+                          if found: return found
+                  for item in value.values():
+                      found = find_video(item, base)
+                      if found: return found
+              return None
+
+          def run(name, base, api, data, roots):
+              print("=====", name, "=====")
+              event_id = None
+              root_used = None
+              errors = []
+              payload = json.dumps({"data": data}).encode()
+              for prefix in roots:
+                  root = f"{base}{prefix}/{api}"
+                  try:
+                      with req(root, "POST", payload, 45) as r:
+                          text = r.read().decode("utf-8", "replace")
+                      parsed = json.loads(text)
+                      if parsed.get("event_id"):
+                          event_id = parsed["event_id"]
+                          root_used = root
+                          print("SUBMIT_OK", root)
+                          break
+                      errors.append(f"{root}: no event_id {text[:300]}")
+                  except Exception as exc:
+                      errors.append(f"{root}: {type(exc).__name__}: {exc}")
+              if not event_id:
+                  print("SUBMIT_FAILED", " | ".join(errors))
+                  return False
+
+              result_url = f"{root_used}/{event_id}"
+              try:
+                  with req(result_url, timeout=160) as r:
+                      text = r.read().decode("utf-8", "replace")
+              except Exception as exc:
+                  print("RESULT_FAILED", type(exc).__name__, str(exc))
+                  return False
+
+              complete_data = None
+              for block in text.replace("\r\n", "\n").split("\n\n"):
+                  if "event: error" in block:
+                      print("EVENT_ERROR", block[-1500:])
+                      return False
+                  if "event: complete" in block:
+                      line = next((x for x in block.splitlines() if x.startswith("data: ")), None)
+                      if line:
+                          complete_data = json.loads(line[6:])
+                          break
+              if complete_data is None:
+                  print("NO_COMPLETE", text[-2000:])
+                  return False
+              video = find_video(complete_data, base)
+              print("COMPLETE_DATA", json.dumps(complete_data)[:2000])
+              if not video:
+                  print("NO_VIDEO")
+                  return False
+              try:
+                  with req(video, timeout=45) as r:
+                      ctype = r.headers.get("content-type", "")
+                      first = r.read(64)
+                  if "video" not in ctype.lower() and b"ftyp" not in first:
+                      print("BAD_VIDEO", ctype)
+                      return False
+              except Exception as exc:
+                  print("VIDEO_FETCH_FAILED", type(exc).__name__, str(exc))
+                  return False
+              print("VIDEO_OK", video)
+              return True
+
+          results = {}
+          results["cogvideox2b"] = run(
+              "cogvideox2b",
+              "https://zai-org-cogvideox-2b-space.hf.space",
+              "generate",
+              ["A small red kite flying above a calm beach, cinematic natural motion", 2, 4.0],
+              ["/gradio_api/call", "/call"],
+          )
+          results["animatediff_lightning"] = run(
+              "animatediff_lightning",
+              "https://bytedance-animatediff-lightning.hf.space",
+              "generate_image",
+              ["A small red kite flying above a calm beach, cinematic", "epiCRealism", "", 2],
+              ["/call", "/gradio_api/call"],
+          )
+          print("RESULTS", json.dumps(results))
+          if not any(results.values()):
+              raise SystemExit("No candidate generated successfully")
