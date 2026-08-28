@@ -1,0 +1,87 @@
+name: Wan2.1 Async Status Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/probe-wan21-status.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Submit and poll Wan2.1
+        shell: python
+        run: |
+          import json, time, urllib.request, urllib.error, http.cookiejar
+
+          base="https://wan-ai-wan2-1.hf.space"
+          jar=http.cookiejar.CookieJar()
+          opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
+          def request(url,method="GET",data=None,timeout=120):
+            h={"User-Agent":"NOVA-wan21-status-probe/1.0","Accept":"text/event-stream, application/json"}
+            if data is not None:h["Content-Type"]="application/json"
+            return opener.open(urllib.request.Request(url,data=data,method=method,headers=h),timeout=timeout)
+
+          def gradio_call(api,data,timeout=180):
+            root=base+"/gradio_api/call/"+api
+            payload=json.dumps({"data":data}).encode()
+            with request(root,"POST",payload,60) as r:
+              submit=json.loads(r.read().decode("utf-8","replace"))
+            eid=submit.get("event_id")
+            print("SUBMIT",api,submit)
+            if not eid:return None
+            with request(root+"/"+eid,timeout=timeout) as r:
+              text=r.read().decode("utf-8","replace")
+            print("STREAM",api,text[-4000:])
+            complete=None
+            for block in text.replace("\r\n","\n").split("\n\n"):
+              if "event: error" in block:return {"error":block}
+              if "event: complete" in block:
+                line=next((x for x in block.splitlines() if x.startswith("data: ")),None)
+                if line:complete=json.loads(line[6:])
+            return complete
+
+          started=gradio_call("t2v_generation_async",[
+            "A small yellow sailboat moving gently across a calm blue lake, cinematic",
+            "1280*720",
+            False,
+            42,
+          ])
+          print("STARTED",json.dumps(started)[:2000])
+
+          for i in range(35):
+            time.sleep(8)
+            status=gradio_call("status_refresh",[],timeout=90)
+            print("POLL",i,json.dumps(status)[:3000])
+            def find_video(v):
+              if isinstance(v,str) and v.startswith("http") and (".mp4" in v.lower() or "video" in v.lower()):return v
+              if isinstance(v,list):
+                for x in v:
+                  y=find_video(x)
+                  if y:return y
+              if isinstance(v,dict):
+                for x in v.values():
+                  y=find_video(x)
+                  if y:return y
+              return None
+            video=find_video(status)
+            if video:
+              print("VIDEO",video)
+              try:
+                with request(video,timeout=60) as r:
+                  c=r.headers.get("content-type","");first=r.read(64)
+                print("VIDEO_CHECK",c,b"ftyp" in first)
+                if "video" in c.lower() or b"ftyp" in first:
+                  print("WAN21_STATUS_VIDEO_OK")
+                  raise SystemExit(0)
+              except Exception as exc:
+                print("VIDEO_FAIL",type(exc).__name__,str(exc))
+          raise SystemExit("Wan2.1 status flow produced no video")
