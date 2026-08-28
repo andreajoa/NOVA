@@ -4,13 +4,35 @@ function config() {
   const url = process.env.NOVA_ZERO_COST_VIDEO_URL;
   if (!url) return null;
   return {
-    url,
+    url: String(url).replace(/\/$/, ""),
     secret: process.env.NOVA_ZERO_COST_VIDEO_SECRET || "",
   };
 }
 
 export function canUseZeroCostVideoWorker() {
   return Boolean(config());
+}
+
+export async function isZeroCostVideoWorkerHealthy() {
+  const worker = config();
+  if (!worker) return false;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(`${worker.url}/health`, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) return false;
+    const payload = await response.json().catch(() => ({}));
+    return payload?.ok === true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function normalizeVideoOutput(payload) {
