@@ -446,13 +446,17 @@ export async function activateBasicSubscription(data: {
 }
 
 export async function isAdminUser(clerkId: string): Promise<boolean> {
+  if (!clerkId) return false
+
   try {
     const res = await queryD1(`SELECT role FROM users WHERE clerk_id = ? LIMIT 1`, [clerkId])
     const rows = d1Rows(res)
-    return rows[0]?.role === 'admin'
+    if (rows[0]?.role === 'admin') return true
   } catch {
-    return false
+    // Fall through to the centralized NOVA admin identity check.
   }
+
+  return isNovaAdminUser(clerkId)
 }
 
 export async function setAdminRole(clerkId: string): Promise<void> {
