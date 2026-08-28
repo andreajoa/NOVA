@@ -63,22 +63,22 @@ export default function HomeVideoHero() {
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/dashboard/generate"
+              href="/dashboard/free"
               className="inline-flex justify-center rounded-2xl bg-[#D7FF00] px-7 py-4 text-sm font-black uppercase tracking-[0.14em] text-black no-underline transition hover:scale-[1.02] hover:bg-[#e3ff2f]"
             >
-              Generate Video
+              Generate Free Now
             </Link>
 
             <Link
-              href="/product-ad-generator"
+              href="/dashboard/generate"
               className="inline-flex justify-center rounded-2xl border border-white/16 bg-white/[0.04] px-7 py-4 text-sm font-black uppercase tracking-[0.14em] text-white no-underline backdrop-blur-xl transition hover:border-[#D7FF00]/60 hover:text-[#D7FF00]"
             >
-              Watch Examples
+              Generate Pro Video
             </Link>
           </div>
 
           <div className="mt-8 grid max-w-3xl grid-cols-2 gap-3 text-xs font-bold text-white/62 sm:grid-cols-4">
-            {["10 free credits", "No studio needed", "Product ads", "Export MP4"].map((item) => (
+            {["Free image + video", "No studio needed", "Product ads", "Export MP4"].map((item) => (
               <div
                 key={item}
                 className="rounded-2xl border border-white/10 bg-black/35 px-4 py-3 backdrop-blur-xl"
