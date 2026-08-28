@@ -32,6 +32,7 @@ export const maxDuration = 90;
 
 const ALLOWED_MODES = new Set(["text-to-video", "image-to-video", "continue-video"]);
 const MAX_PERSISTED_VIDEO_BYTES = 120 * 1024 * 1024;
+const PERSIST_TIMEOUT_MS = 8_000;
 
 function normalizeDuration(value, allowed) {
   const requested = Number(value || 5);
@@ -88,7 +89,7 @@ async function persistGeneratedVideo({ userId, remoteUrl, hfToken }) {
   if (!sourceUrl) throw new Error("NOVA generated video returned an invalid URL");
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45_000);
+  const timer = setTimeout(() => controller.abort(), PERSIST_TIMEOUT_MS);
   let response;
   try {
     response = await fetch(sourceUrl, {
@@ -205,9 +206,6 @@ export async function POST(req) {
     }
   }
 
-  // The shared NOVA safety cap protects only anonymous FREE/trial traffic.
-  // Paid plans, admin, and users using their own free HF GPU allowance keep
-  // their account-level quota instead of being blocked by other users' usage.
   const usesSharedCapacity = !admin && !policy.paid && !hfToken;
   let capacity = null;
   if (usesSharedCapacity) {
@@ -261,25 +259,52 @@ export async function POST(req) {
   };
 
   try {
-    let jobId;
+    let jobId = "";
     let videoUrl = null;
     let processing = true;
+    let engine = null;
+    let storage = null;
 
     if (mode === "text-to-video" || mode === "image-to-video") {
       const generated = await runVerifiedVideoRuntime(input, { hfToken });
-      videoUrl = await persistGeneratedVideo({
-        userId,
-        remoteUrl: generated.videoUrl,
-        hfToken,
-      });
+      videoUrl = generated.videoUrl;
+      engine = generated.engine || null;
+      storage = "provider";
 
-      const completedJob = await createFreeVideoJob({
-        userId,
-        publicUrl: videoUrl,
-        quotaDebited: Boolean(quota?.ok),
-      });
-      await markFreeVideoJobCompleted(completedJob.id, videoUrl);
-      jobId = completedJob.id;
+      // Persistence is best-effort. A valid generated MP4 must never be turned
+      // into a 503 merely because R2 is temporarily slow or unavailable.
+      try {
+        videoUrl = await persistGeneratedVideo({
+          userId,
+          remoteUrl: generated.videoUrl,
+          hfToken,
+        });
+        storage = "r2";
+      } catch (persistError) {
+        console.warn("[NOVA_VIDEO] persistence skipped; returning verified provider URL", {
+          engine,
+          message: persistError?.message || String(persistError),
+        });
+      }
+
+      // Job history is also best-effort for synchronous generations. The user
+      // already has the completed video URL, so a database write must not make
+      // a successful generation look like a failure.
+      try {
+        const completedJob = await createFreeVideoJob({
+          userId,
+          publicUrl: videoUrl,
+          quotaDebited: Boolean(quota?.ok),
+        });
+        await markFreeVideoJobCompleted(completedJob.id, videoUrl);
+        jobId = completedJob.id;
+      } catch (jobError) {
+        console.warn("[NOVA_VIDEO] completed video returned without job history", {
+          engine,
+          message: jobError?.message || String(jobError),
+        });
+      }
+
       processing = false;
     } else {
       const queuedJob = await runZeroCostVideo(input, {
@@ -296,8 +321,10 @@ export async function POST(req) {
         success: true,
         provider: "nova",
         processing,
-        jobId,
+        jobId: jobId || null,
         ...(videoUrl && { videoUrl, url: videoUrl }),
+        ...(engine && { engine }),
+        ...(storage && { storage }),
         mode,
         seconds: duration,
         billing: {
@@ -326,6 +353,7 @@ export async function POST(req) {
     const upstreamCapacityReached = isUpstreamCapacityError(error);
     console.error("[NOVA_VIDEO] generation failed", {
       mode,
+      code: error?.code || null,
       message: error?.message || String(error),
       name: error?.name || null,
       upstreamCapacityReached,
@@ -344,9 +372,7 @@ export async function POST(req) {
           personalFreeGpu: Boolean(hfToken),
           canConnectPersonalFreeGpu: !hfToken,
           ...(admin && {
-            diagnostic: hfToken
-              ? "A cota ZeroGPU autenticada da conta conectada foi atingida."
-              : "A cota ZeroGPU anônima/compartilhada foi atingida; uma conta HF gratuita usa cota própria.",
+            diagnostic: String(error?.message || error || "Capacidade gratuita indisponível").slice(0, 1200),
           }),
         },
         { status: 429 }
@@ -356,11 +382,12 @@ export async function POST(req) {
     return NextResponse.json(
       {
         success: false,
-        code: "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE",
+        code: error?.code || "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE",
         message: "Não foi possível concluir este vídeo agora. A tentativa não consumiu seu limite NOVA.",
         quotaRefunded: true,
+        canConnectPersonalFreeGpu: !hfToken,
         ...(admin && {
-          diagnostic: String(error?.message || error || "Erro desconhecido").slice(0, 700),
+          diagnostic: String(error?.message || error || "Erro desconhecido").slice(0, 1200),
         }),
       },
       { status: 503 }

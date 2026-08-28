@@ -261,30 +261,33 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
       });
       const payload = await response.json().catch(() => ({}));
 
-      if (!response.ok || !payload?.success || !payload?.jobId) {
-        if (response.status === 402) await refreshUsage();
-        if (
-          payload?.code === "NOVA_FREE_VIDEO_ENGINE_QUOTA_REACHED" &&
-          payload?.canConnectPersonalFreeGpu &&
-          !hfToken
-        ) {
-          setShowHfConnect(true);
-        }
-        throw new Error(payload?.message || payload?.error || "Não foi possível iniciar o vídeo.");
-      }
-
-      setShowHfConnect(false);
-      await refreshUsage();
-
-      if (payload?.processing === false && payload?.videoUrl) {
+      // Synchronous text/image generation is already complete here. Do not
+      // require a history job record before showing a valid MP4 to the user.
+      if (response.ok && payload?.success && payload?.processing === false && payload?.videoUrl) {
+        setShowHfConnect(false);
         setResultUrl(payload.videoUrl);
         setTotalSeconds((current) => continueFrom ? current + seconds : seconds);
         setStatus("Vídeo pronto.");
         setLoading(false);
         setJobId("");
+        await refreshUsage();
         return;
       }
 
+      if (!response.ok || !payload?.success || !payload?.jobId) {
+        if (response.status === 402) await refreshUsage();
+        if (payload?.canConnectPersonalFreeGpu && !hfToken) {
+          setShowHfConnect(true);
+        }
+        const baseMessage = payload?.message || payload?.error || "Não foi possível iniciar o vídeo.";
+        const diagnostic = unlimited && payload?.diagnostic
+          ? ` Diagnóstico: ${payload.diagnostic}`
+          : "";
+        throw new Error(`${baseMessage}${diagnostic}`);
+      }
+
+      setShowHfConnect(false);
+      await refreshUsage();
       setJobId(payload.jobId);
       setStatus("Vídeo na fila de geração...");
       await pollJob(payload.jobId, seconds, !continueFrom);
