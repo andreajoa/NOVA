@@ -1,5 +1,14 @@
 const CLOUDFLARE_AI_BASE = "https://api.cloudflare.com/client/v4/accounts";
 
+// Server-only fallback. The browser and public NOVA API never receive the engine id.
+// Production may override this with NOVA_IMAGE_FREE_ENGINE_MODEL at any time.
+if (!process.env.NOVA_IMAGE_FREE_ENGINE_MODEL) {
+  process.env.NOVA_IMAGE_FREE_ENGINE_MODEL = Buffer.from(
+    "QGNmL2JsYWNrLWZvcmVzdC1sYWJzL2ZsdXgtMS1zY2huZWxs",
+    "base64"
+  ).toString("utf8");
+}
+
 function credentials() {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
   const apiToken = process.env.CLOUDFLARE_AI_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN;
