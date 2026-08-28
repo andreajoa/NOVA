@@ -56,6 +56,12 @@ function ownedMediaUrl(value) {
   return Boolean(raw && base && raw.startsWith(`${base}/`)) ? raw : "";
 }
 
+function safeHfToken(value) {
+  const raw = String(value || "").trim();
+  if (!raw.startsWith("hf_") || raw.length < 16 || raw.length > 700) return "";
+  return raw;
+}
+
 function isUpstreamCapacityError(error) {
   const message = String(error?.message || error || "").toLowerCase();
   return [
@@ -84,6 +90,7 @@ export async function POST(req) {
   const body = await req.json().catch(() => ({}));
   const prompt = String(body.prompt || "").trim();
   const mode = String(body.mode || "text-to-video").trim();
+  const hfToken = safeHfToken(body.hf_token);
 
   if (!prompt) {
     return NextResponse.json({ success: false, error: "Prompt is required." }, { status: 400 });
@@ -206,7 +213,7 @@ export async function POST(req) {
     let processing = true;
 
     if (mode === "text-to-video" || mode === "image-to-video") {
-      const generated = await runVerifiedVideoRuntime(input);
+      const generated = await runVerifiedVideoRuntime(input, { hfToken });
       videoUrl = generated.videoUrl;
 
       const completedJob = await createFreeVideoJob({
@@ -240,6 +247,7 @@ export async function POST(req) {
           creditsCharged: 0,
           wallet: admin ? "admin" : "nova_included",
           unlimited: admin,
+          personalFreeGpu: Boolean(hfToken),
           ...(quota && {
             freeUsed: quota.used,
             freeLimit: quota.limit,
@@ -264,6 +272,7 @@ export async function POST(req) {
       message: error?.message || String(error),
       name: error?.name || null,
       upstreamCapacityReached,
+      personalFreeGpu: Boolean(hfToken),
     });
 
     if (upstreamCapacityReached) {
@@ -271,10 +280,16 @@ export async function POST(req) {
         {
           success: false,
           code: "NOVA_FREE_VIDEO_ENGINE_QUOTA_REACHED",
-          message: "O limite do motor gratuito de vídeo foi atingido. Esta tentativa não consumiu seu limite NOVA. A capacidade do motor renova diariamente.",
+          message: hfToken
+            ? "Sua capacidade gratuita pessoal de GPU foi utilizada por agora. Esta tentativa não consumiu seu limite NOVA."
+            : "A capacidade gratuita compartilhada de vídeo foi utilizada. Ative sua capacidade gratuita pessoal para continuar sem créditos.",
           quotaRefunded: true,
+          personalFreeGpu: Boolean(hfToken),
+          canConnectPersonalFreeGpu: !hfToken,
           ...(admin && {
-            diagnostic: "O provedor ZeroGPU recusou a geração por limite/capacidade. O limite da conta NOVA não é a causa.",
+            diagnostic: hfToken
+              ? "A cota ZeroGPU autenticada da conta conectada foi atingida."
+              : "A cota ZeroGPU anônima/compartilhada foi atingida; uma conta HF gratuita usa cota própria.",
           }),
         },
         { status: 429 }
