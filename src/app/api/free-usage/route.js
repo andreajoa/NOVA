@@ -5,6 +5,8 @@ import {
   getFreeGenerationPolicy,
   getFreeGenerationUsage,
 } from "@/lib/freeGenerationQuota";
+import { canUseCloudflareWorkersAI } from "@/lib/cloudflareAiClient";
+import { canUseZeroCostVideoWorker } from "@/lib/zeroCostVideoClient";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +26,12 @@ export async function GET() {
     getFreeGenerationUsage(userId, "video", account.plan),
   ]);
 
+  // Only expose NOVA availability, never provider/model identity.
+  const imageAvailable = Boolean(
+    process.env.NOVA_IMAGE_FREE_ENGINE_MODEL && canUseCloudflareWorkersAI()
+  );
+  const videoAvailable = canUseZeroCostVideoWorker();
+
   return NextResponse.json({
     success: true,
     plan: account.plan,
@@ -35,6 +43,7 @@ export async function GET() {
       remaining: image.remaining,
       resolution: "1K",
       credits: 0,
+      available: imageAvailable,
     },
     video: {
       used: video.used,
@@ -44,6 +53,7 @@ export async function GET() {
       durations: policy.videoDurations,
       resolution: "480p",
       credits: 0,
+      available: videoAvailable,
     },
   });
 }
