@@ -1,18 +1,5 @@
 export const falModels = {
   video: {
-    "wan21-free": {
-      label: "Wan 2.1 · FREE",
-      description: "Free 5s open-model video · 480p · upgrade for premium quality",
-      image: "/models/wan.png",
-      tier: "free",
-      providerPreference: "runpod",
-      runpodTarget: "wan21-free",
-      freeQuotaKind: "video",
-      modes: {
-        "text-to-video":  { label: "Text to Video",  endpoint: "fal-ai/wan-t2v", needsImage: false },
-        "image-to-video": { label: "Image to Video", endpoint: "fal-ai/wan-i2v", needsImage: true  },
-      },
-    },
     seedance: {
       label: "Seedance 2.0",
       description: "ByteDance flagship video model",
@@ -61,6 +48,12 @@ export const falModels = {
       }
     },
     // LTX temporarily disabled: previous endpoints were not verified in fal.ai docs.
+    // ltx: {
+    //   label: "LTX Video 2.3",
+    //   description: "Lightning-fast video generation",
+    //   image: "/models/ltx.png",
+    //   modes: {}
+    // },
     wan: {
       label: "Wan 2.2",
       description: "Open-source video powerhouse",
@@ -99,32 +92,13 @@ export const falModels = {
 
   image: {
     "flux-schnell": {
-      label: "FLUX Schnell · FREE",
-      description: "Free open-model image generation · fast 1K output",
+      label: "FLUX Schnell",
+      description: "Fastest FLUX — great for rapid iteration",
       image: "/models/flux-schnell.png",
       costPerGen: 0.003,
-      unlimited: false,
-      tier: "free",
-      providerPreference: "runpod",
-      runpodTarget: "flux-schnell",
-      freeQuotaKind: "image",
+      unlimited: true,
       modes: {
         "text-to-image": { label: "Text to Image", endpoint: "fal-ai/flux/schnell", needsImage: false },
-      },
-    },
-    "z-image-turbo": {
-      label: "Z-Image Turbo · FREE",
-      description: "Free photorealistic open-model generation · fast 1K output",
-      image: "/models/flux-schnell.png",
-      costPerGen: 0.005,
-      unlimited: false,
-      tier: "free",
-      providerPreference: "runpod",
-      runpodTarget: "z-image-turbo",
-      freeQuotaKind: "image",
-      modes: {
-        "text-to-image": { label: "Text to Image", endpoint: "fal-ai/z-image/turbo", needsImage: false },
-        "image-to-image": { label: "Image to Image", endpoint: "fal-ai/z-image/turbo/image-to-image", needsImage: true },
       },
     },
     "flux-dev": {
@@ -251,7 +225,7 @@ export const falModels = {
       costPerGen: 0.008,
       unlimited: true,
       modes: {
-        "text-to-image":  { label: "Text to Image",  endpoint: "fal-ai/kolors", needsImage: false },
+        "text-to-image":  { label: "Text to Image",  endpoint: "fal-ai/kolors",                  needsImage: false },
       },
     },
   },
