@@ -44,7 +44,7 @@ function safeHttpsUrl(value) {
   }
 }
 
-function ownedVideoUrl(value) {
+function ownedMediaUrl(value) {
   const raw = safeHttpsUrl(value);
   const base = String(process.env.R2_PUBLIC_URL || "").replace(/\/$/, "");
   return Boolean(raw && base && raw.startsWith(`${base}/`)) ? raw : "";
@@ -90,14 +90,14 @@ export async function POST(req) {
   let sourceVideoUrl = "";
 
   if (mode === "image-to-video") {
-    imageUrl = safeHttpsUrl(body.image_url);
+    imageUrl = ownedMediaUrl(body.image_url);
     if (!imageUrl) {
-      return NextResponse.json({ success: false, error: "Reference image is required." }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Invalid NOVA reference image." }, { status: 400 });
     }
   }
 
   if (mode === "continue-video") {
-    sourceVideoUrl = ownedVideoUrl(body.source_video_url);
+    sourceVideoUrl = ownedMediaUrl(body.source_video_url);
     if (!sourceVideoUrl) {
       return NextResponse.json({ success: false, error: "Invalid NOVA source video." }, { status: 400 });
     }
