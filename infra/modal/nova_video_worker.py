@@ -6,6 +6,9 @@ Create a Modal secret named `nova-video-engine` with:
   NOVA_VIDEO_MODEL_REPO=<approved open-weight video model repository>
   NOVA_VIDEO_WORKER_SECRET=<same value configured in NOVA_ZERO_COST_VIDEO_SECRET>
 
+Optional:
+  NOVA_VIDEO_STEPS=8
+
 Deploy with:
   modal deploy infra/modal/nova_video_worker.py
 
@@ -65,7 +68,7 @@ def _dimensions(aspect_ratio: str) -> tuple[int, int]:
 
 
 def _frames_for_duration(seconds: int) -> int:
-    # 24 fps and an 8n+1 frame count keeps the temporal latent geometry valid.
+    # 24 fps and an 8n+1 frame count keeps temporal latent geometry valid.
     return (max(5, min(10, int(seconds))) * 24) + 1
 
 
@@ -180,26 +183,31 @@ class NovaVideoEngine:
     secrets=[engine_secret],
     timeout=12 * 60,
 )
-@modal.fastapi_endpoint(method="POST", label="nova-video")
-async def generate(request):
-    from fastapi import HTTPException, Request
+@modal.asgi_app()
+def api():
+    from fastapi import FastAPI, HTTPException, Request
 
-    # Modal/FastAPI supplies the request object at runtime. Keeping the import
-    # inside the function avoids importing FastAPI in local deployment parsing.
-    if not isinstance(request, Request):
-        raise HTTPException(status_code=400, detail="Invalid request")
+    web = FastAPI(title="NOVA Video Engine", docs_url=None, redoc_url=None, openapi_url=None)
 
-    authorization = request.headers.get("authorization", "")
-    supplied = authorization[7:] if authorization.lower().startswith("bearer ") else ""
-    if not _authorized(supplied):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    @web.get("/health")
+    async def health():
+        return {"ok": True}
 
-    body = await request.json()
-    payload = body.get("input") if isinstance(body, dict) else None
-    if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="Invalid input")
+    @web.post("/")
+    async def generate_video(request: Request):
+        authorization = request.headers.get("authorization", "")
+        supplied = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+        if not _authorized(supplied):
+            raise HTTPException(status_code=401, detail="Unauthorized")
 
-    try:
-        return NovaVideoEngine().generate.remote(payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        body = await request.json()
+        payload = body.get("input") if isinstance(body, dict) else None
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=400, detail="Invalid input")
+
+        try:
+            return NovaVideoEngine().generate.remote(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return web
