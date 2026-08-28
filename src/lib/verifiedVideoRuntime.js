@@ -37,7 +37,7 @@ const WAN_T2V_PROVIDER = {
       Math.min(5, Number(input.duration || 5)),
       1,
       3,
-      4,
+      2,
       seed,
       false,
     ];
@@ -54,7 +54,7 @@ const WAN_I2V_PROVIDER = {
     return [
       image,
       String(input.prompt || "").trim(),
-      4,
+      2,
       String(input.negative_prompt || "").trim(),
       Math.min(5, Number(input.duration || 5)),
       1,
@@ -85,12 +85,19 @@ function providerPool(input) {
   }
 
   if (input.task === "text-to-video" && seconds <= WAN_T2V_PROVIDER.maxSeconds) {
-    // LTX remains first for text generation because it is the currently proven
-    // production route. Wan is an automatic independent model/Space failover.
-    return [LTX_PROVIDER, WAN_T2V_PROVIDER];
+    // Wan's 2-step path reserves about half the ZeroGPU time of the previous
+    // 4-step path, so it is the preferred no-cost engine for 5s generations.
+    return [WAN_T2V_PROVIDER, LTX_PROVIDER];
   }
 
   return [LTX_PROVIDER];
+}
+
+function requestHeaders(hfToken, extra = {}) {
+  return {
+    ...extra,
+    ...(hfToken ? { Authorization: `Bearer ${hfToken}` } : {}),
+  };
 }
 
 function findVideo(value, base) {
@@ -185,7 +192,7 @@ async function readReferenceImage(imageUrl) {
   return { bytes, contentType };
 }
 
-async function uploadReference(provider, reference) {
+async function uploadReference(provider, reference, hfToken) {
   const extension = reference.contentType.includes("png")
     ? "png"
     : reference.contentType.includes("webp")
@@ -206,7 +213,7 @@ async function uploadReference(provider, reference) {
       body: form,
       cache: "no-store",
       signal: uploadTimeout.controller.signal,
-      headers: { "User-Agent": "NOVA-free-video-pool/1.0" },
+      headers: requestHeaders(hfToken, { "User-Agent": "NOVA-free-video-pool/1.1" }),
     });
   } finally {
     clearTimeout(uploadTimeout.timer);
@@ -225,8 +232,8 @@ async function uploadReference(provider, reference) {
   };
 }
 
-async function submitJob(provider, input, reference) {
-  const image = reference ? await uploadReference(provider, reference) : null;
+async function submitJob(provider, input, reference, hfToken) {
+  const image = reference ? await uploadReference(provider, reference, hfToken) : null;
   const seed = Number.isFinite(Number(input.seed))
     ? Number(input.seed)
     : Math.floor(Math.random() * 2_000_000_000);
@@ -243,11 +250,11 @@ async function submitJob(provider, input, reference) {
         method: "POST",
         cache: "no-store",
         signal: submitTimeout.controller.signal,
-        headers: {
+        headers: requestHeaders(hfToken, {
           "Content-Type": "application/json",
           Accept: "application/json",
-          "User-Agent": "NOVA-free-video-pool/1.0",
-        },
+          "User-Agent": "NOVA-free-video-pool/1.1",
+        }),
         body: payload,
       });
       const text = await response.text();
@@ -272,7 +279,7 @@ async function submitJob(provider, input, reference) {
   throw new Error(`NOVA video queue rejected the job: ${errors.join(" | ").slice(0, 900)}`);
 }
 
-async function waitForResult(provider, pollUrl) {
+async function waitForResult(provider, pollUrl, hfToken) {
   const resultTimeout = withTimeout(70000);
   let response;
   try {
@@ -280,10 +287,10 @@ async function waitForResult(provider, pollUrl) {
       method: "GET",
       cache: "no-store",
       signal: resultTimeout.controller.signal,
-      headers: {
+      headers: requestHeaders(hfToken, {
         Accept: "text/event-stream, application/json",
-        "User-Agent": "NOVA-free-video-pool/1.0",
-      },
+        "User-Agent": "NOVA-free-video-pool/1.1",
+      }),
     });
   } finally {
     clearTimeout(resultTimeout.timer);
@@ -317,17 +324,17 @@ async function waitForResult(provider, pollUrl) {
   throw new Error("NOVA video runtime ended without a completion event");
 }
 
-async function verifyVideo(url) {
+async function verifyVideo(url, hfToken) {
   const timeout = withTimeout(20000);
   try {
     const response = await fetch(url, {
       method: "GET",
       cache: "no-store",
       signal: timeout.controller.signal,
-      headers: {
+      headers: requestHeaders(hfToken, {
         Range: "bytes=0-63",
-        "User-Agent": "NOVA-free-video-pool/1.0",
-      },
+        "User-Agent": "NOVA-free-video-pool/1.1",
+      }),
     });
     if (!response.ok && response.status !== 206) {
       throw new Error(`NOVA generated video is not reachable (${response.status})`);
@@ -342,29 +349,30 @@ async function verifyVideo(url) {
   }
 }
 
-async function runProvider(provider, input, reference) {
+async function runProvider(provider, input, reference, hfToken) {
   if (!provider.tasks.has(input.task) || Number(input.duration || 5) > provider.maxSeconds) {
     throw new Error("Provider does not support this NOVA video request");
   }
 
-  const pollUrl = await submitJob(provider, input, reference);
-  const videoUrl = await waitForResult(provider, pollUrl);
-  await verifyVideo(videoUrl);
+  const pollUrl = await submitJob(provider, input, reference, hfToken);
+  const videoUrl = await waitForResult(provider, pollUrl, hfToken);
+  await verifyVideo(videoUrl, hfToken);
   return { videoUrl, engine: provider.id };
 }
 
-export async function runVerifiedVideoRuntime(input = {}) {
+export async function runVerifiedVideoRuntime(input = {}, options = {}) {
   if (!["text-to-video", "image-to-video"].includes(input.task)) {
     throw new Error("Verified NOVA public runtime supports text-to-video and image-to-video only");
   }
 
+  const hfToken = String(options.hfToken || "").trim();
   const reference = input.image_url ? await readReferenceImage(input.image_url) : null;
   const providers = providerPool(input);
   const failures = [];
 
   for (const provider of providers) {
     try {
-      return await runProvider(provider, input, reference);
+      return await runProvider(provider, input, reference, hfToken);
     } catch (error) {
       const normalized = normalizeProviderError(error, provider);
       failures.push(`${provider.id}:${normalized.message}`);
@@ -372,13 +380,13 @@ export async function runVerifiedVideoRuntime(input = {}) {
       console.warn("[NOVA_VIDEO] free engine attempt failed", {
         engine: provider.id,
         code: normalized.code,
+        authenticatedHfQuota: Boolean(hfToken),
         message: normalized.message.slice(0, 500),
       });
 
-      // Hugging Face ZeroGPU quota is shared by the caller across Spaces. If
-      // that quota is exhausted, switching to another HF Space would only burn
-      // time and produce the same result. Provider/runtime faults still fail
-      // over automatically to the next model in the pool.
+      // ZeroGPU quota belongs to the caller. If a personal HF token is present,
+      // the user's own free quota is being consumed; otherwise the stricter
+      // unauthenticated pool is in use. Switching Spaces cannot reset that quota.
       if (normalized.code === "NOVA_ZERO_GPU_QUOTA_EXHAUSTED") {
         throw normalized;
       }
