@@ -101,9 +101,54 @@ export async function getFreeVideoJob({ jobId, userId, admin = false }) {
   };
 }
 
+export async function markFreeVideoJobCompleted(jobId) {
+  if (!jobId) return false;
+  await ensureTable();
+  await queryD1(
+    `UPDATE nova_included_video_jobs
+     SET status = 'completed', error_code = NULL, updated_at = ?
+     WHERE id = ? AND status = 'processing'`,
+    [nowSeconds(), jobId]
+  );
+  return true;
+}
+
+export async function failStaleFreeVideoJob(jobId) {
+  if (!jobId) return { ok: false };
+  await ensureTable();
+
+  const res = await queryD1(
+    `SELECT id, user_id, status, quota_debited, quota_refunded
+     FROM nova_included_video_jobs WHERE id = ? LIMIT 1`,
+    [jobId]
+  );
+  const row = d1Rows(res)[0];
+  if (!row || String(row.status) !== "processing") return { ok: false };
+
+  const shouldRefund =
+    Number(row.quota_debited || 0) === 1 &&
+    Number(row.quota_refunded || 0) !== 1;
+
+  await queryD1(
+    `UPDATE nova_included_video_jobs
+     SET status = 'failed',
+         error_code = 'JOB_TIMEOUT',
+         quota_refunded = ?,
+         updated_at = ?
+     WHERE id = ? AND status = 'processing'`,
+    [shouldRefund ? 1 : 0, nowSeconds(), jobId]
+  );
+
+  return {
+    ok: true,
+    userId: String(row.user_id),
+    shouldRefund,
+  };
+}
+
 export async function finalizeFreeVideoJob({ jobId, callbackToken, status, errorCode = null }) {
   if (!jobId || !callbackToken) return { ok: false, reason: "invalid" };
-  if (!['completed', 'failed'].includes(status)) return { ok: false, reason: "invalid_status" };
+  if (!["completed", "failed"].includes(status)) return { ok: false, reason: "invalid_status" };
   await ensureTable();
 
   const res = await queryD1(
