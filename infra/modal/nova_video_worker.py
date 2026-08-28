@@ -1,20 +1,15 @@
-"""NOVA VIDEO worker for Modal.
+"""Private-engine adapter for NOVA VIDEO.
 
-The public NOVA repository intentionally does not contain the underlying model ID.
-Create a Modal secret named `nova-video-engine` with:
+The public NOVA repository intentionally contains no underlying model identifier
+or provider-facing product name. Deployment configuration is supplied through a
+private Modal Secret named `nova-video-engine`:
 
-  NOVA_VIDEO_MODEL_REPO=<approved open-weight video model repository>
-  NOVA_VIDEO_WORKER_SECRET=<same value configured in NOVA_ZERO_COST_VIDEO_SECRET>
+  NOVA_VIDEO_MODEL_REPO=<private approved model repository id>
+  NOVA_VIDEO_WORKER_SECRET=<same value used by the NOVA server>
+  NOVA_VIDEO_STEPS=<optional inference steps>
 
-Optional:
-  NOVA_VIDEO_STEPS=8
-
-Deploy with:
-  modal deploy infra/modal/nova_video_worker.py
-
-The resulting HTTPS endpoint is configured in NOVA as NOVA_ZERO_COST_VIDEO_URL.
-The worker accepts the private NOVA contract and uploads MP4 output directly to a
-pre-signed R2 URL supplied by NOVA, so large video bytes never pass through Vercel.
+The HTTP endpoint only acknowledges jobs. GPU generation continues in a durable
+background invocation and writes the MP4 directly to NOVA's pre-signed R2 target.
 """
 
 from __future__ import annotations
@@ -22,6 +17,7 @@ from __future__ import annotations
 import hmac
 import os
 import tempfile
+import time
 from pathlib import Path
 
 import modal
@@ -33,17 +29,17 @@ worker_image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install("ffmpeg")
     .uv_pip_install(
-        "accelerate==1.6.0",
-        "diffusers==0.33.1",
+        "accelerate>=1.6,<2",
+        "diffusers>=0.33,<1",
         "fastapi[standard]",
-        "huggingface-hub==0.36.0",
-        "imageio==2.37.0",
-        "imageio-ffmpeg==0.5.1",
+        "huggingface-hub>=0.36,<1",
+        "imageio>=2.37,<3",
+        "imageio-ffmpeg>=0.5,<1",
         "pillow",
-        "requests",
-        "sentencepiece==0.2.0",
-        "torch==2.7.0",
-        "transformers==4.51.3",
+        "requests>=2.32,<3",
+        "sentencepiece>=0.2,<1",
+        "torch>=2.7,<3",
+        "transformers>=4.51,<6",
     )
     .env(
         {
@@ -68,7 +64,7 @@ def _dimensions(aspect_ratio: str) -> tuple[int, int]:
 
 
 def _frames_for_duration(seconds: int) -> int:
-    # 24 fps and an 8n+1 frame count keeps temporal latent geometry valid.
+    # 24 fps and an 8n+1 frame count is accepted by the approved NOVA engine.
     return (max(5, min(10, int(seconds))) * 24) + 1
 
 
@@ -92,96 +88,114 @@ class NovaVideoEngine:
     @modal.enter()
     def load(self):
         import torch
-        from diffusers import LTXImageToVideoPipeline, LTXPipeline
+        from diffusers import DiffusionPipeline
 
         model_repo = os.environ.get("NOVA_VIDEO_MODEL_REPO", "").strip()
         if not model_repo:
-            raise RuntimeError("NOVA video model is not configured")
+            raise RuntimeError("NOVA video engine is not configured")
 
-        self.t2v = LTXPipeline.from_pretrained(
+        self.pipe = DiffusionPipeline.from_pretrained(
             model_repo,
             torch_dtype=torch.bfloat16,
         ).to("cuda")
-
-        # Reuse the same components/weights instead of loading a second copy.
-        self.i2v = LTXImageToVideoPipeline(**self.t2v.components)
+        model_volume.commit()
 
     @modal.method()
     def generate(self, payload: dict) -> dict:
         import requests
+        import torch
         from diffusers.utils import export_to_video, load_image
 
-        task = str(payload.get("task") or "text-to-video")
-        prompt = str(payload.get("prompt") or "").strip()
-        negative_prompt = str(
-            payload.get("negative_prompt")
-            or "worst quality, inconsistent motion, blurry, jittery, distorted"
-        )
-        duration = max(5, min(10, int(payload.get("duration") or 5)))
-        width, height = _dimensions(payload.get("aspect_ratio") or "16:9")
-        num_frames = _frames_for_duration(duration)
-        steps = max(4, min(50, int(os.environ.get("NOVA_VIDEO_STEPS", "8"))))
-        seed = payload.get("seed")
-        output = payload.get("nova_output") or {}
-        upload_url = str(output.get("upload_url") or "")
-        public_url = str(output.get("public_url") or "")
+        callback = payload.get("nova_callback") or {}
+        callback_url = str(callback.get("url") or "")
+        callback_token = str(callback.get("token") or "")
 
-        if not prompt:
-            raise ValueError("Prompt is required")
-        if not upload_url or not public_url:
-            raise ValueError("NOVA output target is required")
+        def notify(status: str, error_code: str | None = None) -> None:
+            if not callback_url.startswith(("https://", "http://localhost")) or not callback_token:
+                return
+            for attempt in range(3):
+                try:
+                    response = requests.post(
+                        callback_url,
+                        headers={"Authorization": f"Bearer {callback_token}"},
+                        json={"status": status, "error_code": error_code},
+                        timeout=15,
+                    )
+                    if 200 <= response.status_code < 300:
+                        return
+                except Exception:
+                    pass
+                time.sleep(1 + attempt)
 
-        generator = None
-        if seed is not None:
-            import torch
+        try:
+            task = str(payload.get("task") or "text-to-video")
+            prompt = str(payload.get("prompt") or "").strip()
+            negative_prompt = str(
+                payload.get("negative_prompt")
+                or "worst quality, inconsistent motion, blurry, jittery, distorted"
+            )
+            duration = max(5, min(10, int(payload.get("duration") or 5)))
+            width, height = _dimensions(payload.get("aspect_ratio") or "16:9")
+            num_frames = _frames_for_duration(duration)
+            steps = max(4, min(50, int(os.environ.get("NOVA_VIDEO_STEPS", "8"))))
+            seed = payload.get("seed")
+            output = payload.get("nova_output") or {}
+            upload_url = str(output.get("upload_url") or "")
+            public_url = str(output.get("public_url") or "")
 
-            generator = torch.Generator(device="cuda").manual_seed(int(seed))
+            if not prompt:
+                raise ValueError("Prompt is required")
+            if not upload_url or not public_url:
+                raise ValueError("NOVA output target is required")
+            if task not in {"text-to-video", "image-to-video"}:
+                raise ValueError("Unsupported NOVA video task")
 
-        common = dict(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            width=width,
-            height=height,
-            num_frames=num_frames,
-            num_inference_steps=steps,
-            generator=generator,
-        )
+            generator = None
+            if seed is not None:
+                generator = torch.Generator(device="cuda").manual_seed(int(seed))
 
-        if task == "image-to-video":
-            image_url = str(payload.get("image_url") or "")
-            if not image_url.startswith(("http://", "https://")):
-                raise ValueError("A public reference image URL is required")
-            image = load_image(image_url)
-            frames = self.i2v(image=image, **common).frames[0]
-        elif task == "text-to-video":
-            frames = self.t2v(**common).frames[0]
-        else:
-            raise ValueError("Unsupported NOVA video task")
+            request_args = {
+                "prompt": prompt,
+                "negative_prompt": negative_prompt,
+                "width": width,
+                "height": height,
+                "num_frames": num_frames,
+                "num_inference_steps": steps,
+                "generator": generator,
+            }
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "nova-video.mp4"
-            export_to_video(frames, output_path, fps=24)
+            if task == "image-to-video":
+                image_url = str(payload.get("image_url") or "")
+                if not image_url.startswith(("http://", "https://")):
+                    raise ValueError("A public reference image URL is required")
+                request_args["image"] = load_image(image_url)
 
-            with output_path.open("rb") as handle:
-                response = requests.put(
-                    upload_url,
-                    data=handle,
-                    headers={"Content-Type": "video/mp4"},
-                    timeout=120,
-                )
-            response.raise_for_status()
+            frames = self.pipe(**request_args).frames[0]
 
-        return {
-            "success": True,
-            "uploaded": True,
-            "video_url": public_url,
-        }
+            with tempfile.TemporaryDirectory() as tmpdir:
+                output_path = Path(tmpdir) / "nova-video.mp4"
+                export_to_video(frames, output_path, fps=24)
+
+                with output_path.open("rb") as handle:
+                    response = requests.put(
+                        upload_url,
+                        data=handle,
+                        headers={"Content-Type": "video/mp4"},
+                        timeout=120,
+                    )
+                response.raise_for_status()
+
+            notify("completed")
+            return {"success": True, "uploaded": True, "video_url": public_url}
+        except Exception:
+            notify("failed", "GENERATION_FAILED")
+            raise
 
 
 @app.function(
     image=worker_image,
     secrets=[engine_secret],
-    timeout=12 * 60,
+    timeout=60,
 )
 @modal.asgi_app()
 def api():
@@ -205,9 +219,17 @@ def api():
         if not isinstance(payload, dict):
             raise HTTPException(status_code=400, detail="Invalid input")
 
-        try:
-            return NovaVideoEngine().generate.remote(payload)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        output = payload.get("nova_output") or {}
+        public_url = str(output.get("public_url") or "")
+        if not public_url:
+            raise HTTPException(status_code=400, detail="Invalid output target")
+
+        call = NovaVideoEngine().generate.spawn(payload)
+        return {
+            "accepted": True,
+            "status": "processing",
+            "call_id": call.object_id,
+            "video_url": public_url,
+        }
 
     return web
