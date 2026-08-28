@@ -1,6 +1,17 @@
 import { falModels } from "@/lib/falModels";
+import { HIDDEN_OPEN_MODEL_KEYS, privateOpenModels } from "@/lib/privateOpenModels";
 
 export function findGenerationModel(modelKey) {
+  if (privateOpenModels.image?.[modelKey]) {
+    return { type: "image", modelKey, model: privateOpenModels.image[modelKey] };
+  }
+  if (privateOpenModels.video?.[modelKey]) {
+    return { type: "video", modelKey, model: privateOpenModels.video[modelKey] };
+  }
+
+  // Provider-facing open model keys stay private and are not accepted as public NOVA model IDs.
+  if (HIDDEN_OPEN_MODEL_KEYS.has(modelKey)) return null;
+
   if (falModels.image?.[modelKey]) {
     return { type: "image", modelKey, model: falModels.image[modelKey] };
   }
@@ -34,6 +45,8 @@ export function resolveGenerationSelection({ model: modelKey, mode: requestedMod
     isFree: found.model?.tier === "free",
     freeQuotaKind: found.model?.freeQuotaKind || found.type,
     runpodTarget: found.model?.runpodTarget || mode.endpoint,
+    cloudflareModel: found.model?.cloudflareModel || null,
+    zeroCostOnly: Boolean(found.model?.zeroCostOnly),
   };
 }
 
