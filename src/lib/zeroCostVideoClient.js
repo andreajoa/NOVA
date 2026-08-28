@@ -1,4 +1,5 @@
 import { getPresignedUploadUrl } from "@/lib/r2";
+import { createFreeVideoJob } from "@/lib/freeVideoJobs";
 
 function config() {
   const url = process.env.NOVA_ZERO_COST_VIDEO_URL;
@@ -35,26 +36,6 @@ export async function isZeroCostVideoWorkerHealthy() {
   }
 }
 
-function normalizeVideoOutput(payload) {
-  const out = payload?.output ?? payload?.result ?? payload;
-  const url =
-    out?.video?.url ||
-    out?.video_url ||
-    out?.videoUrl ||
-    out?.url ||
-    (Array.isArray(out?.videos) ? out.videos[0]?.url || out.videos[0] : null);
-
-  if (typeof url === "string" && (/^https?:\/\//i.test(url) || /^data:video\//i.test(url))) {
-    return { video: { url } };
-  }
-
-  if (out?.video_base64) {
-    return { video: { url: `data:video/mp4;base64,${out.video_base64}` } };
-  }
-
-  throw new Error("NOVA zero-cost video worker returned no video");
-}
-
 function safeSegment(value, fallback = "video") {
   return String(value || fallback)
     .toLowerCase()
@@ -64,7 +45,9 @@ function safeSegment(value, fallback = "video") {
 }
 
 async function createOutputTarget(input = {}) {
-  if (!process.env.R2_BUCKET || !process.env.R2_PUBLIC_URL) return null;
+  if (!process.env.R2_BUCKET || !process.env.R2_PUBLIC_URL) {
+    throw new Error("NOVA video output storage is not configured");
+  }
 
   const date = new Date().toISOString().slice(0, 10);
   const task = safeSegment(input.task, "video");
@@ -78,29 +61,53 @@ async function createOutputTarget(input = {}) {
   };
 }
 
-export async function runZeroCostVideo(input = {}) {
+function callbackBase(origin) {
+  const candidate = String(origin || process.env.NOVA_APP_URL || "https://www.novvideos.online").replace(/\/$/, "");
+  if (!/^https:\/\//i.test(candidate) && !/^http:\/\/localhost(?::\d+)?$/i.test(candidate)) {
+    throw new Error("Invalid NOVA callback origin");
+  }
+  return candidate;
+}
+
+export async function runZeroCostVideo(input = {}, context = {}) {
   const worker = config();
   if (!worker) throw new Error("NOVA zero-cost video worker is not configured");
+  if (!context.userId) throw new Error("NOVA video job requires a user");
 
-  const outputTarget = await createOutputTarget(input).catch((error) => {
-    console.warn("[NOVA_VIDEO] could not prepare direct R2 output target", error?.message || error);
-    return null;
+  const outputTarget = await createOutputTarget(input);
+  const job = await createFreeVideoJob({
+    userId: context.userId,
+    publicUrl: outputTarget.public_url,
+    quotaDebited: Boolean(context.quotaDebited),
   });
+  const callbackUrl = `${callbackBase(context.origin)}/api/internal/free-video-callback?job=${encodeURIComponent(job.id)}`;
 
-  const response = await fetch(worker.url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(worker.secret ? { Authorization: `Bearer ${worker.secret}` } : {}),
-    },
-    body: JSON.stringify({
-      input: {
-        ...input,
-        ...(outputTarget && { nova_output: outputTarget }),
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  let response;
+  try {
+    response = await fetch(worker.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(worker.secret ? { Authorization: `Bearer ${worker.secret}` } : {}),
       },
-    }),
-    cache: "no-store",
-  });
+      body: JSON.stringify({
+        input: {
+          ...input,
+          nova_output: outputTarget,
+          nova_callback: {
+            url: callbackUrl,
+            token: job.callbackToken,
+          },
+        },
+      }),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   const text = await response.text();
   let payload = {};
@@ -114,15 +121,13 @@ export async function runZeroCostVideo(input = {}) {
     throw new Error(`NOVA zero-cost video worker failed (${response.status})`);
   }
 
-  // When the worker uploads directly to the pre-signed R2 target it may return
-  // only a success flag. In that case NOVA can safely use the private public URL
-  // it generated before dispatching the job.
-  try {
-    return normalizeVideoOutput(payload);
-  } catch (error) {
-    if (outputTarget?.public_url && (payload?.success === true || payload?.uploaded === true)) {
-      return { video: { url: outputTarget.public_url } };
-    }
-    throw error;
+  if (payload?.accepted !== true && payload?.status !== "processing") {
+    throw new Error("NOVA video worker did not accept the generation job");
   }
+
+  return {
+    video: { url: outputTarget.public_url },
+    processing: true,
+    jobId: job.id,
+  };
 }
