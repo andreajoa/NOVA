@@ -6,7 +6,7 @@ import {
   getFreeGenerationUsage,
 } from "@/lib/freeGenerationQuota";
 import { canUseCloudflareWorkersAI } from "@/lib/cloudflareAiClient";
-import { canUseZeroCostVideoWorker } from "@/lib/zeroCostVideoClient";
+import { isZeroCostVideoWorkerHealthy } from "@/lib/zeroCostVideoClient";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ export async function GET() {
   const imageAvailable = Boolean(
     process.env.NOVA_IMAGE_FREE_ENGINE_MODEL && canUseCloudflareWorkersAI()
   );
-  const videoAvailable = canUseZeroCostVideoWorker();
+  const videoAvailable = await isZeroCostVideoWorkerHealthy();
 
   if (admin) {
     return NextResponse.json({
