@@ -1,5 +1,69 @@
-const VIDEO_BASE = "https://lightricks-ltx-2-3.hf.space";
-const VIDEO_API = "generate_video";
+const LTX_PROVIDER = {
+  id: "ltx23",
+  base: "https://lightricks-ltx-2-3.hf.space",
+  api: "generate_video",
+  tasks: new Set(["text-to-video", "image-to-video"]),
+  maxSeconds: 10,
+  buildData({ input, image, seed }) {
+    const { height, width } = dimensionsForAspect(input.aspect_ratio);
+    const prompt = [
+      String(input.prompt || "").trim(),
+      input.negative_prompt ? `Avoid: ${String(input.negative_prompt).trim()}` : "",
+    ].filter(Boolean).join("\n");
+
+    return [
+      image,
+      prompt,
+      Number(input.duration || 5),
+      false,
+      seed,
+      false,
+      height,
+      width,
+    ];
+  },
+};
+
+const WAN_T2V_PROVIDER = {
+  id: "wan22-fast-t2v",
+  base: "https://zerogpu-aoti-wan2-2-fp8da-aoti.hf.space",
+  api: "generate_video",
+  tasks: new Set(["text-to-video"]),
+  maxSeconds: 5,
+  buildData({ input, seed }) {
+    return [
+      String(input.prompt || "").trim(),
+      String(input.negative_prompt || "").trim(),
+      Math.min(5, Number(input.duration || 5)),
+      1,
+      3,
+      4,
+      seed,
+      false,
+    ];
+  },
+};
+
+const WAN_I2V_PROVIDER = {
+  id: "wan22-fast-i2v",
+  base: "https://zerogpu-aoti-wan2-2-fp8da-aoti-faster.hf.space",
+  api: "generate_video",
+  tasks: new Set(["image-to-video"]),
+  maxSeconds: 5,
+  buildData({ input, image, seed }) {
+    return [
+      image,
+      String(input.prompt || "").trim(),
+      4,
+      String(input.negative_prompt || "").trim(),
+      Math.min(5, Number(input.duration || 5)),
+      1,
+      1,
+      seed,
+      false,
+    ];
+  },
+};
 
 function withTimeout(ms) {
   const controller = new AbortController();
@@ -13,20 +77,36 @@ function dimensionsForAspect(aspect) {
   return { height: 512, width: 768 };
 }
 
-function findVideo(value) {
+function providerPool(input) {
+  const seconds = Number(input.duration || 5);
+
+  if (input.task === "image-to-video" && seconds <= WAN_I2V_PROVIDER.maxSeconds) {
+    return [WAN_I2V_PROVIDER, LTX_PROVIDER];
+  }
+
+  if (input.task === "text-to-video" && seconds <= WAN_T2V_PROVIDER.maxSeconds) {
+    // LTX remains first for text generation because it is the currently proven
+    // production route. Wan is an automatic independent model/Space failover.
+    return [LTX_PROVIDER, WAN_T2V_PROVIDER];
+  }
+
+  return [LTX_PROVIDER];
+}
+
+function findVideo(value, base) {
   if (typeof value === "string") {
     if (/^https?:\/\//i.test(value) && (/\.mp4(?:\?|#|$)/i.test(value) || /file=/i.test(value))) {
       return value;
     }
     if (value.startsWith("/") && (/\.mp4(?:\?|#|$)/i.test(value) || /file=/i.test(value))) {
-      return `${VIDEO_BASE}${value}`;
+      return `${base}${value}`;
     }
     return null;
   }
 
   if (Array.isArray(value)) {
     for (const item of value) {
-      const found = findVideo(item);
+      const found = findVideo(item, base);
       if (found) return found;
     }
     return null;
@@ -35,12 +115,12 @@ function findVideo(value) {
   if (value && typeof value === "object") {
     for (const key of ["url", "path", "video", "value"]) {
       if (key in value) {
-        const found = findVideo(value[key]);
+        const found = findVideo(value[key], base);
         if (found) return found;
       }
     }
     for (const item of Object.values(value)) {
-      const found = findVideo(item);
+      const found = findVideo(item, base);
       if (found) return found;
     }
   }
@@ -48,7 +128,37 @@ function findVideo(value) {
   return null;
 }
 
-async function uploadReference(imageUrl) {
+function isSharedZeroGpuQuotaError(error) {
+  const text = [error?.message, error?.cause?.message, error?.code]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return [
+    "gpu quota",
+    "zerogpu quota",
+    "zero gpu quota",
+    "quota exceeded",
+    "exceeded your quota",
+    "rate limit",
+    "too many requests",
+    "status 429",
+    "(429)",
+  ].some((needle) => text.includes(needle));
+}
+
+function normalizeProviderError(error, provider) {
+  const wrapped = new Error(`[${provider.id}] ${error?.message || String(error)}`);
+  wrapped.cause = error;
+  if (isSharedZeroGpuQuotaError(error)) {
+    wrapped.code = "NOVA_ZERO_GPU_QUOTA_EXHAUSTED";
+  } else {
+    wrapped.code = error?.code || "NOVA_FREE_VIDEO_PROVIDER_FAILED";
+  }
+  return wrapped;
+}
+
+async function readReferenceImage(imageUrl) {
   const sourceTimeout = withTimeout(15000);
   let source;
   try {
@@ -72,19 +182,31 @@ async function uploadReference(imageUrl) {
     throw new Error("NOVA reference image is empty or too large");
   }
 
-  const extension = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+  return { bytes, contentType };
+}
+
+async function uploadReference(provider, reference) {
+  const extension = reference.contentType.includes("png")
+    ? "png"
+    : reference.contentType.includes("webp")
+      ? "webp"
+      : "jpg";
   const form = new FormData();
-  form.append("files", new Blob([bytes], { type: contentType }), `nova-reference.${extension}`);
+  form.append(
+    "files",
+    new Blob([reference.bytes], { type: reference.contentType }),
+    `nova-reference.${extension}`
+  );
 
   const uploadTimeout = withTimeout(25000);
   let response;
   try {
-    response = await fetch(`${VIDEO_BASE}/gradio_api/upload`, {
+    response = await fetch(`${provider.base}/gradio_api/upload`, {
       method: "POST",
       body: form,
       cache: "no-store",
       signal: uploadTimeout.controller.signal,
-      headers: { "User-Agent": "NOVA-free-video-sync/1.0" },
+      headers: { "User-Agent": "NOVA-free-video-pool/1.0" },
     });
   } finally {
     clearTimeout(uploadTimeout.timer);
@@ -98,39 +220,22 @@ async function uploadReference(imageUrl) {
   return {
     path,
     orig_name: `nova-reference.${extension}`,
-    mime_type: contentType,
+    mime_type: reference.contentType,
     meta: { _type: "gradio.FileData" },
   };
 }
 
-async function submitJob(input) {
-  const image = input.image_url ? await uploadReference(input.image_url) : null;
-  const { height, width } = dimensionsForAspect(input.aspect_ratio);
+async function submitJob(provider, input, reference) {
+  const image = reference ? await uploadReference(provider, reference) : null;
   const seed = Number.isFinite(Number(input.seed))
     ? Number(input.seed)
     : Math.floor(Math.random() * 2_000_000_000);
-  const prompt = [
-    String(input.prompt || "").trim(),
-    input.negative_prompt ? `Avoid: ${String(input.negative_prompt).trim()}` : "",
-  ].filter(Boolean).join("\n");
-
-  const payload = JSON.stringify({
-    data: [
-      image,
-      prompt,
-      Number(input.duration || 5),
-      false,
-      seed,
-      false,
-      height,
-      width,
-    ],
-  });
+  const payload = JSON.stringify({ data: provider.buildData({ input, image, seed }) });
 
   const errors = [];
   for (const root of [
-    `${VIDEO_BASE}/gradio_api/call/${VIDEO_API}`,
-    `${VIDEO_BASE}/call/${VIDEO_API}`,
+    `${provider.base}/gradio_api/call/${provider.api}`,
+    `${provider.base}/call/${provider.api}`,
   ]) {
     const submitTimeout = withTimeout(45000);
     try {
@@ -141,7 +246,7 @@ async function submitJob(input) {
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          "User-Agent": "NOVA-free-video-sync/1.0",
+          "User-Agent": "NOVA-free-video-pool/1.0",
         },
         body: payload,
       });
@@ -156,7 +261,7 @@ async function submitJob(input) {
       if (response.ok && parsed?.event_id) {
         return `${root}/${encodeURIComponent(parsed.event_id)}`;
       }
-      errors.push(`${response.status}:${text.slice(0, 180)}`);
+      errors.push(`${response.status}:${text.slice(0, 300)}`);
     } catch (error) {
       errors.push(error?.message || String(error));
     } finally {
@@ -164,10 +269,10 @@ async function submitJob(input) {
     }
   }
 
-  throw new Error(`NOVA video queue rejected the job: ${errors.join(" | ").slice(0, 600)}`);
+  throw new Error(`NOVA video queue rejected the job: ${errors.join(" | ").slice(0, 900)}`);
 }
 
-async function waitForResult(pollUrl) {
+async function waitForResult(provider, pollUrl) {
   const resultTimeout = withTimeout(70000);
   let response;
   try {
@@ -177,7 +282,7 @@ async function waitForResult(pollUrl) {
       signal: resultTimeout.controller.signal,
       headers: {
         Accept: "text/event-stream, application/json",
-        "User-Agent": "NOVA-free-video-sync/1.0",
+        "User-Agent": "NOVA-free-video-pool/1.0",
       },
     });
   } finally {
@@ -190,7 +295,7 @@ async function waitForResult(pollUrl) {
   const blocks = text.replace(/\r\n/g, "\n").split("\n\n");
   for (const block of blocks) {
     if (block.includes("event: error")) {
-      throw new Error(`NOVA video runtime reported an error: ${block.slice(-900)}`);
+      throw new Error(`NOVA video runtime reported an error: ${block.slice(-1200)}`);
     }
     if (!block.includes("event: complete")) continue;
 
@@ -204,7 +309,7 @@ async function waitForResult(pollUrl) {
       throw new Error("NOVA video runtime returned invalid completion data");
     }
 
-    const videoUrl = findVideo(data);
+    const videoUrl = findVideo(data, provider.base);
     if (!videoUrl) throw new Error("NOVA video runtime returned no MP4 URL");
     return videoUrl;
   }
@@ -221,7 +326,7 @@ async function verifyVideo(url) {
       signal: timeout.controller.signal,
       headers: {
         Range: "bytes=0-63",
-        "User-Agent": "NOVA-free-video-sync/1.0",
+        "User-Agent": "NOVA-free-video-pool/1.0",
       },
     });
     if (!response.ok && response.status !== 206) {
@@ -237,13 +342,50 @@ async function verifyVideo(url) {
   }
 }
 
+async function runProvider(provider, input, reference) {
+  if (!provider.tasks.has(input.task) || Number(input.duration || 5) > provider.maxSeconds) {
+    throw new Error("Provider does not support this NOVA video request");
+  }
+
+  const pollUrl = await submitJob(provider, input, reference);
+  const videoUrl = await waitForResult(provider, pollUrl);
+  await verifyVideo(videoUrl);
+  return { videoUrl, engine: provider.id };
+}
+
 export async function runVerifiedVideoRuntime(input = {}) {
   if (!["text-to-video", "image-to-video"].includes(input.task)) {
     throw new Error("Verified NOVA public runtime supports text-to-video and image-to-video only");
   }
 
-  const pollUrl = await submitJob(input);
-  const videoUrl = await waitForResult(pollUrl);
-  await verifyVideo(videoUrl);
-  return { videoUrl };
+  const reference = input.image_url ? await readReferenceImage(input.image_url) : null;
+  const providers = providerPool(input);
+  const failures = [];
+
+  for (const provider of providers) {
+    try {
+      return await runProvider(provider, input, reference);
+    } catch (error) {
+      const normalized = normalizeProviderError(error, provider);
+      failures.push(`${provider.id}:${normalized.message}`);
+
+      console.warn("[NOVA_VIDEO] free engine attempt failed", {
+        engine: provider.id,
+        code: normalized.code,
+        message: normalized.message.slice(0, 500),
+      });
+
+      // Hugging Face ZeroGPU quota is shared by the caller across Spaces. If
+      // that quota is exhausted, switching to another HF Space would only burn
+      // time and produce the same result. Provider/runtime faults still fail
+      // over automatically to the next model in the pool.
+      if (normalized.code === "NOVA_ZERO_GPU_QUOTA_EXHAUSTED") {
+        throw normalized;
+      }
+    }
+  }
+
+  const error = new Error(`All NOVA free video engines failed: ${failures.join(" | ").slice(0, 1500)}`);
+  error.code = "NOVA_FREE_VIDEO_POOL_UNAVAILABLE";
+  throw error;
 }
