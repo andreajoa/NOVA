@@ -10,6 +10,10 @@ import {
   refundFreeGeneration,
 } from "@/lib/freeGenerationQuota";
 import {
+  reserveVideoCapacity,
+  refundVideoCapacity,
+} from "@/lib/freeVideoCapacity";
+import {
   canUseZeroCostVideoWorker,
   isZeroCostVideoWorkerHealthy,
   runZeroCostVideo,
@@ -122,10 +126,27 @@ export async function POST(req) {
     );
   }
 
+  let capacity = null;
+  if (!admin) {
+    capacity = await reserveVideoCapacity(duration);
+    if (!capacity.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "NOVA_VIDEO_DAILY_CAPACITY_REACHED",
+          message: "A capacidade incluída de NOVA VIDEO foi utilizada hoje. Tente novamente após a renovação diária.",
+          resetAt: capacity.resetAt,
+        },
+        { status: 429 }
+      );
+    }
+  }
+
   let quota = null;
   if (!admin) {
     quota = await checkAndDebitFreeGeneration(userId, "video", account.plan);
     if (!quota.ok) {
+      if (capacity?.ok) await refundVideoCapacity(capacity.units).catch(() => {});
       return NextResponse.json(
         {
           success: false,
@@ -187,6 +208,9 @@ export async function POST(req) {
   } catch (error) {
     if (quota?.ok) {
       await refundFreeGeneration(userId, "video").catch(() => {});
+    }
+    if (capacity?.ok) {
+      await refundVideoCapacity(capacity.units).catch(() => {});
     }
     console.error("[NOVA_VIDEO] failed to enqueue", {
       mode,
