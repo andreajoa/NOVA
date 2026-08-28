@@ -97,6 +97,11 @@ const WAN_I2V_PROVIDER = {
   },
 };
 
+const SUBMIT_TIMEOUT_MS = 20_000;
+const RESULT_TIMEOUT_MS = 45_000;
+const VERIFY_TIMEOUT_MS = 12_000;
+const RUNTIME_DEADLINE_MS = 82_000;
+
 function withTimeout(ms) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
@@ -119,14 +124,13 @@ function providerPool(input) {
   const seconds = Number(input.duration || 5);
 
   if (input.task === "image-to-video" && seconds <= WAN_I2V_PROVIDER.maxSeconds) {
-    return [WAN_I2V_PROVIDER, LTX_PROVIDER, LTX_FAST_PROVIDER];
+    return [LTX_PROVIDER, WAN_I2V_PROVIDER, LTX_FAST_PROVIDER];
   }
 
   if (input.task === "text-to-video" && seconds <= WAN_T2V_PROVIDER.maxSeconds) {
-    // Prefer the lowest-cost verified route first, then two separate LTX
-    // runtimes. All three are independent Spaces even though they may share
-    // the caller's Hugging Face ZeroGPU allowance.
-    return [WAN_T2V_PROVIDER, LTX_PROVIDER, LTX_FAST_PROVIDER];
+    // LTX 2.3 is the primary route because this exact 5-second payload is
+    // continuously probed by NOVA CI. Other engines are genuine failovers.
+    return [LTX_PROVIDER, WAN_T2V_PROVIDER, LTX_FAST_PROVIDER];
   }
 
   if (seconds <= LTX_FAST_PROVIDER.maxSeconds) {
@@ -257,7 +261,7 @@ async function uploadReference(provider, reference, hfToken) {
       body: form,
       cache: "no-store",
       signal: uploadTimeout.controller.signal,
-      headers: requestHeaders(hfToken, { "User-Agent": "NOVA-free-video-pool/1.2" }),
+      headers: requestHeaders(hfToken, { "User-Agent": "NOVA-free-video-pool/1.3" }),
     });
   } finally {
     clearTimeout(uploadTimeout.timer);
@@ -291,7 +295,7 @@ async function submitJob(provider, input, reference, hfToken) {
     `${provider.base}/gradio_api/call/${api}`,
     `${provider.base}/call/${api}`,
   ]) {
-    const submitTimeout = withTimeout(45000);
+    const submitTimeout = withTimeout(SUBMIT_TIMEOUT_MS);
     try {
       const response = await fetch(root, {
         method: "POST",
@@ -300,7 +304,7 @@ async function submitJob(provider, input, reference, hfToken) {
         headers: requestHeaders(hfToken, {
           "Content-Type": "application/json",
           Accept: "application/json",
-          "User-Agent": "NOVA-free-video-pool/1.2",
+          "User-Agent": "NOVA-free-video-pool/1.3",
         }),
         body: payload,
       });
@@ -327,7 +331,7 @@ async function submitJob(provider, input, reference, hfToken) {
 }
 
 async function waitForResult(provider, pollUrl, hfToken) {
-  const resultTimeout = withTimeout(70000);
+  const resultTimeout = withTimeout(RESULT_TIMEOUT_MS);
   let response;
   try {
     response = await fetch(pollUrl, {
@@ -336,7 +340,7 @@ async function waitForResult(provider, pollUrl, hfToken) {
       signal: resultTimeout.controller.signal,
       headers: requestHeaders(hfToken, {
         Accept: "text/event-stream, application/json",
-        "User-Agent": "NOVA-free-video-pool/1.2",
+        "User-Agent": "NOVA-free-video-pool/1.3",
       }),
     });
   } finally {
@@ -372,7 +376,7 @@ async function waitForResult(provider, pollUrl, hfToken) {
 }
 
 async function verifyVideo(url, hfToken) {
-  const timeout = withTimeout(20000);
+  const timeout = withTimeout(VERIFY_TIMEOUT_MS);
   try {
     const response = await fetch(url, {
       method: "GET",
@@ -380,7 +384,7 @@ async function verifyVideo(url, hfToken) {
       signal: timeout.controller.signal,
       headers: requestHeaders(hfToken, {
         Range: "bytes=0-63",
-        "User-Agent": "NOVA-free-video-pool/1.2",
+        "User-Agent": "NOVA-free-video-pool/1.3",
       }),
     });
     if (!response.ok && response.status !== 206) {
@@ -416,18 +420,18 @@ export async function runVerifiedVideoRuntime(input = {}, options = {}) {
   const reference = input.image_url ? await readReferenceImage(input.image_url) : null;
   const providers = providerPool(input);
   const failures = [];
-  let exhaustedQuotaFamily = null;
+  const startedAt = Date.now();
   let quotaError = null;
+  let quotaFailures = 0;
 
   for (const provider of providers) {
-    if (exhaustedQuotaFamily && provider.quotaFamily === exhaustedQuotaFamily) {
-      continue;
-    }
+    if (Date.now() - startedAt >= RUNTIME_DEADLINE_MS) break;
 
     try {
       return await runProvider(provider, input, reference, hfToken);
     } catch (error) {
       const normalized = normalizeProviderError(error, provider);
+      const isQuota = normalized.code === "NOVA_ZERO_GPU_QUOTA_EXHAUSTED";
       failures.push(`${provider.id}:${normalized.message}`);
 
       console.warn("[NOVA_VIDEO] free engine attempt failed", {
@@ -438,14 +442,40 @@ export async function runVerifiedVideoRuntime(input = {}, options = {}) {
         message: normalized.message.slice(0, 500),
       });
 
-      if (normalized.code === "NOVA_ZERO_GPU_QUOTA_EXHAUSTED") {
-        exhaustedQuotaFamily = provider.quotaFamily || "hf-zerogpu";
-        quotaError = normalized;
+      if (isQuota) {
+        quotaFailures += 1;
+        quotaError ||= normalized;
+
+        // A personal HF quota can be exhausted while the same public Space is
+        // still accepting anonymous/shared traffic. Retry that exact provider
+        // once without the token before moving to another engine.
+        if (hfToken && Date.now() - startedAt < RUNTIME_DEADLINE_MS) {
+          try {
+            return await runProvider(provider, input, reference, "");
+          } catch (anonymousError) {
+            const anonymousNormalized = normalizeProviderError(anonymousError, provider);
+            failures.push(`${provider.id}-anonymous:${anonymousNormalized.message}`);
+            if (anonymousNormalized.code === "NOVA_ZERO_GPU_QUOTA_EXHAUSTED") {
+              quotaFailures += 1;
+              quotaError ||= anonymousNormalized;
+            }
+            console.warn("[NOVA_VIDEO] anonymous failover attempt failed", {
+              engine: provider.id,
+              code: anonymousNormalized.code,
+              message: anonymousNormalized.message.slice(0, 500),
+            });
+          }
+        }
       }
     }
   }
 
-  if (quotaError) throw quotaError;
+  // Do not treat the first ZeroGPU quota response as a global stop. Different
+  // Spaces can still be healthy, so all configured engines are attempted.
+  // Only report quota exhaustion when every attempted route failed that way.
+  if (quotaError && failures.length > 0 && quotaFailures >= failures.length) {
+    throw quotaError;
+  }
 
   const error = new Error(`All NOVA free video engines failed: ${failures.join(" | ").slice(0, 1500)}`);
   error.code = "NOVA_FREE_VIDEO_POOL_UNAVAILABLE";
