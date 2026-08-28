@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 const TOKEN_KEY = "nova_hf_access_token";
 const EXPIRY_KEY = "nova_hf_token_expiry";
@@ -11,11 +11,11 @@ const RETURN_KEY = "nova_hf_return_to";
 
 export default function HuggingFaceOAuthCallbackPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [message, setMessage] = useState("Ativando sua capacidade gratuita pessoal de vídeo...");
 
   useEffect(() => {
     let cancelled = false;
+    const searchParams = new URLSearchParams(window.location.search);
 
     async function complete() {
       const error = searchParams.get("error");
@@ -71,7 +71,7 @@ export default function HuggingFaceOAuthCallbackPage() {
     return () => {
       cancelled = true;
     };
-  }, [router, searchParams]);
+  }, [router]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#020303] px-5 text-white">
