@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - feat/free-open-image-video
+      - main
     paths:
       - ".github/workflows/probe-nova-video.yml"
 
@@ -24,7 +24,7 @@ jobs:
           base = base64.b64decode("aHR0cHM6Ly9saWdodHJpY2tzLWx0eC0yLTMuaGYuc3BhY2U=").decode()
           api = "generate_video"
           payload = json.dumps({
-              "data": [None, "A calm ocean wave moving gently at sunset, cinematic camera, natural motion", 1.0, False, 42, False, 512, 768]
+              "data": [None, "A calm ocean wave moving gently at sunset, cinematic camera, natural motion", 5.0, False, 42, False, 512, 768]
           }).encode()
 
           def request(url, method="GET", data=None, timeout=30):
@@ -35,7 +35,7 @@ jobs:
                   headers={
                       "Content-Type": "application/json",
                       "Accept": "text/event-stream, application/json",
-                      "User-Agent": "NOVA-runtime-probe/1.0",
+                      "User-Agent": "NOVA-runtime-probe/2.0",
                   },
               )
               return urllib.request.urlopen(req, timeout=timeout)
@@ -112,6 +112,7 @@ jobs:
               return None
 
           video = find_video(complete_data)
+          print("COMPLETE_DATA", json.dumps(complete_data)[:3000])
           if not video:
               raise SystemExit("NO_VIDEO_OUTPUT\n" + json.dumps(complete_data)[:3000])
 
