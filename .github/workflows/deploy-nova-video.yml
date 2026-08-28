@@ -25,6 +25,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Validate worker syntax
+        run: python -m py_compile infra/modal/nova_video_worker.py
+
       - name: Install Modal
         run: pip install --upgrade modal
 
