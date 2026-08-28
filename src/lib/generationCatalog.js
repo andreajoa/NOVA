@@ -1,23 +1,27 @@
 import { falModels } from "@/lib/falModels";
-import { HIDDEN_OPEN_MODEL_KEYS, privateOpenModels } from "@/lib/privateOpenModels";
+import { privateOpenModels } from "@/lib/privateOpenModels";
 
 export function findGenerationModel(modelKey) {
   if (privateOpenModels.image?.[modelKey]) {
-    return { type: "image", modelKey, model: privateOpenModels.image[modelKey] };
+    return { type: "image", modelKey, model: privateOpenModels.image[modelKey], privateEngine: true };
   }
   if (privateOpenModels.video?.[modelKey]) {
-    return { type: "video", modelKey, model: privateOpenModels.video[modelKey] };
+    return { type: "video", modelKey, model: privateOpenModels.video[modelKey], privateEngine: true };
   }
 
-  // Provider-facing open model keys stay private and are not accepted as public NOVA model IDs.
-  if (HIDDEN_OPEN_MODEL_KEYS.has(modelKey)) return null;
+  const imageModel = falModels.image?.[modelKey];
+  if (imageModel) {
+    // Provider-facing legacy free entries must not remain callable public model IDs.
+    if (imageModel.tier === "free") return null;
+    return { type: "image", modelKey, model: imageModel, privateEngine: false };
+  }
 
-  if (falModels.image?.[modelKey]) {
-    return { type: "image", modelKey, model: falModels.image[modelKey] };
+  const videoModel = falModels.video?.[modelKey];
+  if (videoModel) {
+    if (videoModel.tier === "free") return null;
+    return { type: "video", modelKey, model: videoModel, privateEngine: false };
   }
-  if (falModels.video?.[modelKey]) {
-    return { type: "video", modelKey, model: falModels.video[modelKey] };
-  }
+
   return null;
 }
 
@@ -35,17 +39,17 @@ export function resolveGenerationSelection({ model: modelKey, mode: requestedMod
   }
 
   const mode = found.model?.modes?.[modeKey];
-  if (!mode?.endpoint) return null;
+  if (!mode) return null;
+  if (!found.privateEngine && !mode.endpoint) return null;
 
   return {
     ...found,
     modeKey,
     mode,
-    endpoint: mode.endpoint,
+    endpoint: mode.endpoint || null,
+    engine: found.model?.engine || null,
     isFree: found.model?.tier === "free",
     freeQuotaKind: found.model?.freeQuotaKind || found.type,
-    runpodTarget: found.model?.runpodTarget || mode.endpoint,
-    cloudflareModel: found.model?.cloudflareModel || null,
     zeroCostOnly: Boolean(found.model?.zeroCostOnly),
   };
 }
