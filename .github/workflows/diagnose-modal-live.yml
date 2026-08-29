@@ -1,4 +1,5 @@
 name: Diagnose NOVA Modal Live
+# Active call probe: 2026-08-29 22:49 UTC
 
 on:
   workflow_dispatch:
@@ -20,10 +21,12 @@ jobs:
       - name: Install Modal CLI
         run: python -m pip install --upgrade "modal>=1.5,<2"
 
-      - name: Fetch recent NOVA video engine logs
+      - name: Fetch active generation logs
         shell: bash
         run: |
           set -euo pipefail
-          modal app logs nova-video-engine --since 1h --tail 1000 --timestamps --show-function-id --show-function-call-id --show-container-id | tee modal-live.log
+          modal app logs nova-video-engine --since 30m --tail 1000 --timestamps --show-function-id --show-function-call-id --show-container-id --function-call fc-01M17V3CDKH9GWEK7KNG7T19D1 | tee modal-live.log
+          echo "--- LAST 80 LINES ---"
+          tail -n 80 modal-live.log
           echo "--- ERROR SUMMARY ---"
           grep -E -i "Traceback|Error|Exception|failed|killed|timeout|out of memory|CUDA|No module|exit code" modal-live.log || true
