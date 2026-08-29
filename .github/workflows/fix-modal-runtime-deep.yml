@@ -1,0 +1,76 @@
+name: Fix NOVA Modal Runtime Deep
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fix-modal-runtime-deep.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Patch production Wan runtime and failover
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          worker = Path("infra/modal/nova_video_worker.py")
+          text = worker.read_text(encoding="utf-8")
+
+          old_prepare = '''def _prepare_normal_wan_runtime() -> None:\n    """Keep optional Wan pipelines from breaking the normal TI2V worker."""\n    init_file = WAN_CODE / "wan" / "__init__.py"\n    source = init_file.read_text(encoding="utf-8")\n    optional_imports = [\n        ("from .speech2video import WanS2V", "WanS2V"),\n        ("from .animate import WanAnimate", "WanAnimate"),\n    ]\n    for needle, symbol in optional_imports:\n        replacement = f"try:\\n    {needle}\\nexcept ImportError:\\n    {symbol} = None"\n        if needle in source:\n            source = source.replace(needle, replacement, 1)\n    init_file.write_text(source, encoding="utf-8")\n'''
+          new_prepare = '''def _prepare_normal_wan_runtime() -> None:\n    """Make the normal Wan TI2V runtime self-contained on Modal GPUs."""\n    init_file = WAN_CODE / "wan" / "__init__.py"\n    source = init_file.read_text(encoding="utf-8")\n    optional_imports = [\n        ("from .speech2video import WanS2V", "WanS2V"),\n        ("from .animate import WanAnimate", "WanAnimate"),\n    ]\n    for needle, symbol in optional_imports:\n        replacement = f"try:\\n    {needle}\\nexcept ImportError:\\n    {symbol} = None"\n        if needle in source:\n            source = source.replace(needle, replacement, 1)\n    init_file.write_text(source, encoding="utf-8")\n\n    # Wan's model.py calls flash_attention() directly. The base image does not\n    # ship the compiled flash-attn extension, so that path asserts before the\n    # first denoising step. Use Wan's own PyTorch SDPA fallback instead.\n    model_file = WAN_CODE / "wan" / "modules" / "model.py"\n    model_source = model_file.read_text(encoding="utf-8")\n    model_source = model_source.replace(\n        "from .attention import flash_attention",\n        "from .attention import attention as flash_attention",\n        1,\n    )\n    model_file.write_text(model_source, encoding="utf-8")\n'''
+          if old_prepare not in text:
+              raise SystemExit("prepare runtime block not found")
+          text = text.replace(old_prepare, new_prepare, 1)
+
+          start = text.index("def _run_normal_segment(\n")
+          end = text.index("\ndef _speech_generate(payload: dict) -> str:\n", start)
+          replacement = '''def _run_normal_segment(\n    *,\n    prompt: str,\n    aspect: str,\n    frames: int,\n    steps: int,\n    seed: int,\n    output: Path,\n    reference: Path | None = None,\n) -> None:\n    """Render one Wan TI2V clip using the verified SDPA runtime."""\n    command = [\n        "python", str(WAN_CODE / "generate.py"),\n        "--task", "ti2v-5B",\n        "--size", _size(aspect),\n        "--ckpt_dir", str(TI2V_DIR),\n        "--offload_model", "True",\n        "--convert_model_dtype",\n        "--t5_cpu",\n        "--prompt", prompt,\n        "--frame_num", str(frames),\n        "--sample_steps", str(steps),\n        "--base_seed", str(seed),\n        "--save_file", str(output),\n    ]\n    if reference is not None:\n        command.extend(["--image", str(reference)])\n    subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=14 * 60)\n\n\ndef _normal_generate(payload: dict) -> str:\n    _prepare_normal_wan_runtime()\n    _ensure_model(TI2V_REPO, TI2V_DIR)\n    prompt = str(payload.get("prompt") or "").strip()\n    task = str(payload.get("task") or "text-to-video")\n    if not prompt:\n        raise ValueError("Prompt is required")\n    if task not in {"text-to-video", "image-to-video", "continue-video"}:\n        raise ValueError("Unsupported normal video task")\n\n    duration = max(5, min(10, int(payload.get("duration") or 5)))\n    aspect = str(payload.get("aspect_ratio") or "16:9")\n    steps = max(4, min(24, int(os.environ.get("NOVA_WAN_SAMPLE_STEPS", "8"))))\n    seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)\n\n    with tempfile.TemporaryDirectory() as tmpdir:\n        tmp = Path(tmpdir)\n        segment = tmp / "segment.mp4"\n        reference: Path | None = None\n        source_video: Path | None = None\n\n        if task == "image-to-video":\n            reference = tmp / "reference.jpg"\n            _download(str(payload.get("image_url") or ""), reference, 20_000_000)\n        elif task == "continue-video":\n            source_video = tmp / "source.mp4"\n            reference = tmp / "last-frame.png"\n            _download(str(payload.get("source_video_url") or ""), source_video)\n            _extract_last_frame(source_video, reference)\n\n        _run_normal_segment(\n            prompt=prompt,\n            aspect=aspect,\n            frames=_frames(duration),\n            steps=steps,\n            seed=seed,\n            output=segment,\n            reference=reference,\n        )\n\n        result = segment\n        if aspect == "1:1":\n            square = tmp / "square.mp4"\n            _crop_square(result, square)\n            result = square\n        if source_video is not None:\n            combined = tmp / "combined.mp4"\n            _concat(source_video, result, combined)\n            result = combined\n        return _upload(payload, result)\n\n'''
+          text = text[:start] + replacement + text[end + 1:]
+          text = text.replace('    gpu="L4",\n    cpu=4.0,\n    memory=65536,\n    volumes={str(MODEL_ROOT): model_volume},\n    secrets=[engine_secret],\n    timeout=18 * 60,\n    scaledown_window=30,', '    gpu="L40S",\n    cpu=4.0,\n    memory=65536,\n    volumes={str(MODEL_ROOT): model_volume},\n    secrets=[engine_secret],\n    timeout=18 * 60,\n    scaledown_window=60,', 1)
+          worker.write_text(text, encoding="utf-8")
+
+          callback = Path("src/app/api/internal/free-video-callback/route.js")
+          cb = callback.read_text(encoding="utf-8")
+          cb = cb.replace('import { retryFreeVideoJobOnPublicFallback } from "@/lib/publicVideoJobRetry";\n', '', 1)
+          marker_start = '      // Last resilience layer for ordinary text/image video: keep the SAME job\n'
+          if marker_start in cb:
+              s = cb.index(marker_start)
+              e = cb.index('    }\n  }\n\n  const finalized', s)
+              cb = cb[:s] + '    }\n  }\n\n  const finalized' + cb[e + len('    }\n  }\n\n  const finalized'):]
+          callback.write_text(cb, encoding="utf-8")
+
+          deploy = Path(".github/workflows/deploy-nova-video.yml")
+          dep = deploy.read_text(encoding="utf-8")
+          dep = dep.replace('NOVA_WAN_SAMPLE_STEPS="24"', 'NOVA_WAN_SAMPLE_STEPS="8"')
+          deploy.write_text(dep, encoding="utf-8")
+          PY
+
+      - name: Validate repair
+        run: |
+          python -m py_compile infra/modal/nova_video_worker.py
+          grep -q 'attention as flash_attention' infra/modal/nova_video_worker.py
+          grep -q 'gpu="L40S"' infra/modal/nova_video_worker.py
+          grep -q 'frames=_frames(duration)' infra/modal/nova_video_worker.py
+          grep -q 'NOVA_WAN_SAMPLE_STEPS="8"' .github/workflows/deploy-nova-video.yml
+          ! grep -q 'retryFreeVideoJobOnPublicFallback' src/app/api/internal/free-video-callback/route.js
+          node --check src/app/api/internal/free-video-callback/route.js
+
+      - name: Commit repair
+        shell: bash
+        run: |
+          git config user.name "andreajoa"
+          git config user.email "100246160+andreajoa@users.noreply.github.com"
+          git add infra/modal/nova_video_worker.py src/app/api/internal/free-video-callback/route.js .github/workflows/deploy-nova-video.yml
+          git commit -m "fix: use verified Wan SDPA runtime on L40S"
+          git push origin main
