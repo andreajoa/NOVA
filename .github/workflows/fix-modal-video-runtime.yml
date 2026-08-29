@@ -13,13 +13,16 @@ permissions:
 jobs:
   fix:
     runs-on: ubuntu-latest
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: main
 
-      - name: Patch Modal worker and deploy guard
+      - name: Patch Modal worker
         shell: bash
         run: |
           python - <<'PY'
@@ -27,6 +30,7 @@ jobs:
 
           worker = Path("infra/modal/nova_video_worker.py")
           text = worker.read_text(encoding="utf-8")
+          text = text.replace("from __future__ import annotations\n\n", "", 1)
 
           if '"einops>=0.8,<1",' not in text:
               text = text.replace(
@@ -44,35 +48,35 @@ jobs:
               'call = await NovaWanVideo().generate.spawn.aio(payload)',
           )
 
-          smoke = '''\n\n@app.function(image=base_image, timeout=120, memory=8192)\ndef smoke_import():\n    """Fail deployment early if the Wan runtime image has missing imports."""\n    import wan  # noqa: F401\n    from einops import rearrange  # noqa: F401\n    return {"ok": True, "wan": True, "einops": True}\n'''
+          smoke = '''\n\n@app.function(image=base_image, timeout=120, memory=8192)\ndef smoke_import():\n    """Fail early if the Wan runtime image has missing imports."""\n    import wan  # noqa: F401\n    from einops import rearrange  # noqa: F401\n    return {"ok": True, "wan": True, "einops": True}\n'''
           marker = '\n\n@app.function(image=base_image, volumes={str(MODEL_ROOT): model_volume}, timeout=45 * 60, memory=65536)\ndef preload_models'
           if 'def smoke_import()' not in text:
               text = text.replace(marker, smoke + marker, 1)
 
           worker.write_text(text, encoding="utf-8")
-
-          deploy = Path(".github/workflows/deploy-nova-video.yml")
-          d = deploy.read_text(encoding="utf-8")
-          needle = '''      - name: Preload Wan checkpoints on CPU\n        if: steps.config.outputs.configured == 'true'\n        shell: bash\n        run: |\n          set -euo pipefail\n          modal run infra/modal/nova_video_worker.py::preload_models --include-speech\n'''
-          replacement = '''      - name: Smoke-test Wan runtime imports\n        if: steps.config.outputs.configured == 'true'\n        shell: bash\n        run: |\n          set -euo pipefail\n          modal run infra/modal/nova_video_worker.py::smoke_import\n\n''' + needle
-          if 'Smoke-test Wan runtime imports' not in d:
-              d = d.replace(needle, replacement, 1)
-          deploy.write_text(d, encoding="utf-8")
           PY
 
-      - name: Validate patch
+      - name: Validate source patch
         run: |
           python -m py_compile infra/modal/nova_video_worker.py
           grep -q 'einops>=0.8,<1' infra/modal/nova_video_worker.py
           grep -q 'spawn.aio(payload)' infra/modal/nova_video_worker.py
           grep -q 'def smoke_import' infra/modal/nova_video_worker.py
-          grep -q 'Smoke-test Wan runtime imports' .github/workflows/deploy-nova-video.yml
 
-      - name: Commit repair
+      - name: Install Modal CLI
+        run: python -m pip install --upgrade "modal>=1.5,<2"
+
+      - name: Smoke-test Wan runtime image
+        shell: bash
+        run: |
+          set -euo pipefail
+          modal run infra/modal/nova_video_worker.py::smoke_import
+
+      - name: Commit worker repair
         shell: bash
         run: |
           git config user.name "andreajoa"
           git config user.email "100246160+andreajoa@users.noreply.github.com"
-          git add infra/modal/nova_video_worker.py .github/workflows/deploy-nova-video.yml
+          git add infra/modal/nova_video_worker.py
           git commit -m "fix: repair Wan runtime imports and async dispatch"
           git push origin main
