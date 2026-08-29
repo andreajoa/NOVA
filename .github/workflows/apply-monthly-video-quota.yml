@@ -32,21 +32,10 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          # The migration helper intentionally uses exact replacements. Fix the
-          # duplicated admin/non-admin video block by moving payment state only
-          # to the non-admin response.
           usage = Path("src/app/api/free-usage/route.js")
           text = usage.read_text(encoding="utf-8")
-          patched = '''      available: videoAvailable,
-              active: video.active !== false,
-              paymentRequired: video.reason === "subscription_payment_required",
-              speechAvailable,
-              capabilities: videoCapabilities,
-'''
-          original = '''      available: videoAvailable,
-              speechAvailable,
-              capabilities: videoCapabilities,
-'''
+          patched = '      available: videoAvailable,\n        active: video.active !== false,\n        paymentRequired: video.reason === "subscription_payment_required",\n        speechAvailable,\n        capabilities: videoCapabilities,\n'
+          original = '      available: videoAvailable,\n        speechAvailable,\n        capabilities: videoCapabilities,\n'
           if patched in text:
               text = text.replace(patched, original, 1)
           if text.count(original) < 2:
@@ -55,39 +44,21 @@ jobs:
           text = head + patched + tail
           usage.write_text(text, encoding="utf-8")
 
-          # Require a paid latest Stripe invoice when live-refreshing an expired
-          # paid cycle. This prevents a failed renewal from unlocking a new quota.
           quota = Path("src/lib/freeGenerationQuota.js")
           text = quota.read_text(encoding="utf-8")
-          old = '''    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-              const { start, end, item } = subscriptionPeriod(subscription);
-              const billingInterval = normalizedBillingInterval(account?.billing_interval, item);
-              const active = subscription?.status === "active";
-'''
-          new = '''    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
-                expand: ["latest_invoice"],
-              });
-              const { start, end, item } = subscriptionPeriod(subscription);
-              const billingInterval = normalizedBillingInterval(account?.billing_interval, item);
-              const latestInvoiceStatus = typeof subscription.latest_invoice === "object"
-                ? String(subscription.latest_invoice?.status || "")
-                : "";
-              const active = subscription?.status === "active" && latestInvoiceStatus === "paid";
-'''
+          old = '    const subscription = await stripe.subscriptions.retrieve(subscriptionId);\n    const { start, end, item } = subscriptionPeriod(subscription);\n    const billingInterval = normalizedBillingInterval(account?.billing_interval, item);\n    const active = subscription?.status === "active";\n'
+          new = '    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {\n      expand: ["latest_invoice"],\n    });\n    const { start, end, item } = subscriptionPeriod(subscription);\n    const billingInterval = normalizedBillingInterval(account?.billing_interval, item);\n    const latestInvoiceStatus = typeof subscription.latest_invoice === "object"\n      ? String(subscription.latest_invoice?.status || "")\n      : "";\n    const active = subscription?.status === "active" && latestInvoiceStatus === "paid";\n'
           if old not in text:
               raise SystemExit("Expected Stripe cycle refresh block not found")
           quota.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-          # Finish changing every visible daily-video label to the new monthly
-          # policy. (Image quotas remain unchanged.)
           studio = Path("src/components/NovaFreeVideoStudio.jsx")
           text = studio.read_text(encoding="utf-8")
-          replacements = {
+          for old, new in {
               'gerações hoje.': 'gerações neste mês.',
               'Limite diário utilizado': 'Limite mensal utilizado',
               'nova geração diária.': 'nova geração mensal.',
-          }
-          for old, new in replacements.items():
+          }.items():
               text = text.replace(old, new)
           studio.write_text(text, encoding="utf-8")
           PY
