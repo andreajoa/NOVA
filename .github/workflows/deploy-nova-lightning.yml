@@ -2,6 +2,12 @@ name: Deploy NOVA Lightning Video Workers
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy_gpu:
+        description: "Deploy Lightning GPU workers (requires a verified payment method)"
+        required: true
+        default: false
+        type: boolean
   push:
     branches:
       - main
@@ -37,15 +43,18 @@ jobs:
       - name: Check deployment configuration
         id: config
         shell: bash
+        env:
+          DEPLOY_GPU: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_gpu || false }}
         run: |
-          if [ -n "${LIGHTNING_USER_ID:-}" ] && \
+          if [ "${DEPLOY_GPU}" = "true" ] && \
+             [ -n "${LIGHTNING_USER_ID:-}" ] && \
              [ -n "${LIGHTNING_API_KEY:-}" ] && \
              [ -n "${NOVA_VIDEO_WORKER_SECRET:-}" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
-            echo "NOVA Lightning deployment credentials are present."
+            echo "NOVA Lightning GPU deployment is enabled and credentials are present."
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "Lightning credentials are not configured; validation passed and deployment is skipped."
+            echo "Lightning GPU deployment is disabled; syntax validation passed. NOVA can continue with Modal only."
           fi
 
       - name: Install Lightning SDK
