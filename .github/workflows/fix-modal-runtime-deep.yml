@@ -49,11 +49,6 @@ jobs:
               e = cb.index('    }\n  }\n\n  const finalized', s)
               cb = cb[:s] + '    }\n  }\n\n  const finalized' + cb[e + len('    }\n  }\n\n  const finalized'):]
           callback.write_text(cb, encoding="utf-8")
-
-          deploy = Path(".github/workflows/deploy-nova-video.yml")
-          dep = deploy.read_text(encoding="utf-8")
-          dep = dep.replace('NOVA_WAN_SAMPLE_STEPS="24"', 'NOVA_WAN_SAMPLE_STEPS="8"')
-          deploy.write_text(dep, encoding="utf-8")
           PY
 
       - name: Validate repair
@@ -62,7 +57,6 @@ jobs:
           grep -q 'attention as flash_attention' infra/modal/nova_video_worker.py
           grep -q 'gpu="L40S"' infra/modal/nova_video_worker.py
           grep -q 'frames=_frames(duration)' infra/modal/nova_video_worker.py
-          grep -q 'NOVA_WAN_SAMPLE_STEPS="8"' .github/workflows/deploy-nova-video.yml
           ! grep -q 'retryFreeVideoJobOnPublicFallback' src/app/api/internal/free-video-callback/route.js
           node --check src/app/api/internal/free-video-callback/route.js
 
@@ -71,6 +65,6 @@ jobs:
         run: |
           git config user.name "andreajoa"
           git config user.email "100246160+andreajoa@users.noreply.github.com"
-          git add infra/modal/nova_video_worker.py src/app/api/internal/free-video-callback/route.js .github/workflows/deploy-nova-video.yml
+          git add infra/modal/nova_video_worker.py src/app/api/internal/free-video-callback/route.js
           git commit -m "fix: use verified Wan SDPA runtime on L40S"
           git push origin main
