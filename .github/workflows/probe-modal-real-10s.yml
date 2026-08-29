@@ -1,0 +1,66 @@
+name: Probe NOVA Real 10s Generation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/probe-modal-real-10s.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add ephemeral real generation probe
+        shell: bash
+        run: |
+          cat >> infra/modal/nova_video_worker.py <<'PY'
+
+          @app.function(
+              image=base_image,
+              gpu="L40S",
+              cpu=4.0,
+              memory=65536,
+              volumes={str(MODEL_ROOT): model_volume},
+              timeout=16 * 60,
+          )
+          def real_10s_probe():
+              _prepare_normal_wan_runtime()
+              _ensure_model(TI2V_REPO, TI2V_DIR)
+              prompt = '''Create a 10-second vertical 9:16 cinematic relationship-drama scene. Use the established characters consistently. Laura, 34, with shoulder-length dark brown wavy hair, light olive skin, brown eyes, wearing a soft beige blouse, dark tailored pants, delicate gold necklace and wedding ring, is standing alone in a modern upscale kitchen early Saturday morning. Warm natural sunlight enters through large windows. She calmly prepares coffee. Her smartphone lies on the marble kitchen island beside her. At second 2, the phone vibrates. Insert a realistic close-up of the phone screen showing an incoming message from CAIO: “Last night was incredible. When can I see you again?” Laura's expression instantly changes from relaxed to alarmed. She quickly grabs the phone. At second 6, Daniel unexpectedly enters the kitchen behind her wearing a dark gray T-shirt. He notices her reaction and casually asks in natural American English: “Who’s texting you this early?” Laura freezes for half a second. End on her nervous face. Slow cinematic push-in. Realistic acting, subtle tension, no music generated, no subtitles.'''
+              with tempfile.TemporaryDirectory() as tmpdir:
+                  output = Path(tmpdir) / "probe.mp4"
+                  command = [
+                      "python", str(WAN_CODE / "generate.py"),
+                      "--task", "ti2v-5B",
+                      "--size", "704*1280",
+                      "--ckpt_dir", str(TI2V_DIR),
+                      "--offload_model", "True",
+                      "--convert_model_dtype",
+                      "--t5_cpu",
+                      "--prompt", prompt,
+                      "--frame_num", "241",
+                      "--sample_steps", "8",
+                      "--base_seed", "1338705872",
+                      "--save_file", str(output),
+                  ]
+                  started = time.time()
+                  subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=15 * 60)
+                  size = output.stat().st_size
+                  if size < 10000:
+                      raise RuntimeError(f"Generated MP4 unexpectedly small: {size}")
+                  return {"ok": True, "seconds": round(time.time() - started, 2), "bytes": size}
+          PY
+          python -m py_compile infra/modal/nova_video_worker.py
+      - name: Install Modal CLI
+        run: python -m pip install --upgrade "modal>=1.5,<2"
+      - name: Run exact prompt on L40S at 8 steps
+        run: modal run infra/modal/nova_video_worker.py::real_10s_probe
