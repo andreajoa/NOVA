@@ -1,0 +1,29 @@
+name: Diagnose NOVA Modal Live
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-modal-live.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - name: Install Modal CLI
+        run: python -m pip install --upgrade "modal>=1.5,<2"
+
+      - name: Fetch recent NOVA video engine logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          modal app logs nova-video-engine --since 1h --tail 1000 --timestamps --show-function-id --show-function-call-id --show-container-id | tee modal-live.log
+          echo "--- ERROR SUMMARY ---"
+          grep -E -i "Traceback|Error|Exception|failed|killed|timeout|out of memory|CUDA|No module|exit code" modal-live.log || true
