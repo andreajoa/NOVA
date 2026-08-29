@@ -34,15 +34,22 @@ jobs:
 
           usage = Path("src/app/api/free-usage/route.js")
           text = usage.read_text(encoding="utf-8")
-          patched = '      available: videoAvailable,\n        active: video.active !== false,\n        paymentRequired: video.reason === "subscription_payment_required",\n        speechAvailable,\n        capabilities: videoCapabilities,\n'
-          original = '      available: videoAvailable,\n        speechAvailable,\n        capabilities: videoCapabilities,\n'
-          if patched in text:
-              text = text.replace(patched, original, 1)
-          if text.count(original) < 2:
-              raise SystemExit("Expected admin and non-admin video response blocks")
-          head, tail = text.rsplit(original, 1)
-          text = head + patched + tail
-          usage.write_text(text, encoding="utf-8")
+          marker = '  const [image, video] = await Promise.all(['
+          if marker not in text:
+              raise SystemExit("Non-admin usage marker not found")
+          admin_part, user_part = text.split(marker, 1)
+          admin_lines = [
+              line for line in admin_part.splitlines()
+              if 'active: video.active !== false' not in line
+              and 'paymentRequired: video.reason === "subscription_payment_required"' not in line
+          ]
+          admin_part = '\n'.join(admin_lines) + '\n'
+          needle = '      available: videoAvailable,\n'
+          addition = '      available: videoAvailable,\n      active: video.active !== false,\n      paymentRequired: video.reason === "subscription_payment_required",\n'
+          if needle not in user_part:
+              raise SystemExit("Non-admin video availability line not found")
+          user_part = user_part.replace(needle, addition, 1)
+          usage.write_text(admin_part + marker + user_part, encoding="utf-8")
 
           quota = Path("src/lib/freeGenerationQuota.js")
           text = quota.read_text(encoding="utf-8")
@@ -91,6 +98,7 @@ jobs:
           set -euo pipefail
           grep -q 'videoMonthlyLimit: 10' src/lib/freeGenerationQuota.js
           grep -q 'videoMonthlyLimit: 20' src/lib/freeGenerationQuota.js
+          grep -q 'latestInvoiceStatus' src/lib/freeGenerationQuota.js
           grep -q 'NOVA_FREE_VIDEO_MONTHLY_LIMIT_REACHED' src/app/api/free-video-generate/route.js
           grep -q 'NOVA_VIDEO_MONTHLY_LIMIT_REACHED' src/app/api/free-video-generate/route.js
           grep -q 'NOVA_SUBSCRIPTION_PAYMENT_REQUIRED' src/app/api/free-video-generate/route.js
