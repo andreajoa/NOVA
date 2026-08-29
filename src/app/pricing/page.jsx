@@ -156,13 +156,13 @@ function Pill({ children, blue = false }) {
   );
 }
 
-function PlanCard({ plan }) {
+function PlanCard({ plan, annual }) {
   const isLime = plan.tone === "lime";
   const isBlue = plan.tone === "blue" || plan.tone === "business";
-  const displayPrice = plan.monthlyPrice;
-  const displayOldPrice = "";
-  const displayBilling = "per month, billed monthly";
-  const displayHighlight = "Renews monthly · cancel anytime";
+  const displayPrice = annual ? plan.price : plan.monthlyPrice;
+  const displayOldPrice = annual ? plan.oldPrice : "";
+  const displayBilling = annual ? plan.billing : "per month, billed monthly";
+  const displayHighlight = annual ? plan.highlight : "No annual commitment";
 
   return (
     <article
@@ -216,7 +216,7 @@ function PlanCard({ plan }) {
       </div>
 
       <Link
-        href={`/checkout/plan?plan=${plan.name.toLowerCase()}&billing=monthly`}
+        href={`/checkout/plan?plan=${plan.name.toLowerCase()}&billing=${annual ? "annual" : "monthly"}`}
         className={[
           "relative z-10 mt-5 grid h-12 place-items-center rounded-xl text-xs font-black uppercase tracking-[.14em] no-underline transition",
           isLime ? "bg-[#D7FF00] text-black hover:bg-[#c7ef00]" : "",
@@ -269,6 +269,7 @@ function PlanCard({ plan }) {
 }
 
 export default function PricingPage() {
+  const [annual, setAnnual] = useState(true);
   const [openFaq, setOpenFaq] = useState(null);
 
   return (
@@ -282,12 +283,12 @@ export default function PricingPage() {
 
           <div className="relative z-10 flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
             <div>
-              <Pill>Monthly Plans</Pill>
+              <Pill>Limited Time</Pill>
               <h1 className="mt-5 max-w-3xl text-3xl font-black leading-tight tracking-tight text-white md:text-5xl">
-                Create with a simple monthly subscription.
+                Create without limits. Save more.
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-white/60">
-                Choose the NOVA plan that fits your workflow. Paid plans renew automatically every month until you cancel.
+                Get <span className="font-black text-[#D7FF00]">30% OFF</span> on annual NOVA plans — including high limits, premium models and Unlimited video generation.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3">
@@ -297,7 +298,7 @@ export default function PricingPage() {
             </div>
 
             <Link href="#plans" className="w-fit rounded-2xl bg-[#D7FF00] px-7 py-4 text-xs font-black uppercase tracking-[.14em] text-black no-underline hover:bg-[#c7ef00]">
-              View Monthly Plans
+              30% Off Annual Plans
             </Link>
           </div>
         </div>
@@ -308,18 +309,23 @@ export default function PricingPage() {
           <h2 className="text-4xl font-black uppercase tracking-tight md:text-5xl">Pick your plan</h2>
           <p className="mt-3 text-sm text-white/40">Scale creativity with higher limits, priority access, and early features</p>
 
-          <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[.035] px-4 py-2 text-xs text-white/55">
-            <span className="font-bold text-white">Monthly billing</span>
-            <span>·</span>
-            <span>Renews automatically</span>
-            <span>·</span>
-            <span>Cancel anytime</span>
+          <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[.035] px-4 py-2 text-xs text-white/45">
+            <span>Monthly</span>
+            <button
+              onClick={() => setAnnual(!annual)}
+              className={`relative h-6 w-11 rounded-full transition ${annual ? "bg-[#D7FF00]" : "bg-white/20"}`}
+              aria-label="Toggle annual billing"
+            >
+              <span className={`absolute top-1 h-4 w-4 rounded-full transition ${annual ? "left-6 bg-black" : "left-1 bg-white"}`} />
+            </button>
+            <span className="font-bold text-white">Annual</span>
+            <Pill>30% Off</Pill>
           </div>
         </div>
 
         <div className="mt-10 grid gap-5 lg:grid-cols-4">
           {plans.map((plan) => (
-            <PlanCard key={plan.name} plan={plan} />
+            <PlanCard key={plan.name} plan={plan} annual={annual} />
           ))}
         </div>
 
@@ -387,7 +393,7 @@ export default function PricingPage() {
           <div className="overflow-x-auto">
             <div className="min-w-[980px]">
               <div className="grid grid-cols-6 border-b border-white/8 bg-white/[.03] text-xs font-black uppercase tracking-[.14em] text-white/45">
-                <div className="p-4">Monthly plans</div>
+                <div className="p-4">Annual 30% Off</div>
                 {["Free", "Basic", "Plus", "Ultra", "Business"].map((head) => (
                   <div key={head} className="p-4 text-center">
                     <div className={head === "Plus" ? "text-[#D7FF00]" : head === "Business" ? "text-blue-400" : "text-white/65"}>{head}</div>
@@ -444,11 +450,7 @@ export default function PricingPage() {
 
               {openFaq === index && (
                 <p className="px-5 pb-5 text-sm leading-6 text-white/45">
-                  {question === "Is my subscription automatically renewed?"
-                    ? "Yes. Every paid NOVA plan renews automatically each month on the saved payment method until you cancel. The new monthly allowance is released after the renewal payment is successfully approved."
-                    : question === "How many videos can I generate?"
-                      ? "NOVA VIDEO includes 10 generations per calendar month on Free and 20 generations per paid monthly cycle on every paid plan. Admin accounts remain unlimited."
-                      : "NOVA plans are designed for AI video and image generation. Credits, Unlimited access and model availability may vary depending on the selected plan and model usage."}
+                  NOVA plans are designed for AI video and image generation. Credits, Unlimited access and model availability may vary depending on the selected plan and model usage.
                 </p>
               )}
             </div>

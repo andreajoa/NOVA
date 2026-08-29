@@ -3,10 +3,14 @@ import Stripe from "stripe";
 import { auth } from "@clerk/nextjs/server";
 
 const PRICE_MAP: Record<string, string> = {
-  basic: "price_1TTbBXPsIezuzlaECvxgoy59",
-  plus: "price_1TTbORPsIezuzlaEwyo0LYhF",
-  ultra: "price_1TTbVuPsIezuzlaEiJP3ukGR",
-  business: "price_1TTbkxPsIezuzlaEysolpSAz",
+  basic_monthly:    "price_1TTbBXPsIezuzlaECvxgoy59",
+  basic_annual:     "price_1TTbElPsIezuzlaEdfyVUJw7",
+  plus_monthly:     "price_1TTbORPsIezuzlaEwyo0LYhF",
+  plus_annual:      "price_1TTbQHPsIezuzlaE7gXw5TEb",
+  ultra_monthly:    "price_1TTbVuPsIezuzlaEiJP3ukGR",
+  ultra_annual:     "price_1TTbbDPsIezuzlaESnMNcqne",
+  business_monthly: "price_1TTbkxPsIezuzlaEysolpSAz",
+  business_annual:  "price_1TTbirPsIezuzlaECJ38sSiO",
 };
 
 export async function POST(req: Request) {
@@ -18,13 +22,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
-    const plan = String(body?.plan || "").toLowerCase();
-    const billing = "monthly";
-    const priceId = PRICE_MAP[plan];
+    const { plan, billing } = await req.json();
+    const key = `${plan}_${billing}`;
+    const priceId = PRICE_MAP[key];
 
     if (!priceId) {
-      return NextResponse.json({ error: `Invalid plan: ${plan}` }, { status: 400 });
+      return NextResponse.json({ error: `Invalid plan: ${key}` }, { status: 400 });
     }
 
     const session = await stripe.checkout.sessions.create({
