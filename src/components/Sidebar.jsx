@@ -102,6 +102,7 @@ function NavGroup({ group, pathname }) {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 className={[
                   "flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-black no-underline transition",
                   active ? "bg-[#D7FF00] text-black" : accented ? "border border-[#D7FF00]/25 bg-[#D7FF00]/8 text-[#D7FF00]" : "text-white/45 hover:bg-white/[.04] hover:text-white",
@@ -136,7 +137,7 @@ function DrawerAccordionGroup({ group, pathname, onClose }) {
           {group.items.map((item) => {
             const active = isActive(item.href, pathname);
             return (
-              <Link key={item.href} href={item.href} onClick={onClose} className={["rounded-2xl border px-3 py-3 no-underline transition", active ? "border-[#D7FF00] bg-[#D7FF00] text-black" : "border-white/10 bg-white/[0.03] text-white/60 hover:text-white"].join(" ")}>
+              <Link key={item.href} href={item.href} prefetch={false} onClick={onClose} className={["rounded-2xl border px-3 py-3 no-underline transition", active ? "border-[#D7FF00] bg-[#D7FF00] text-black" : "border-white/10 bg-white/[0.03] text-white/60 hover:text-white"].join(" ")}>
                 <span className="block text-lg">{item.icon}</span>
                 <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.12em]">{item.label}</span>
               </Link>
@@ -156,7 +157,7 @@ export default function Sidebar() {
     <>
       <aside className="hidden h-full w-[260px] shrink-0 flex-col border-r border-white/10 bg-[#050505] lg:flex">
         <div className="flex h-24 items-center border-b border-white/10 px-7">
-          <Link href="/dashboard" className="no-underline"><img src="/nova/logo-nova.jpeg" alt="NOVA" className="hidden" /></Link>
+          <Link href="/dashboard" prefetch={false} className="no-underline"><img src="/nova/logo-nova.jpeg" alt="NOVA" className="hidden" /></Link>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           {navGroups.map((group, i) => <NavGroup key={i} group={group} pathname={pathname} />)}
@@ -183,7 +184,7 @@ export default function Sidebar() {
         {mobileItems.map((item) => {
           const active = isActive(item.href, pathname);
           return (
-            <Link key={item.href} href={item.href} className={["flex flex-col items-center gap-1 px-1 py-3 no-underline transition", active || item.accent ? "text-[#D7FF00]" : "text-white/35 hover:text-white"].join(" ")}>
+            <Link key={item.href} href={item.href} prefetch={false} className={["flex flex-col items-center gap-1 px-1 py-3 no-underline transition", active || item.accent ? "text-[#D7FF00]" : "text-white/35 hover:text-white"].join(" ")}>
               <span className="text-lg leading-none">{item.icon}</span>
               <span className="text-[8px] font-black uppercase tracking-wider">{item.label}</span>
             </Link>

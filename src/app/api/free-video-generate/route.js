@@ -353,20 +353,13 @@ export async function POST(req) {
       });
     } else if (mode === "text-to-video" || mode === "image-to-video") {
       if (hasPrivateGpuVideoPool()) {
-        try {
-          result = await runPrivateGpuVideoPool(input, {
-            userId,
-            quotaDebited: Boolean(quota?.ok),
-            origin: req.nextUrl.origin,
-          });
-        } catch (privateError) {
-          console.warn("[NOVA_VIDEO] Modal/Lightning pool unavailable; using public fallback", {
-            message: String(privateError?.message || privateError).slice(0, 800),
-          });
-        }
-      }
-
-      if (!result) {
+        result = await runPrivateGpuVideoPool(input, {
+          userId,
+          quotaDebited: Boolean(quota?.ok),
+          origin: req.nextUrl.origin,
+        });
+      } else {
+        // Legacy/dev-only path. Production NOVA uses the private Modal pool.
         result = await runSynchronousPublicGeneration({
           input,
           userId,
@@ -378,17 +371,11 @@ export async function POST(req) {
       // Continuation also prefers the independent GPU pools. The legacy worker
       // remains a final fallback while Modal/Lightning are not configured.
       if (hasPrivateGpuVideoPool()) {
-        try {
-          result = await runPrivateGpuVideoPool(input, {
-            userId,
-            quotaDebited: Boolean(quota?.ok),
-            origin: req.nextUrl.origin,
-          });
-        } catch (privateError) {
-          console.warn("[NOVA_VIDEO] private continuation unavailable; using legacy fallback", {
-            message: String(privateError?.message || privateError).slice(0, 800),
-          });
-        }
+        result = await runPrivateGpuVideoPool(input, {
+          userId,
+          quotaDebited: Boolean(quota?.ok),
+          origin: req.nextUrl.origin,
+        });
       }
 
       if (!result) {
@@ -448,7 +435,12 @@ export async function POST(req) {
       await refundVideoCapacity(capacity.units).catch(() => {});
     }
 
-    const upstreamCapacityReached = isUpstreamCapacityError(error);
+    const privateGpuFailure = [
+      "NOVA_PRIVATE_GPU_POOL_UNAVAILABLE",
+      "NOVA_PRIVATE_GPU_TASK_UNAVAILABLE",
+      "NOVA_PRIVATE_GPU_RETRY_EXHAUSTED",
+    ].includes(String(error?.code || ""));
+    const upstreamCapacityReached = !privateGpuFailure && isUpstreamCapacityError(error);
     console.error("[NOVA_VIDEO] generation failed", {
       mode,
       admin,
@@ -472,7 +464,7 @@ export async function POST(req) {
           quotaRefunded: true,
           adminUnlimited: admin,
           personalFreeGpu: Boolean(hfToken),
-          canConnectPersonalFreeGpu: !hfToken,
+          canConnectPersonalFreeGpu: !admin && !privateGpuFailure && !hfToken,
           ...(admin && {
             diagnostic: String(error?.message || error || "Capacidade gratuita externa indisponível").slice(0, 1200),
           }),
@@ -493,13 +485,17 @@ export async function POST(req) {
           ? "NOVA_SPEECH_VIDEO_ENGINE_UNAVAILABLE"
           : error?.code || "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE",
         message: speechUnavailable
-          ? "NOVA VIDEO com fala está aguardando uma GPU gratuita compatível."
-          : admin
-            ? "Sua conta ADMIN continua ilimitada no NOVA, mas nenhum motor gratuito conseguiu concluir esta tentativa."
-            : "Não foi possível concluir este vídeo agora. A tentativa não consumiu seu limite NOVA.",
+          ? "NOVA VIDEO com fala está temporariamente indisponível."
+          : privateGpuFailure
+            ? admin
+              ? "Sua conta ADMIN continua ilimitada. O motor NOVA/Modal não aceitou esta tentativa; aguarde alguns instantes e tente novamente."
+              : "O motor NOVA/Modal está temporariamente indisponível. A tentativa não consumiu seu limite mensal."
+            : admin
+              ? "Sua conta ADMIN continua ilimitada no NOVA, mas a geração não pôde ser concluída agora."
+              : "Não foi possível concluir este vídeo agora. A tentativa não consumiu seu limite NOVA.",
         quotaRefunded: true,
         adminUnlimited: admin,
-        canConnectPersonalFreeGpu: !hfToken,
+        canConnectPersonalFreeGpu: !admin && !privateGpuFailure && !hfToken,
         ...(admin && {
           diagnostic: String(error?.message || error || "Erro desconhecido").slice(0, 1200),
         }),

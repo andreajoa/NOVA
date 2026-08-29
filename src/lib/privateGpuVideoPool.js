@@ -90,7 +90,7 @@ async function createOutputTarget(input = {}) {
 
 async function workerHealth(worker) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 3500);
+  const timer = setTimeout(() => controller.abort(), 12_000);
   try {
     const response = await fetch(`${worker.url}/health`, {
       method: "GET",
@@ -169,7 +169,7 @@ async function submitWorker(worker, input = {}, context = {}, existingJob = null
 
   const callbackUrl = `${callbackBase(context.origin)}/api/internal/free-video-callback?job=${encodeURIComponent(job.id)}`;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15_000);
+  const timer = setTimeout(() => controller.abort(), 45_000);
 
   try {
     const response = await fetch(worker.url, {
@@ -224,12 +224,8 @@ async function runWorkers(input, context, workers, existingJob = null) {
   let activeJob = existingJob;
 
   for (const worker of workers) {
-    const health = await workerHealth(worker);
-    if (!health.ok || !health.tasks.has(String(input.task || ""))) {
-      failures.push(`${worker.id}:health`);
-      continue;
-    }
-
+    // The POST is authoritative. Do not pre-gate a serverless worker on /health:
+    // a cold wake can exceed a probe timeout even though the job endpoint works.
     try {
       return await submitWorker(worker, input, context, activeJob);
     } catch (error) {
