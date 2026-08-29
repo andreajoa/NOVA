@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
-import { activatePlanSubscription, addApiCredits } from "@/lib/db";
+import { activatePlanSubscription, addApiCredits, d1Rows, PLAN_CONFIG, queryD1 } from "@/lib/db";
+import { activatePaidVideoCycle, deactivatePaidVideoCycle } from "@/lib/freeGenerationQuota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +16,63 @@ const PRICE_TO_PLAN = {
   "price_1TTbkxPsIezuzlaEysolpSAz": "business",
   "price_1TTbirPsIezuzlaECJ38sSiO": "business",
 };
+
+function invoiceSubscriptionId(invoice) {
+  return String(
+    invoice?.subscription ||
+    invoice?.parent?.subscription_details?.subscription ||
+    ""
+  );
+}
+
+function subscriptionDetails(subscription, fallbackBilling = "monthly") {
+  const item = subscription?.items?.data?.[0] || {};
+  const priceId = String(item?.price?.id || "");
+  const interval = String(item?.price?.recurring?.interval || fallbackBilling || "month").toLowerCase();
+  const billingInterval = interval === "year" || interval === "annual" ? "annual" : "monthly";
+  const periodStart = Number(item.current_period_start || subscription?.current_period_start || 0);
+  const periodEnd = Number(item.current_period_end || subscription?.current_period_end || 0);
+  const plan = PRICE_TO_PLAN[priceId] || "basic";
+  return { item, priceId, plan, billingInterval, periodStart, periodEnd };
+}
+
+async function findUserByStripe({ customerId = "", subscriptionId = "" }) {
+  if (subscriptionId) {
+    const bySubscription = await queryD1(
+      `SELECT id, clerk_id, plan, stripe_customer_id, stripe_subscription_id, billing_interval
+       FROM users WHERE stripe_subscription_id = ? LIMIT 1`,
+      [subscriptionId]
+    );
+    const row = d1Rows(bySubscription)[0];
+    if (row) return row;
+  }
+
+  if (customerId) {
+    const byCustomer = await queryD1(
+      `SELECT id, clerk_id, plan, stripe_customer_id, stripe_subscription_id, billing_interval
+       FROM users WHERE stripe_customer_id = ? LIMIT 1`,
+      [customerId]
+    );
+    return d1Rows(byCustomer)[0] || null;
+  }
+
+  return null;
+}
+
+async function activateCycleForSubscription({ userId, subscription, invoiceId = "", fallbackBilling = "monthly" }) {
+  const details = subscriptionDetails(subscription, fallbackBilling);
+  if (subscription?.status !== "active" || !details.periodStart || !details.periodEnd) return false;
+
+  await activatePaidVideoCycle({
+    userId,
+    stripeSubscriptionId: String(subscription.id),
+    stripeInvoiceId: invoiceId,
+    billingInterval: details.billingInterval,
+    periodStart: details.periodStart,
+    periodEnd: details.periodEnd,
+  });
+  return true;
+}
 
 export async function POST(request) {
   const stripe = getStripe();
@@ -46,65 +104,115 @@ export async function POST(request) {
       return NextResponse.json({ received: true, type: "api_credits" });
     }
 
-    if (userId && session.customer && session.subscription) {
-      let plan = (metadata.plan || "").toLowerCase();
+    if (userId && session.customer && session.subscription && session.payment_status === "paid") {
+      try {
+        const subscription = await stripe.subscriptions.retrieve(String(session.subscription));
+        const details = subscriptionDetails(subscription, metadata.billing || "monthly");
+        const requestedPlan = String(metadata.plan || "").toLowerCase();
+        const plan = ["basic", "plus", "ultra", "business"].includes(requestedPlan)
+          ? requestedPlan
+          : details.plan;
+        const billing = metadata.billing || details.billingInterval;
 
-      if (!plan || !["basic", "plus", "ultra", "business"].includes(plan)) {
-        try {
-          const subscription = await stripe.subscriptions.retrieve(String(session.subscription));
-          const priceId = subscription.items.data[0]?.price?.id ?? "";
-          plan = PRICE_TO_PLAN[priceId] ?? "basic";
-        } catch {
-          plan = "basic";
-        }
+        await activatePlanSubscription({
+          userId,
+          plan,
+          stripeCustomerId: String(session.customer),
+          stripeSubscriptionId: String(session.subscription),
+          billingInterval: billing,
+        });
+
+        await activateCycleForSubscription({
+          userId,
+          subscription,
+          invoiceId: typeof subscription.latest_invoice === "string"
+            ? subscription.latest_invoice
+            : String(subscription.latest_invoice?.id || ""),
+          fallbackBilling: billing,
+        });
+
+        console.log(`[stripe webhook] initial paid subscription plan=${plan} billing=${billing} userId=${userId}`);
+      } catch (err) {
+        console.error("[stripe webhook] checkout activation error:", err);
       }
-
-      const billing = metadata.billing || "monthly";
-
-      await activatePlanSubscription({
-        userId,
-        plan,
-        stripeCustomerId: String(session.customer),
-        stripeSubscriptionId: String(session.subscription),
-        billingInterval: billing,
-      });
-
-      console.log(`[stripe webhook] plan=${plan} billing=${billing} userId=${userId}`);
     }
   }
 
   if (event.type === "invoice.payment_succeeded") {
     const invoice = event.data.object;
-    const subscriptionId = invoice.subscription;
-    const customerId = invoice.customer;
+    const subscriptionId = invoiceSubscriptionId(invoice);
+    const customerId = String(invoice.customer || "");
 
     if (subscriptionId && customerId) {
       try {
-        const subscription = await stripe.subscriptions.retrieve(String(subscriptionId));
-        const priceId = subscription.items.data[0]?.price?.id ?? "";
-        const plan = PRICE_TO_PLAN[priceId] ?? "basic";
-
-        // Find user by stripe customer id
-        const { queryD1, d1Rows, PLAN_CONFIG } = await import("@/lib/db");
-        const res = await queryD1(
-          "SELECT id, clerk_id FROM users WHERE stripe_customer_id = ? LIMIT 1",
-          [customerId]
-        );
-        const rows = d1Rows(res);
-        const user = rows[0];
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const details = subscriptionDetails(subscription);
+        const user = await findUserByStripe({ customerId, subscriptionId });
 
         if (user) {
           const userId = String(user.clerk_id || user.id);
-          const credits = PLAN_CONFIG[plan]?.credits ?? 70;
+          const credits = PLAN_CONFIG[details.plan]?.credits ?? 70;
+
+          await activatePlanSubscription({
+            userId,
+            plan: details.plan,
+            stripeCustomerId: customerId,
+            stripeSubscriptionId: subscriptionId,
+            billingInterval: details.billingInterval,
+          });
+
           await queryD1(
-            `UPDATE users SET credits = ?, image_gens_used = 0 WHERE id = ? OR clerk_id = ?`,
+            `UPDATE users SET credits = ?, image_gens_used = 0, subscription_status = 'active'
+             WHERE id = ? OR clerk_id = ?`,
             [credits, userId, userId]
           );
-          console.log(`[stripe webhook] monthly renewal plan=${plan} userId=${userId} credits=${credits}`);
+
+          await activateCycleForSubscription({
+            userId,
+            subscription,
+            invoiceId: String(invoice.id || ""),
+            fallbackBilling: details.billingInterval,
+          });
+
+          console.log(`[stripe webhook] renewal paid plan=${details.plan} userId=${userId} videoQuota=20`);
         }
       } catch (err) {
         console.error("[stripe webhook] renewal error:", err);
       }
+    }
+  }
+
+  if (event.type === "invoice.payment_failed") {
+    const invoice = event.data.object;
+    const subscriptionId = invoiceSubscriptionId(invoice);
+    const customerId = String(invoice.customer || "");
+    const user = await findUserByStripe({ customerId, subscriptionId });
+    if (user) {
+      const userId = String(user.clerk_id || user.id);
+      await queryD1(
+        `UPDATE users SET subscription_status = 'past_due' WHERE id = ? OR clerk_id = ?`,
+        [userId, userId]
+      );
+      await deactivatePaidVideoCycle({ userId });
+      console.log(`[stripe webhook] renewal payment failed userId=${userId}; paid video quota locked`);
+    }
+  }
+
+  if (event.type === "customer.subscription.deleted") {
+    const subscription = event.data.object;
+    const subscriptionId = String(subscription.id || "");
+    const customerId = String(subscription.customer || "");
+    const user = await findUserByStripe({ customerId, subscriptionId });
+    if (user) {
+      const userId = String(user.clerk_id || user.id);
+      await queryD1(
+        `UPDATE users
+         SET plan = 'trial', credits = 10, image_gens_used = 0, subscription_status = 'canceled'
+         WHERE id = ? OR clerk_id = ?`,
+        [userId, userId]
+      );
+      await deactivatePaidVideoCycle({ userId });
+      console.log(`[stripe webhook] subscription canceled userId=${userId}; returned to free plan`);
     }
   }
 

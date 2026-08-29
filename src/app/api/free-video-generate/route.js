@@ -259,7 +259,7 @@ export async function POST(req) {
     }
   }
 
-  // ADMIN never enters a NOVA daily quota/capacity gate. External free GPU
+  // ADMIN never enters a NOVA monthly quota/capacity gate. External free GPU
   // providers can still run out of their own compute allocation.
   const usesSharedCapacity = !admin && !policy.paid && !hfToken;
   let capacity = null;
@@ -284,15 +284,38 @@ export async function POST(req) {
     quota = await checkAndDebitFreeGeneration(userId, "video", account.plan);
     if (!quota.ok) {
       if (capacity?.ok) await refundVideoCapacity(capacity.units).catch(() => {});
+
+      if (quota.reason === "subscription_payment_required") {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "NOVA_SUBSCRIPTION_PAYMENT_REQUIRED",
+            message: "Sua assinatura precisa estar ativa e com o pagamento aprovado para liberar os 20 vídeos do novo ciclo.",
+            used: quota.used,
+            limit: quota.limit,
+            remaining: 0,
+            resetAt: quota.resetAt,
+            paymentRequired: true,
+            upgradeUrl: "/pricing",
+          },
+          { status: 402 }
+        );
+      }
+
+      const freeAccount = !policy.paid;
       return NextResponse.json(
         {
           success: false,
-          code: "FREE_MODEL_DAILY_LIMIT_REACHED",
-          message: `Você atingiu o limite de ${quota.limit} vídeos incluídos hoje.`,
+          code: freeAccount ? "NOVA_FREE_VIDEO_MONTHLY_LIMIT_REACHED" : "NOVA_VIDEO_MONTHLY_LIMIT_REACHED",
+          message: freeAccount
+            ? `Você usou seus ${quota.limit} vídeos gratuitos deste mês. Assine o NOVA para liberar 20 vídeos por mês.`
+            : `Você usou os ${quota.limit} vídeos incluídos neste ciclo mensal. O limite será renovado no próximo ciclo da sua assinatura.`,
           used: quota.used,
           limit: quota.limit,
           remaining: quota.remaining,
           resetAt: quota.resetAt,
+          upgradeRequired: freeAccount,
+          upgradeUrl: freeAccount ? "/pricing" : null,
         },
         { status: 402 }
       );

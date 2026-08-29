@@ -34,13 +34,16 @@ export async function POST(req: Request) {
       ui_mode: "embedded_page",
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
+      client_reference_id: userId,
+      subscription_data: { metadata: { userId, plan, billing } },
       return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?subscribed=true`,
       metadata: { userId, plan, billing },
     });
 
     return NextResponse.json({ clientSecret: session.client_secret });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unexpected checkout error";
     console.error("Plan checkout error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

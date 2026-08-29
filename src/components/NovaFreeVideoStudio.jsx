@@ -87,6 +87,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
   const [continuePrompt, setContinuePrompt] = useState("");
   const [hfConnected, setHfConnected] = useState(false);
   const [showHfConnect, setShowHfConnect] = useState(false);
+  const [showUpgradePopup, setShowUpgradePopup] = useState(false);
   const pollToken = useRef(0);
 
   const videoUsage = usage?.video;
@@ -99,6 +100,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
   const effectiveDuration = durations.includes(duration) ? duration : (durations[0] || 5);
 
   const unlimited = Boolean(usage?.admin || videoUsage?.unlimited);
+  const paidUser = Boolean(usage?.paid);
   const exhausted = !unlimited && Number(videoUsage?.remaining ?? 1) <= 0;
 
   async function refreshUsage() {
@@ -142,7 +144,11 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
       try {
         const response = await fetch("/api/free-usage", { cache: "no-store" });
         const payload = await response.json().catch(() => ({}));
-        if (!cancelled && response.ok && payload?.success) setUsage(payload);
+        if (!cancelled && response.ok && payload?.success) {
+          setUsage(payload);
+          const freeExhausted = !payload?.paid && !payload?.admin && Number(payload?.video?.remaining ?? 1) <= 0;
+          if (freeExhausted) setShowUpgradePopup(true);
+        }
       } catch {
         // Server-side quota enforcement remains authoritative.
       }
@@ -220,7 +226,12 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
       return;
     }
     if (exhausted) {
-      setError("Seu limite diário de NOVA VIDEO foi utilizado.");
+      if (!paidUser) setShowUpgradePopup(true);
+      setError(
+        paidUser
+          ? "Você usou os 20 vídeos incluídos neste ciclo mensal."
+          : "Você usou seus 10 vídeos gratuitos deste mês."
+      );
       return;
     }
     if (!continueFrom && mode === "image-to-video" && !referenceFile) {
@@ -276,6 +287,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
 
       if (!response.ok || !payload?.success || !payload?.jobId) {
         if (response.status === 402) await refreshUsage();
+        if (payload?.upgradeRequired) setShowUpgradePopup(true);
         if (payload?.canConnectPersonalFreeGpu && !hfToken) {
           setShowHfConnect(true);
         }
@@ -316,7 +328,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
               </div>
             )}
             <div className="rounded-full border border-[#D7FF00]/25 bg-[#D7FF00]/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-[#D7FF00]">
-              {unlimited ? "Admin · Ilimitado" : `${videoUsage?.remaining ?? "—"} / ${videoUsage?.limit ?? "—"} hoje`}
+              {unlimited ? "Admin · Ilimitado" : `${videoUsage?.remaining ?? "—"} / ${videoUsage?.limit ?? "—"} este mês`}
             </div>
           </div>
         </div>
@@ -330,7 +342,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
               <span className="rounded-full border border-white/10 bg-white/[.035] px-3 py-1 text-[9px] font-black uppercase tracking-[0.15em] text-white/45">480p</span>
             </div>
             <h1 className="mt-4 text-4xl font-black uppercase leading-[0.9] tracking-[-0.07em] md:text-7xl">NOVA VIDEO FREE</h1>
-            <p className="mt-4 max-w-3xl text-sm leading-7 text-white/48">Crie a partir de texto ou imagem e continue um vídeo pronto em novos blocos, respeitando o limite diário da sua conta.</p>
+            <p className="mt-4 max-w-3xl text-sm leading-7 text-white/48">Crie a partir de texto ou imagem e continue um vídeo pronto em novos blocos, respeitando o limite mensal da sua conta.</p>
           </div>
         </section>
 
@@ -392,7 +404,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
             <div className="mt-6 rounded-2xl border border-[#D7FF00]/20 bg-[#D7FF00]/8 p-4 text-xs leading-6 text-white/48">
               {unlimited
                 ? "Conta admin: gerações NOVA incluídas ilimitadas."
-                : `Restam ${videoUsage?.remaining ?? "—"} de ${videoUsage?.limit ?? "—"} gerações hoje.`}
+                : `Restam ${videoUsage?.remaining ?? "—"} de ${videoUsage?.limit ?? "—"} gerações neste mês.`}
             </div>
 
             <button
@@ -401,7 +413,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
               disabled={loading || exhausted || !prompt.trim()}
               className="mt-5 min-h-16 w-full rounded-2xl bg-[#D7FF00] px-5 text-sm font-black uppercase tracking-[0.13em] text-black disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {loading ? (status || "Gerando...") : exhausted ? "Limite diário utilizado" : `Gerar vídeo · ${effectiveDuration}s`}
+              {loading ? (status || "Gerando...") : exhausted ? "Limite mensal utilizado" : `Gerar vídeo · ${effectiveDuration}s`}
             </button>
 
             {jobId && <p className="mt-3 text-center text-xs text-white/35">Processando com segurança. Você pode manter esta página aberta.</p>}
@@ -437,7 +449,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
 
             <div className="mt-6 rounded-2xl border border-cyan-400/20 bg-cyan-400/[.05] p-5">
               <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">Continuar este vídeo</p>
-              <p className="mt-2 text-xs leading-6 text-white/40">A continuação usa o final do vídeo anterior, gera o próximo trecho e devolve um único arquivo mais longo. Cada continuação conta como uma nova geração diária.</p>
+              <p className="mt-2 text-xs leading-6 text-white/40">A continuação usa o final do vídeo anterior, gera o próximo trecho e devolve um único arquivo mais longo. Cada continuação conta como uma nova geração mensal.</p>
               <textarea
                 value={continuePrompt}
                 onChange={(event) => setContinuePrompt(event.target.value)}
@@ -462,6 +474,31 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
           </section>
         )}
       </div>
+        {showUpgradePopup && !paidUser && !unlimited && (
+          <div className="fixed inset-0 z-[100] grid place-items-center bg-black/80 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[2rem] border border-[#D7FF00]/35 bg-[#080a08] p-7 text-center shadow-[0_0_80px_rgba(215,255,0,.16)]">
+              <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#D7FF00] text-2xl font-black text-black">✦</div>
+              <h2 className="mt-5 text-2xl font-black text-white">Seus vídeos grátis do mês acabaram</h2>
+              <p className="mt-3 text-sm leading-6 text-white/60">
+                Você usou os 10 vídeos gratuitos deste mês. Assine um plano NOVA e libere 20 vídeos por mês.
+              </p>
+              <Link
+                href="/pricing"
+                className="mt-6 grid h-12 w-full place-items-center rounded-xl bg-[#D7FF00] text-xs font-black uppercase tracking-[0.14em] text-black no-underline"
+              >
+                Ver planos e assinar
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowUpgradePopup(false)}
+                className="mt-3 text-xs font-bold text-white/40 hover:text-white/70"
+              >
+                Agora não
+              </button>
+              <p className="mt-4 text-[11px] leading-5 text-white/35">Se você não assinar, seus 10 vídeos gratuitos voltam no próximo mês.</p>
+            </div>
+          </div>
+        )}
     </main>
   );
 }
