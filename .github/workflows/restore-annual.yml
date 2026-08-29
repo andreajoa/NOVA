@@ -17,18 +17,11 @@ jobs:
           git checkout 6a134187131ca83cf3132282caf37f460ada2a28 -- src/app/pricing/page.jsx src/app/api/checkout/plans/session/route.ts
           python - <<'PY'
           from pathlib import Path
+          import re
           p = Path('src/app/pricing/page.jsx')
           s = p.read_text()
           s = s.replace('import Image from "next/image";\n', '')
-          s = s.replace('<a href="/dashboard"', '<Link href="/dashboard"').replace('</a>', '</Link>')
-          s = s.replace('<a href="/dashboard/models"', '<Link href="/dashboard/models"')
-          s = s.replace('<a href="/pricing"', '<Link href="/pricing"')
-          s = s.replace('<a href="/product-ad-generator"', '<Link href="/product-ad-generator"')
-          s = s.replace('<a href="/generate"', '<Link href="/generate"')
-          s = s.replace('<a href="/explore"', '<Link href="/explore"')
-          s = s.replace('<a href="/terms"', '<Link href="/terms"')
-          s = s.replace('<a href="/privacy"', '<Link href="/privacy"')
-          s = s.replace('<a href="/contact"', '<Link href="/contact"')
+          s = re.sub(r'<a href="(/[^"]*)"([^>]*)>(.*?)</a>', r'<Link href="\1"\2>\3</Link>', s, flags=re.S)
           for marker in ['      "70 credits/mo",','      "500 credits/mo",','      "3,000 credits/mo",','      "3,000 credits in total/mo",']:
               if '20 NOVA VIDEO generations/mo' not in s[s.find(marker):s.find(marker)+140]:
                   s = s.replace(marker, marker+'\n      "20 NOVA VIDEO generations/mo",', 1)
