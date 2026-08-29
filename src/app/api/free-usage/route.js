@@ -8,6 +8,7 @@ import {
 } from "@/lib/freeGenerationQuota";
 import { canUseCloudflareWorkersAI } from "@/lib/cloudflareAiClient";
 import { isZeroCostVideoWorkerHealthy } from "@/lib/zeroCostVideoClient";
+import { getPrivateGpuVideoCapabilities } from "@/lib/privateGpuVideoPool";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,11 +29,38 @@ export async function GET() {
   );
   const policy = getFreeGenerationPolicy(account.plan);
 
-  // Only expose NOVA availability, never provider/model identity.
   const imageAvailable = Boolean(
     process.env.NOVA_IMAGE_FREE_ENGINE_MODEL && canUseCloudflareWorkersAI()
   );
-  const videoAvailable = await isZeroCostVideoWorkerHealthy();
+
+  const [privateGpu, legacyVideoAvailable] = await Promise.all([
+    getPrivateGpuVideoCapabilities().catch(() => ({
+      available: false,
+      textToVideo: false,
+      imageToVideo: false,
+      continueVideo: false,
+      speechVideo: false,
+      providers: [],
+    })),
+    isZeroCostVideoWorkerHealthy().catch(() => false),
+  ]);
+
+  // Text/image video still has the public HF pool as a fallback. Speech video
+  // is only exposed when a private GPU reports that Wan S2V is actually ready.
+  const videoAvailable = Boolean(
+    privateGpu.textToVideo ||
+    privateGpu.imageToVideo ||
+    legacyVideoAvailable
+  );
+  const speechAvailable = Boolean(privateGpu.speechVideo);
+
+  const videoCapabilities = {
+    textToVideo: Boolean(privateGpu.textToVideo || legacyVideoAvailable),
+    imageToVideo: Boolean(privateGpu.imageToVideo || legacyVideoAvailable),
+    continueVideo: Boolean(privateGpu.continueVideo || legacyVideoAvailable),
+    speechVideo: speechAvailable,
+    privateGpu: Boolean(privateGpu.available),
+  };
 
   if (admin) {
     return NextResponse.json({
@@ -61,6 +89,8 @@ export async function GET() {
         resolution: "480p",
         credits: 0,
         available: videoAvailable,
+        speechAvailable,
+        capabilities: videoCapabilities,
       },
     });
   }
@@ -96,6 +126,8 @@ export async function GET() {
       resolution: "480p",
       credits: 0,
       available: videoAvailable,
+      speechAvailable,
+      capabilities: videoCapabilities,
     },
   });
 }

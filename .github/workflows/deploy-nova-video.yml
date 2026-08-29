@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - feat/free-open-image-video
     paths:
       - "infra/modal/**"
       - ".github/workflows/deploy-nova-video.yml"
@@ -16,6 +15,10 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      NOVA_VIDEO_WORKER_SECRET: ${{ secrets.NOVA_VIDEO_WORKER_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,54 +26,69 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Validate worker syntax
         run: python -m py_compile infra/modal/nova_video_worker.py
 
       - name: Check deployment configuration
         id: config
-        env:
-          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
-          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-          NOVA_VIDEO_T2V_MODEL_REPO: ${{ secrets.NOVA_VIDEO_T2V_MODEL_REPO }}
-          NOVA_VIDEO_I2V_MODEL_REPO: ${{ secrets.NOVA_VIDEO_I2V_MODEL_REPO }}
-          NOVA_VIDEO_WORKER_SECRET: ${{ secrets.NOVA_VIDEO_WORKER_SECRET }}
+        shell: bash
         run: |
-          if [ -n "$MODAL_TOKEN_ID" ] && \
-             [ -n "$MODAL_TOKEN_SECRET" ] && \
-             [ -n "$NOVA_VIDEO_T2V_MODEL_REPO" ] && \
-             [ -n "$NOVA_VIDEO_I2V_MODEL_REPO" ] && \
-             [ -n "$NOVA_VIDEO_WORKER_SECRET" ]; then
+          if [ -n "${MODAL_TOKEN_ID:-}" ] && \
+             [ -n "${MODAL_TOKEN_SECRET:-}" ] && \
+             [ -n "${NOVA_VIDEO_WORKER_SECRET:-}" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
-            echo "NOVA VIDEO deployment configuration is present."
+            echo "NOVA Modal deployment credentials are present."
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "NOVA VIDEO deployment credentials are not configured; syntax validation passed and deployment is skipped."
+            echo "Modal credentials are not configured; validation passed and deployment is skipped."
           fi
 
       - name: Install Modal
         if: steps.config.outputs.configured == 'true'
-        run: pip install --upgrade modal
+        run: python -m pip install --upgrade "modal>=1.1,<2"
 
-      - name: Create or update private engine secret
+      - name: Create or update NOVA engine secret
         if: steps.config.outputs.configured == 'true'
-        env:
-          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
-          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-          NOVA_VIDEO_T2V_MODEL_REPO: ${{ secrets.NOVA_VIDEO_T2V_MODEL_REPO }}
-          NOVA_VIDEO_I2V_MODEL_REPO: ${{ secrets.NOVA_VIDEO_I2V_MODEL_REPO }}
-          NOVA_VIDEO_WORKER_SECRET: ${{ secrets.NOVA_VIDEO_WORKER_SECRET }}
+        shell: bash
         run: |
-          modal secret create --force nova-video-engine \
-            NOVA_VIDEO_T2V_MODEL_REPO="$NOVA_VIDEO_T2V_MODEL_REPO" \
-            NOVA_VIDEO_I2V_MODEL_REPO="$NOVA_VIDEO_I2V_MODEL_REPO" \
+          set -euo pipefail
+          modal secret create nova-video-engine \
             NOVA_VIDEO_WORKER_SECRET="$NOVA_VIDEO_WORKER_SECRET" \
-            NOVA_VIDEO_STEPS="8"
+            NOVA_ENABLE_SPEECH="1" \
+            NOVA_WAN_SAMPLE_STEPS="24" \
+            NOVA_WAN_SPEECH_STEPS="20" \
+            --force
 
-      - name: Deploy NOVA video engine
+      - name: Preload Wan checkpoints on CPU
         if: steps.config.outputs.configured == 'true'
-        env:
-          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
-          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-        run: modal deploy infra/modal/nova_video_worker.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          modal run infra/modal/nova_video_worker.py::preload_models --include-speech true
+
+      - name: Deploy NOVA Modal video engine
+        if: steps.config.outputs.configured == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          modal deploy infra/modal/nova_video_worker.py 2>&1 | tee modal-deploy.log
+          python - <<'PY'
+          import json, re
+          text = open("modal-deploy.log", encoding="utf-8").read()
+          urls = re.findall(r"https://[A-Za-z0-9._-]+\.modal\.run", text)
+          url = urls[-1] if urls else ""
+          with open("modal-url.json", "w", encoding="utf-8") as handle:
+              json.dump({"url": url}, handle, indent=2)
+          print(f"NOVA Modal endpoint: {url or 'not printed by CLI'}")
+          PY
+
+      - name: Store Modal endpoint artifact
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-modal-video-url
+          path: modal-url.json
+          if-no-files-found: ignore
+          retention-days: 7

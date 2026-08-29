@@ -13,8 +13,10 @@ on:
       - "src/app/api/generate/**"
       - "src/app/api/internal/free-video-callback/**"
       - "src/app/dashboard/free/**"
+      - "src/app/dashboard/models/[model]/[mode]/**"
       - "src/app/oauth/callback/huggingface/**"
       - "src/components/NovaFreeVideoStudio.jsx"
+      - "src/components/NovaSpeechVideoStudio.jsx"
       - "src/components/NovaGenerationStudio.jsx"
       - "src/lib/cloudflareAiClient.js"
       - "src/lib/db.ts"
@@ -24,12 +26,15 @@ on:
       - "src/lib/freeVideoJobs.js"
       - "src/lib/generationCatalog.js"
       - "src/lib/novaAdminAccess.js"
+      - "src/lib/privateGpuVideoPool.js"
+      - "src/lib/publicVideoJobRetry.js"
       - "src/lib/privateOpenModels.js"
       - "src/lib/publicGenerationCatalog.js"
       - "src/lib/r2.ts"
       - "src/lib/verifiedVideoRuntime.js"
       - "src/lib/zeroCostVideoClient.js"
-      - "infra/modal/nova_video_worker.py"
+      - "infra/modal/**"
+      - "infra/lightning/**"
       - ".github/workflows/ci-free-generation.yml"
 
 permissions:
@@ -60,8 +65,10 @@ jobs:
             src/app/api/generate/route.js \
             src/app/api/internal/free-video-callback/route.js \
             src/app/dashboard/free/page.jsx \
+            'src/app/dashboard/models/[model]/[mode]/page.jsx' \
             src/app/oauth/callback/huggingface/page.jsx \
             src/components/NovaFreeVideoStudio.jsx \
+            src/components/NovaSpeechVideoStudio.jsx \
             src/components/NovaGenerationStudio.jsx \
             src/lib/cloudflareAiClient.js \
             src/lib/freeGenerationQuota.js \
@@ -70,6 +77,8 @@ jobs:
             src/lib/freeVideoJobs.js \
             src/lib/generationCatalog.js \
             src/lib/novaAdminAccess.js \
+            src/lib/privateGpuVideoPool.js \
+            src/lib/publicVideoJobRetry.js \
             src/lib/privateOpenModels.js \
             src/lib/publicGenerationCatalog.js \
             src/lib/r2.ts \
@@ -79,8 +88,11 @@ jobs:
       - name: Validate TypeScript database module
         run: npx tsc --noEmit --pretty false
 
-      - name: Validate video worker syntax
-        run: python -m py_compile infra/modal/nova_video_worker.py
+      - name: Validate GPU worker syntax
+        run: |
+          python -m py_compile infra/modal/nova_video_worker.py
+          python -m py_compile infra/lightning/nova_video_server.py
+          python -m py_compile infra/lightning/deploy.py
 
       - name: Validate NOVA free-generation contracts
         shell: bash
@@ -88,16 +100,20 @@ jobs:
           set -euo pipefail
 
           grep -q 'NOVA_VIDEO_DEDICATED_FLOW_REQUIRED' src/app/api/generate/route.js
-          grep -q 'NOVA_INCLUDED_MODEL_DASHBOARD_ONLY' src/app/api/generate/route.js
           grep -q '/api/free-video-generate' src/components/NovaFreeVideoStudio.jsx
-          grep -q '/api/free-video-status' src/components/NovaFreeVideoStudio.jsx
-          grep -q 'reserveCloudflareFreeImage' src/app/api/generate/route.js
+          grep -q 'speech-video' src/components/NovaSpeechVideoStudio.jsx
           grep -q 'reserveVideoCapacity' src/app/api/free-video-generate/route.js
-          grep -q 'usesSharedCapacity' src/app/api/free-video-generate/route.js
-          grep -q 'persistGeneratedVideo' src/app/api/free-video-generate/route.js
-          grep -q 'uploadToR2' src/app/api/free-video-generate/route.js
+          grep -q 'runPrivateGpuVideoPool' src/app/api/free-video-generate/route.js
           grep -q 'runVerifiedVideoRuntime' src/app/api/free-video-generate/route.js
-          grep -q 'refundFreeGeneration' src/app/api/internal/free-video-callback/route.js
+          grep -q 'NOVA_MODAL_VIDEO_URL' src/lib/privateGpuVideoPool.js
+          grep -q 'NOVA_LIGHTNING_VIDEO_URL' src/lib/privateGpuVideoPool.js
+          grep -q 'NOVA_LIGHTNING_SPEECH_VIDEO_URL' src/lib/privateGpuVideoPool.js
+          grep -q 'retryPrivateGpuVideoJob' src/app/api/internal/free-video-callback/route.js
+          grep -q 'retryFreeVideoJobOnPublicFallback' src/app/api/internal/free-video-callback/route.js
+          grep -q 'prepareFreeVideoJobRetry' src/lib/freeVideoJobs.js
+          grep -q 'Wan-AI/Wan2.2-TI2V-5B' infra/modal/nova_video_worker.py
+          grep -q 'Wan-AI/Wan2.2-S2V-14B' infra/modal/nova_video_worker.py
+          grep -q -- '--tts_prompt_text' infra/modal/nova_video_worker.py
           grep -q 'isNovaAdminUser' src/lib/db.ts
           grep -q 'BUILT_IN_ADMIN_EMAIL_HASHES' src/lib/novaAdminAccess.js
 

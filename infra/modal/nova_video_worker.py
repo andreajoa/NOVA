@@ -1,17 +1,10 @@
-"""Private-engine adapter for NOVA VIDEO.
+"""NOVA VIDEO private GPU worker for Modal.
 
-The public NOVA repository intentionally contains no underlying model identifier.
-Deployment configuration is supplied through a private Modal Secret named
-`nova-video-engine`:
+Normal video uses Wan2.2-TI2V-5B (Apache-2.0) on an L4.
+Speech video uses Wan2.2-S2V-14B (Apache-2.0) on an A100-80GB.
 
-  NOVA_VIDEO_T2V_MODEL_REPO=<private approved text-to-video repository id>
-  NOVA_VIDEO_I2V_MODEL_REPO=<private approved image-to-video repository id>
-  NOVA_VIDEO_WORKER_SECRET=<same value used by the NOVA server>
-  NOVA_VIDEO_STEPS=<optional inference steps>
-
-The HTTP endpoint only acknowledges jobs. GPU generation continues in a durable
-background invocation, writes the MP4 directly to NOVA's pre-signed R2 target,
-and calls NOVA back when the job completes or fails.
+The HTTP endpoint only accepts work. GPU functions render in background, upload
+MP4 files directly to NOVA R2, and call NOVA's authenticated callback.
 """
 
 from __future__ import annotations
@@ -26,280 +19,375 @@ from pathlib import Path
 import modal
 
 APP_NAME = "nova-video-engine"
-MODEL_CACHE = Path("/models")
+WAN_CODE = Path("/opt/Wan2.2")
+MODEL_ROOT = Path("/models")
+TI2V_REPO = "Wan-AI/Wan2.2-TI2V-5B"
+S2V_REPO = "Wan-AI/Wan2.2-S2V-14B"
+TI2V_DIR = MODEL_ROOT / "Wan2.2-TI2V-5B"
+S2V_DIR = MODEL_ROOT / "Wan2.2-S2V-14B"
+TTS_PROMPT_TEXT = "希望你以后能够做的比我还好呦。"
 
-worker_image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .apt_install("ffmpeg")
-    .uv_pip_install(
-        "accelerate>=1.6,<2",
-        "diffusers>=0.33,<1",
-        "fastapi[standard]",
-        "huggingface-hub>=0.36,<1",
-        "imageio>=2.37,<3",
-        "imageio-ffmpeg>=0.5,<1",
-        "pillow",
-        "requests>=2.32,<3",
-        "sentencepiece>=0.2,<1",
-        "torch>=2.7,<3",
-        "transformers>=4.51,<6",
-    )
+NORMAL_PACKAGES = [
+    "accelerate>=1.6,<2",
+    "dashscope",
+    "decord",
+    "diffusers>=0.31,<1",
+    "easydict",
+    "fastapi[standard]",
+    "ftfy",
+    "huggingface-hub>=0.36,<1",
+    "imageio[ffmpeg]>=2.37,<3",
+    "imageio-ffmpeg>=0.5,<1",
+    "numpy<2",
+    "opencv-python-headless>=4.9",
+    "pillow",
+    "requests>=2.32,<3",
+    "safetensors",
+    "sentencepiece>=0.2,<1",
+    "tokenizers",
+    "torch>=2.7,<3",
+    "torchaudio",
+    "torchvision",
+    "tqdm",
+    "transformers>=4.49,<=4.51.3",
+]
+
+# Mirrors Wan2.2/requirements_s2v.txt so built-in CosyVoice TTS can self-install
+# its repository/model the first time speech generation runs.
+SPEECH_PACKAGES = [
+    "GitPython",
+    "HyperPyYAML",
+    "conformer",
+    "gdown",
+    "hydra-core",
+    "inflect",
+    "librosa",
+    "lightning",
+    "matplotlib",
+    "modelscope",
+    "omegaconf",
+    "onnxruntime",
+    "openai-whisper",
+    "pyarrow",
+    "pyworld",
+    "rich",
+    "wetext",
+    "wget",
+]
+
+base_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg", "git", "libgl1", "libglib2.0-0", "libsndfile1")
+    .uv_pip_install(*NORMAL_PACKAGES)
+    .run_commands("git clone --depth 1 https://github.com/Wan-Video/Wan2.2.git /opt/Wan2.2")
     .env(
         {
-            "HF_HOME": str(MODEL_CACHE),
+            "HF_HOME": str(MODEL_ROOT),
             "HF_XET_HIGH_PERFORMANCE": "1",
+            "PYTHONPATH": str(WAN_CODE),
+            "TOKENIZERS_PARALLELISM": "false",
         }
     )
 )
 
+speech_image = base_image.uv_pip_install(*SPEECH_PACKAGES)
+
 app = modal.App(APP_NAME)
-model_volume = modal.Volume.from_name("nova-video-model-cache", create_if_missing=True)
+model_volume = modal.Volume.from_name("nova-wan-model-cache", create_if_missing=True)
 engine_secret = modal.Secret.from_name("nova-video-engine")
-
-
-def _dimensions(aspect_ratio: str) -> tuple[int, int]:
-    ratio = str(aspect_ratio or "16:9")
-    if ratio == "9:16":
-        return 448, 768
-    if ratio == "1:1":
-        return 512, 512
-    return 768, 448
-
-
-def _frames_for_duration(seconds: int) -> int:
-    return (max(5, min(10, int(seconds))) * 24) + 1
 
 
 def _authorized(request_secret: str | None) -> bool:
     expected = os.environ.get("NOVA_VIDEO_WORKER_SECRET", "")
-    if not expected:
-        return False
-    return hmac.compare_digest(str(request_secret or ""), expected)
+    return bool(expected) and hmac.compare_digest(str(request_secret or ""), expected)
 
 
-def _download(url: str, destination: Path) -> None:
+def _speech_enabled() -> bool:
+    return str(os.environ.get("NOVA_ENABLE_SPEECH", "0")).lower() in {"1", "true", "yes"}
+
+
+def _frames(seconds: int) -> int:
+    # Wan TI2V requires 4n+1 frames. At 24 fps this maps 5s->121, 10s->241.
+    return (max(5, min(10, int(seconds))) * 24) + 1
+
+
+def _size(aspect: str) -> str:
+    return "704*1280" if str(aspect) == "9:16" else "1280*704"
+
+
+def _ensure_model(repo_id: str, local_dir: Path) -> None:
+    marker = local_dir / ".nova-ready"
+    if marker.exists():
+        return
+    from huggingface_hub import snapshot_download
+
+    local_dir.mkdir(parents=True, exist_ok=True)
+    snapshot_download(repo_id=repo_id, local_dir=str(local_dir), local_dir_use_symlinks=False)
+    marker.write_text(repo_id, encoding="utf-8")
+    model_volume.commit()
+
+
+def _download(url: str, destination: Path, max_bytes: int = 150_000_000) -> None:
     import requests
 
-    if not url.startswith("https://"):
+    if not str(url).startswith("https://"):
         raise ValueError("Only HTTPS media URLs are accepted")
+    total = 0
     with requests.get(url, stream=True, timeout=60) as response:
         response.raise_for_status()
         with destination.open("wb") as handle:
             for chunk in response.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    handle.write(chunk)
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > max_bytes:
+                    raise ValueError("Input media is too large")
+                handle.write(chunk)
 
 
 def _extract_last_frame(video_path: Path, frame_path: Path) -> None:
     subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-sseof",
-            "-0.15",
-            "-i",
-            str(video_path),
-            "-frames:v",
-            "1",
-            str(frame_path),
-        ],
+        ["ffmpeg", "-y", "-sseof", "-0.12", "-i", str(video_path), "-frames:v", "1", str(frame_path)],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
 
 
-def _concat_videos(first: Path, second: Path, output: Path) -> None:
-    list_file = output.with_suffix(".txt")
-    list_file.write_text(
-        f"file '{first.as_posix()}'\nfile '{second.as_posix()}'\n",
-        encoding="utf-8",
-    )
+def _crop_square(source: Path, destination: Path) -> None:
     subprocess.run(
         [
-            "ffmpeg",
-            "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            str(list_file),
-            "-an",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-crf",
-            "20",
-            "-pix_fmt",
-            "yuv420p",
-            str(output),
+            "ffmpeg", "-y", "-i", str(source),
+            "-vf", "crop='min(iw,ih)':'min(iw,ih)'",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", str(destination),
         ],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+
+
+def _concat(first: Path, second: Path, output: Path) -> None:
+    manifest = output.with_suffix(".txt")
+    manifest.write_text(f"file '{first.as_posix()}'\nfile '{second.as_posix()}'\n", encoding="utf-8")
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(manifest),
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", str(output),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _upload(payload: dict, output_path: Path) -> str:
+    import requests
+
+    target = payload.get("nova_output") or {}
+    upload_url = str(target.get("upload_url") or "")
+    public_url = str(target.get("public_url") or "")
+    if not upload_url.startswith("https://") or not public_url.startswith("https://"):
+        raise ValueError("NOVA output target is required")
+    with output_path.open("rb") as handle:
+        response = requests.put(upload_url, data=handle, headers={"Content-Type": "video/mp4"}, timeout=240)
+    response.raise_for_status()
+    return public_url
+
+
+def _notify(payload: dict, status: str, error_code: str | None = None) -> None:
+    import requests
+
+    callback = payload.get("nova_callback") or {}
+    url = str(callback.get("url") or "")
+    token = str(callback.get("token") or "")
+    if not token or not url.startswith(("https://", "http://localhost")):
+        return
+    for attempt in range(3):
+        try:
+            response = requests.post(
+                url,
+                headers={"Authorization": f"Bearer {token}"},
+                json={"status": status, "error_code": error_code},
+                timeout=15,
+            )
+            if 200 <= response.status_code < 300:
+                return
+        except Exception:
+            pass
+        time.sleep(1 + attempt)
+
+
+def _normal_generate(payload: dict) -> str:
+    _ensure_model(TI2V_REPO, TI2V_DIR)
+    prompt = str(payload.get("prompt") or "").strip()
+    task = str(payload.get("task") or "text-to-video")
+    if not prompt:
+        raise ValueError("Prompt is required")
+    if task not in {"text-to-video", "image-to-video", "continue-video"}:
+        raise ValueError("Unsupported normal video task")
+
+    duration = max(5, min(10, int(payload.get("duration") or 5)))
+    aspect = str(payload.get("aspect_ratio") or "16:9")
+    steps = max(4, min(50, int(os.environ.get("NOVA_WAN_SAMPLE_STEPS", "24"))))
+    seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        segment = tmp / "segment.mp4"
+        reference: Path | None = None
+        source_video: Path | None = None
+
+        if task == "image-to-video":
+            reference = tmp / "reference.jpg"
+            _download(str(payload.get("image_url") or ""), reference, 20_000_000)
+        elif task == "continue-video":
+            source_video = tmp / "source.mp4"
+            reference = tmp / "last-frame.png"
+            _download(str(payload.get("source_video_url") or ""), source_video)
+            _extract_last_frame(source_video, reference)
+
+        command = [
+            "python", str(WAN_CODE / "generate.py"),
+            "--task", "ti2v-5B",
+            "--size", _size(aspect),
+            "--ckpt_dir", str(TI2V_DIR),
+            "--offload_model", "True",
+            "--convert_model_dtype",
+            "--t5_cpu",
+            "--prompt", prompt,
+            "--frame_num", str(_frames(duration)),
+            "--sample_steps", str(steps),
+            "--base_seed", str(seed),
+            "--save_file", str(segment),
+        ]
+        if reference is not None:
+            command.extend(["--image", str(reference)])
+
+        subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=11 * 60)
+
+        result = segment
+        if aspect == "1:1":
+            square = tmp / "square.mp4"
+            _crop_square(result, square)
+            result = square
+        if source_video is not None:
+            combined = tmp / "combined.mp4"
+            _concat(source_video, result, combined)
+            result = combined
+        return _upload(payload, result)
+
+
+def _speech_generate(payload: dict) -> str:
+    if not _speech_enabled():
+        raise RuntimeError("Speech video is disabled")
+    _ensure_model(S2V_REPO, S2V_DIR)
+
+    prompt = str(payload.get("prompt") or "").strip()
+    speech_text = str(payload.get("speech_text") or "").strip()
+    image_url = str(payload.get("image_url") or "")
+    if not prompt or not speech_text or not image_url.startswith("https://"):
+        raise ValueError("Speech video requires prompt, speech_text and reference image")
+
+    aspect = str(payload.get("aspect_ratio") or "16:9")
+    duration = max(5, min(10, int(payload.get("duration") or 5)))
+    clips = 1 if duration <= 5 else 2
+    steps = max(4, min(40, int(os.environ.get("NOVA_WAN_SPEECH_STEPS", "20"))))
+    seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        reference = tmp / "reference.jpg"
+        output = tmp / "speech.mp4"
+        _download(image_url, reference, 20_000_000)
+
+        command = [
+            "python", str(WAN_CODE / "generate.py"),
+            "--task", "s2v-14B",
+            "--size", "704*1024" if aspect == "9:16" else "1024*704",
+            "--ckpt_dir", str(S2V_DIR),
+            "--offload_model", "True",
+            "--convert_model_dtype",
+            "--t5_cpu",
+            "--prompt", prompt,
+            "--image", str(reference),
+            "--enable_tts",
+            "--tts_prompt_audio", str(WAN_CODE / "examples" / "zero_shot_prompt.wav"),
+            "--tts_prompt_text", TTS_PROMPT_TEXT,
+            "--tts_text", speech_text[:500],
+            "--num_clip", str(clips),
+            "--sample_steps", str(steps),
+            "--base_seed", str(seed),
+            "--save_file", str(output),
+        ]
+        subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=15 * 60)
+
+        result = output
+        if aspect == "1:1":
+            square = tmp / "speech-square.mp4"
+            _crop_square(result, square)
+            result = square
+        return _upload(payload, result)
+
+
+@app.function(image=base_image, volumes={str(MODEL_ROOT): model_volume}, timeout=45 * 60, memory=65536)
+def preload_models(include_speech: bool = False):
+    """Download checkpoints on CPU so no GPU minutes are burned by downloads."""
+    _ensure_model(TI2V_REPO, TI2V_DIR)
+    if include_speech:
+        _ensure_model(S2V_REPO, S2V_DIR)
+    return {"normal": TI2V_DIR.exists(), "speech": S2V_DIR.exists()}
 
 
 @app.cls(
-    image=worker_image,
+    image=base_image,
     gpu="L4",
-    volumes={str(MODEL_CACHE): model_volume},
+    cpu=4.0,
+    memory=65536,
+    volumes={str(MODEL_ROOT): model_volume},
     secrets=[engine_secret],
     timeout=12 * 60,
-    scaledown_window=60,
+    scaledown_window=30,
     max_containers=2,
 )
-class NovaVideoEngine:
-    @modal.enter()
-    def load(self):
-        import torch
-        from diffusers import DiffusionPipeline
-
-        t2v_repo = os.environ.get("NOVA_VIDEO_T2V_MODEL_REPO", "").strip()
-        i2v_repo = os.environ.get("NOVA_VIDEO_I2V_MODEL_REPO", "").strip()
-        if not t2v_repo or not i2v_repo:
-            raise RuntimeError("NOVA video engine repositories are not configured")
-
-        self.t2v = DiffusionPipeline.from_pretrained(
-            t2v_repo,
-            torch_dtype=torch.bfloat16,
-        ).to("cuda")
-        self.i2v_repo = i2v_repo
-        self.i2v = None
-        model_volume.commit()
-
-    def _image_pipeline(self):
-        if self.i2v is None:
-            import torch
-            from diffusers import DiffusionPipeline
-
-            self.i2v = DiffusionPipeline.from_pretrained(
-                self.i2v_repo,
-                torch_dtype=torch.bfloat16,
-            ).to("cuda")
-            model_volume.commit()
-        return self.i2v
-
+class NovaWanVideo:
     @modal.method()
     def generate(self, payload: dict) -> dict:
-        import requests
-        import torch
-        from diffusers.utils import export_to_video, load_image
-
-        callback = payload.get("nova_callback") or {}
-        callback_url = str(callback.get("url") or "")
-        callback_token = str(callback.get("token") or "")
-
-        def notify(status: str, error_code: str | None = None) -> None:
-            if not callback_url.startswith(("https://", "http://localhost")) or not callback_token:
-                return
-            for attempt in range(3):
-                try:
-                    response = requests.post(
-                        callback_url,
-                        headers={"Authorization": f"Bearer {callback_token}"},
-                        json={"status": status, "error_code": error_code},
-                        timeout=15,
-                    )
-                    if 200 <= response.status_code < 300:
-                        return
-                except Exception:
-                    pass
-                time.sleep(1 + attempt)
-
         try:
-            task = str(payload.get("task") or "text-to-video")
-            prompt = str(payload.get("prompt") or "").strip()
-            negative_prompt = str(
-                payload.get("negative_prompt")
-                or "worst quality, inconsistent motion, blurry, jittery, distorted"
-            )
-            duration = max(5, min(10, int(payload.get("duration") or 5)))
-            width, height = _dimensions(payload.get("aspect_ratio") or "16:9")
-            num_frames = _frames_for_duration(duration)
-            steps = max(4, min(50, int(os.environ.get("NOVA_VIDEO_STEPS", "8"))))
-            seed = payload.get("seed")
-            output = payload.get("nova_output") or {}
-            upload_url = str(output.get("upload_url") or "")
-            public_url = str(output.get("public_url") or "")
-
-            if not prompt:
-                raise ValueError("Prompt is required")
-            if not upload_url or not public_url:
-                raise ValueError("NOVA output target is required")
-            if task not in {"text-to-video", "image-to-video", "continue-video"}:
-                raise ValueError("Unsupported NOVA video task")
-
-            generator = None
-            if seed is not None:
-                generator = torch.Generator(device="cuda").manual_seed(int(seed))
-
-            request_args = {
-                "prompt": prompt,
-                "negative_prompt": negative_prompt,
-                "width": width,
-                "height": height,
-                "num_frames": num_frames,
-                "num_inference_steps": steps,
-                "generator": generator,
-            }
-
-            source_video = None
-            with tempfile.TemporaryDirectory() as tmpdir:
-                tmp = Path(tmpdir)
-
-                if task == "image-to-video":
-                    image_url = str(payload.get("image_url") or "")
-                    if not image_url.startswith("https://"):
-                        raise ValueError("A public HTTPS reference image is required")
-                    request_args["image"] = load_image(image_url)
-                    pipeline = self._image_pipeline()
-                elif task == "continue-video":
-                    source_url = str(payload.get("source_video_url") or "")
-                    if not source_url.startswith("https://"):
-                        raise ValueError("A NOVA source video is required")
-                    source_video = tmp / "source.mp4"
-                    last_frame = tmp / "last-frame.png"
-                    _download(source_url, source_video)
-                    _extract_last_frame(source_video, last_frame)
-                    request_args["image"] = load_image(str(last_frame))
-                    pipeline = self._image_pipeline()
-                else:
-                    pipeline = self.t2v
-
-                frames = pipeline(**request_args).frames[0]
-                segment_path = tmp / "segment.mp4"
-                export_to_video(frames, segment_path, fps=24)
-
-                output_path = segment_path
-                if source_video is not None:
-                    combined_path = tmp / "combined.mp4"
-                    _concat_videos(source_video, segment_path, combined_path)
-                    output_path = combined_path
-
-                with output_path.open("rb") as handle:
-                    response = requests.put(
-                        upload_url,
-                        data=handle,
-                        headers={"Content-Type": "video/mp4"},
-                        timeout=180,
-                    )
-                response.raise_for_status()
-
-            notify("completed")
-            return {"success": True, "uploaded": True, "video_url": public_url}
+            public_url = _normal_generate(payload)
+            _notify(payload, "completed")
+            return {"success": True, "video_url": public_url}
         except Exception:
-            notify("failed", "GENERATION_FAILED")
+            _notify(payload, "failed", "GENERATION_FAILED")
             raise
 
 
-@app.function(
-    image=worker_image,
+@app.cls(
+    image=speech_image,
+    gpu="A100-80GB",
+    cpu=4.0,
+    memory=65536,
+    volumes={str(MODEL_ROOT): model_volume},
     secrets=[engine_secret],
-    timeout=60,
+    timeout=18 * 60,
+    scaledown_window=15,
+    max_containers=1,
 )
+class NovaWanSpeechVideo:
+    @modal.method()
+    def generate(self, payload: dict) -> dict:
+        try:
+            public_url = _speech_generate(payload)
+            _notify(payload, "completed")
+            return {"success": True, "video_url": public_url}
+        except Exception:
+            _notify(payload, "failed", "SPEECH_GENERATION_FAILED")
+            raise
+
+
+@app.function(image=base_image, secrets=[engine_secret], timeout=60)
 @modal.asgi_app()
 def api():
     from fastapi import FastAPI, HTTPException, Request
@@ -308,12 +396,10 @@ def api():
 
     @web.get("/health")
     async def health():
-        configured = bool(
-            os.environ.get("NOVA_VIDEO_T2V_MODEL_REPO")
-            and os.environ.get("NOVA_VIDEO_I2V_MODEL_REPO")
-            and os.environ.get("NOVA_VIDEO_WORKER_SECRET")
-        )
-        return {"ok": configured}
+        tasks = ["text-to-video", "image-to-video", "continue-video"]
+        if _speech_enabled():
+            tasks.append("speech-video")
+        return {"ok": True, "provider": "modal", "tasks": tasks}
 
     @web.post("/")
     async def generate_video(request: Request):
@@ -327,17 +413,18 @@ def api():
         if not isinstance(payload, dict):
             raise HTTPException(status_code=400, detail="Invalid input")
 
-        output = payload.get("nova_output") or {}
-        public_url = str(output.get("public_url") or "")
-        if not public_url:
-            raise HTTPException(status_code=400, detail="Invalid output target")
+        task = str(payload.get("task") or "")
+        if task == "speech-video":
+            if not _speech_enabled():
+                raise HTTPException(status_code=503, detail="Speech engine disabled")
+            call = NovaWanSpeechVideo().generate.spawn(payload)
+            engine = "wan-s2v"
+        elif task in {"text-to-video", "image-to-video", "continue-video"}:
+            call = NovaWanVideo().generate.spawn(payload)
+            engine = "wan-ti2v"
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported task")
 
-        call = NovaVideoEngine().generate.spawn(payload)
-        return {
-            "accepted": True,
-            "status": "processing",
-            "call_id": call.object_id,
-            "video_url": public_url,
-        }
+        return {"accepted": True, "status": "processing", "call_id": call.object_id, "engine": engine}
 
     return web

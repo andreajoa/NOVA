@@ -21,13 +21,13 @@ import {
   runZeroCostVideo,
 } from "@/lib/zeroCostVideoClient";
 import {
-  hasPrivateGpuVideoPool,
-  runPrivateGpuVideoPool,
-} from "@/lib/privateGpuVideoPool";
-import {
   createFreeVideoJob,
   markFreeVideoJobCompleted,
 } from "@/lib/freeVideoJobs";
+import {
+  hasPrivateGpuVideoPool,
+  runPrivateGpuVideoPool,
+} from "@/lib/privateGpuVideoPool";
 import { runVerifiedVideoRuntime } from "@/lib/verifiedVideoRuntime";
 import { uploadToR2 } from "@/lib/r2";
 
@@ -35,7 +35,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 90;
 
-const ALLOWED_MODES = new Set(["text-to-video", "image-to-video", "continue-video"]);
+const ALLOWED_MODES = new Set([
+  "text-to-video",
+  "image-to-video",
+  "continue-video",
+  "speech-video",
+]);
 const MAX_PERSISTED_VIDEO_BYTES = 120 * 1024 * 1024;
 const PERSIST_TIMEOUT_MS = 8_000;
 
@@ -85,6 +90,8 @@ function isUpstreamCapacityError(error) {
     "daily limit",
     "exceeded",
     "capacity",
+    "free credit",
+    "credits exhausted",
     "429",
   ].some((needle) => message.includes(needle));
 }
@@ -134,6 +141,51 @@ async function persistGeneratedVideo({ userId, remoteUrl, hfToken }) {
   return publicUrl;
 }
 
+async function runSynchronousPublicGeneration({ input, userId, quota, hfToken }) {
+  const generated = await runVerifiedVideoRuntime(input, { hfToken });
+  let videoUrl = generated.videoUrl;
+  const engine = generated.engine || null;
+  let storage = "provider";
+
+  try {
+    videoUrl = await persistGeneratedVideo({
+      userId,
+      remoteUrl: generated.videoUrl,
+      hfToken,
+    });
+    storage = "r2";
+  } catch (persistError) {
+    console.warn("[NOVA_VIDEO] persistence skipped; returning verified provider URL", {
+      engine,
+      message: persistError?.message || String(persistError),
+    });
+  }
+
+  let jobId = "";
+  try {
+    const completedJob = await createFreeVideoJob({
+      userId,
+      publicUrl: videoUrl,
+      quotaDebited: Boolean(quota?.ok),
+    });
+    await markFreeVideoJobCompleted(completedJob.id, videoUrl);
+    jobId = completedJob.id;
+  } catch (jobError) {
+    console.warn("[NOVA_VIDEO] completed video returned without job history", {
+      engine,
+      message: jobError?.message || String(jobError),
+    });
+  }
+
+  return {
+    processing: false,
+    jobId,
+    videoUrl,
+    engine,
+    storage,
+  };
+}
+
 export async function POST(req) {
   const session = await auth();
   const userId = session.userId || null;
@@ -145,12 +197,19 @@ export async function POST(req) {
   const prompt = String(body.prompt || "").trim();
   const mode = String(body.mode || "text-to-video").trim();
   const hfToken = safeHfToken(body.hf_token);
+  const speechText = String(body.speech_text || "").trim();
 
   if (!prompt) {
     return NextResponse.json({ success: false, error: "Prompt is required." }, { status: 400 });
   }
   if (!ALLOWED_MODES.has(mode)) {
     return NextResponse.json({ success: false, error: "Unsupported video mode." }, { status: 400 });
+  }
+  if (mode === "speech-video" && !speechText) {
+    return NextResponse.json(
+      { success: false, error: "O texto da fala é obrigatório." },
+      { status: 400 }
+    );
   }
 
   const account = await ensureUserGenerationAccount(userId);
@@ -178,10 +237,18 @@ export async function POST(req) {
   let imageUrl = "";
   let sourceVideoUrl = "";
 
-  if (mode === "image-to-video") {
+  if (mode === "image-to-video" || mode === "speech-video") {
     imageUrl = ownedMediaUrl(body.image_url);
     if (!imageUrl) {
-      return NextResponse.json({ success: false, error: "Invalid NOVA reference image." }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: mode === "speech-video"
+            ? "Adicione uma imagem da pessoa ou personagem que irá falar."
+            : "Invalid NOVA reference image.",
+        },
+        { status: 400 }
+      );
     }
   }
 
@@ -190,34 +257,10 @@ export async function POST(req) {
     if (!sourceVideoUrl) {
       return NextResponse.json({ success: false, error: "Invalid NOVA source video." }, { status: 400 });
     }
-
-    if (!canUseZeroCostVideoWorker()) {
-      return NextResponse.json(
-        {
-          success: false,
-          code: "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE",
-          message: "A continuação de vídeo ainda não está disponível neste ambiente.",
-        },
-        { status: 503 }
-      );
-    }
-
-    const healthy = await isZeroCostVideoWorkerHealthy();
-    if (!healthy) {
-      return NextResponse.json(
-        {
-          success: false,
-          code: "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE",
-          message: "O motor de continuação de vídeo está temporariamente indisponível.",
-        },
-        { status: 503 }
-      );
-    }
   }
 
-  // ADMIN is never debited and never enters NOVA's shared daily capacity gate.
-  // Any later provider quota/capacity response is external infrastructure, not
-  // a NOVA account limit.
+  // ADMIN never enters a NOVA daily quota/capacity gate. External free GPU
+  // providers can still run out of their own compute allocation.
   const usesSharedCapacity = !admin && !policy.paid && !hfToken;
   let capacity = null;
   if (usesSharedCapacity) {
@@ -262,6 +305,7 @@ export async function POST(req) {
     ...(body.negative_prompt && { negative_prompt: String(body.negative_prompt).slice(0, 1200) }),
     ...(imageUrl && { image_url: imageUrl }),
     ...(sourceVideoUrl && { source_video_url: sourceVideoUrl }),
+    ...(speechText && { speech_text: speechText.slice(0, 500) }),
     duration,
     resolution: "480p",
     aspect_ratio: normalizeAspect(body.aspect_ratio),
@@ -271,31 +315,27 @@ export async function POST(req) {
   };
 
   try {
-    let jobId = "";
-    let videoUrl = null;
-    let processing = true;
-    let engine = null;
-    let storage = null;
+    let result = null;
 
-    if (mode === "text-to-video" || mode === "image-to-video") {
-      let privateQueued = false;
-
-      // Preferred zero-cost path: Modal first, Lightning second. They use
-      // independent compute pools, so exhausting one provider does not block
-      // the next. If neither private pool is configured/healthy, NOVA falls
-      // back to its verified public video runtimes.
+    if (mode === "speech-video") {
+      if (!hasPrivateGpuVideoPool()) {
+        const error = new Error("NOVA speech GPU workers are not configured");
+        error.code = "NOVA_SPEECH_VIDEO_ENGINE_UNAVAILABLE";
+        throw error;
+      }
+      result = await runPrivateGpuVideoPool(input, {
+        userId,
+        quotaDebited: Boolean(quota?.ok),
+        origin: req.nextUrl.origin,
+      });
+    } else if (mode === "text-to-video" || mode === "image-to-video") {
       if (hasPrivateGpuVideoPool()) {
         try {
-          const queued = await runPrivateGpuVideoPool(input, {
+          result = await runPrivateGpuVideoPool(input, {
             userId,
             quotaDebited: Boolean(quota?.ok),
             origin: req.nextUrl.origin,
           });
-          jobId = queued.jobId;
-          engine = queued.engine || "private-gpu";
-          storage = "r2";
-          processing = true;
-          privateQueued = true;
         } catch (privateError) {
           console.warn("[NOVA_VIDEO] Modal/Lightning pool unavailable; using public fallback", {
             message: String(privateError?.message || privateError).slice(0, 800),
@@ -303,62 +343,62 @@ export async function POST(req) {
         }
       }
 
-      if (!privateQueued) {
-        const generated = await runVerifiedVideoRuntime(input, { hfToken });
-        videoUrl = generated.videoUrl;
-        engine = generated.engine || null;
-        storage = "provider";
-
-        try {
-          videoUrl = await persistGeneratedVideo({
-            userId,
-            remoteUrl: generated.videoUrl,
-            hfToken,
-          });
-          storage = "r2";
-        } catch (persistError) {
-          console.warn("[NOVA_VIDEO] persistence skipped; returning verified provider URL", {
-            engine,
-            message: persistError?.message || String(persistError),
-          });
-        }
-
-        try {
-          const completedJob = await createFreeVideoJob({
-            userId,
-            publicUrl: videoUrl,
-            quotaDebited: Boolean(quota?.ok),
-          });
-          await markFreeVideoJobCompleted(completedJob.id, videoUrl);
-          jobId = completedJob.id;
-        } catch (jobError) {
-          console.warn("[NOVA_VIDEO] completed video returned without job history", {
-            engine,
-            message: jobError?.message || String(jobError),
-          });
-        }
-
-        processing = false;
+      if (!result) {
+        result = await runSynchronousPublicGeneration({
+          input,
+          userId,
+          quota,
+          hfToken,
+        });
       }
     } else {
-      const queuedJob = await runZeroCostVideo(input, {
-        userId,
-        quotaDebited: Boolean(quota?.ok),
-        origin: req.nextUrl.origin,
-      });
-      jobId = queuedJob.jobId;
-      processing = true;
+      // Continuation also prefers the independent GPU pools. The legacy worker
+      // remains a final fallback while Modal/Lightning are not configured.
+      if (hasPrivateGpuVideoPool()) {
+        try {
+          result = await runPrivateGpuVideoPool(input, {
+            userId,
+            quotaDebited: Boolean(quota?.ok),
+            origin: req.nextUrl.origin,
+          });
+        } catch (privateError) {
+          console.warn("[NOVA_VIDEO] private continuation unavailable; using legacy fallback", {
+            message: String(privateError?.message || privateError).slice(0, 800),
+          });
+        }
+      }
+
+      if (!result) {
+        if (!canUseZeroCostVideoWorker() || !(await isZeroCostVideoWorkerHealthy())) {
+          const error = new Error("NOVA continuation engines are temporarily unavailable");
+          error.code = "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE";
+          throw error;
+        }
+        const queued = await runZeroCostVideo(input, {
+          userId,
+          quotaDebited: Boolean(quota?.ok),
+          origin: req.nextUrl.origin,
+        });
+        result = {
+          processing: true,
+          jobId: queued.jobId,
+          engine: "legacy-free",
+          storage: "r2",
+        };
+      }
     }
 
+    const processing = result?.processing !== false;
+    const videoUrl = result?.videoUrl || result?.video?.url || null;
     return NextResponse.json(
       {
         success: true,
         provider: "nova",
         processing,
-        jobId: jobId || null,
+        jobId: result?.jobId || null,
         ...(videoUrl && { videoUrl, url: videoUrl }),
-        ...(engine && { engine }),
-        ...(storage && { storage }),
+        ...(result?.engine && { engine: result.engine }),
+        ...(result?.storage && { storage: result.storage }),
         mode,
         seconds: duration,
         billing: {
@@ -402,7 +442,7 @@ export async function POST(req) {
           success: false,
           code: "NOVA_FREE_VIDEO_ENGINE_QUOTA_REACHED",
           message: admin
-            ? "Sua conta ADMIN está ilimitada no NOVA. Os motores gratuitos externos estão sem capacidade neste momento; nenhum limite da sua conta foi aplicado."
+            ? "Sua conta ADMIN está ilimitada no NOVA. Os pools gratuitos externos estão sem capacidade neste momento; nenhum limite da sua conta foi aplicado."
             : hfToken
               ? "Sua capacidade gratuita pessoal de GPU foi utilizada por agora. Esta tentativa não consumiu seu limite NOVA."
               : "A capacidade gratuita compartilhada de vídeo foi utilizada. Ative sua capacidade gratuita pessoal para continuar sem créditos.",
@@ -418,13 +458,22 @@ export async function POST(req) {
       );
     }
 
+    const speechUnavailable =
+      mode === "speech-video" &&
+      ["NOVA_SPEECH_VIDEO_ENGINE_UNAVAILABLE", "NOVA_PRIVATE_GPU_TASK_UNAVAILABLE", "NOVA_PRIVATE_GPU_POOL_UNAVAILABLE"]
+        .includes(String(error?.code || ""));
+
     return NextResponse.json(
       {
         success: false,
-        code: error?.code || "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE",
-        message: admin
-          ? "Sua conta ADMIN continua ilimitada no NOVA, mas nenhum motor gratuito conseguiu concluir esta tentativa."
-          : "Não foi possível concluir este vídeo agora. A tentativa não consumiu seu limite NOVA.",
+        code: speechUnavailable
+          ? "NOVA_SPEECH_VIDEO_ENGINE_UNAVAILABLE"
+          : error?.code || "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE",
+        message: speechUnavailable
+          ? "NOVA VIDEO com fala está aguardando uma GPU gratuita compatível."
+          : admin
+            ? "Sua conta ADMIN continua ilimitada no NOVA, mas nenhum motor gratuito conseguiu concluir esta tentativa."
+            : "Não foi possível concluir este vídeo agora. A tentativa não consumiu seu limite NOVA.",
         quotaRefunded: true,
         adminUnlimited: admin,
         canConnectPersonalFreeGpu: !hfToken,

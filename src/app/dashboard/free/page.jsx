@@ -13,18 +13,8 @@ function UsagePill({ remaining, limit, unlimited }) {
 
 function AvailabilityPill({ available, admin = false }) {
   const testing = admin && !available;
-
   return (
-    <span
-      className={
-        "rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] " +
-        (available
-          ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-          : testing
-            ? "border-[#D7FF00]/30 bg-[#D7FF00]/10 text-[#D7FF00]"
-            : "border-white/10 bg-white/[.04] text-white/35")
-      }
-    >
+    <span className={"rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] " + (available ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : testing ? "border-[#D7FF00]/30 bg-[#D7FF00]/10 text-[#D7FF00]" : "border-white/10 bg-white/[.04] text-white/35")}>
       {available ? "Online" : testing ? "Teste admin" : "Em preparação"}
     </span>
   );
@@ -40,25 +30,12 @@ export default function FreeGenerationHub() {
       .catch(() => {});
   }, []);
 
-  const image = usage?.image || {
-    remaining: 10,
-    limit: 10,
-    unlimited: false,
-    resolution: "1K",
-    available: false,
-  };
-  const video = usage?.video || {
-    remaining: 3,
-    limit: 3,
-    unlimited: false,
-    durations: [5],
-    resolution: "480p",
-    available: false,
-  };
-
+  const image = usage?.image || { remaining: 10, limit: 10, unlimited: false, resolution: "1K", available: false };
+  const video = usage?.video || { remaining: 3, limit: 3, unlimited: false, durations: [5], resolution: "480p", available: false, speechAvailable: false };
   const admin = Boolean(usage?.admin);
   const canOpenImage = Boolean(image.available || admin);
   const canOpenVideo = Boolean(video.available || admin);
+  const speechAvailable = Boolean(video.speechAvailable || video.capabilities?.speechVideo);
 
   return (
     <main className="min-h-screen bg-[#020303] text-white">
@@ -69,19 +46,11 @@ export default function FreeGenerationHub() {
           <div className="relative max-w-4xl">
             <p className="text-xs font-black uppercase tracking-[0.24em] text-[#D7FF00]">NOVA AI · criação incluída</p>
             <h1 className="mt-4 text-5xl font-black uppercase leading-[0.86] tracking-[-0.08em] md:text-7xl">GERAR GRÁTIS AGORA</h1>
-            <p className="mt-5 max-w-3xl text-sm leading-7 text-white/52 md:text-base">
-              Escolha imagem ou vídeo. As gerações incluídas usam 0 créditos e renovam diariamente.
-            </p>
+            <p className="mt-5 max-w-3xl text-sm leading-7 text-white/52 md:text-base">Escolha imagem ou vídeo. As gerações incluídas usam 0 créditos e renovam diariamente.</p>
             {usage && (
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-white/30">
-                <span>
-                  Plano atual: <span className="font-black uppercase text-white/55">{usage.plan}</span>
-                </span>
-                {admin && (
-                  <span className="rounded-full border border-[#D7FF00]/30 bg-[#D7FF00]/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-[#D7FF00]">
-                    Admin · acesso ilimitado
-                  </span>
-                )}
+                <span>Plano atual: <span className="font-black uppercase text-white/55">{usage.plan}</span></span>
+                {admin && <span className="rounded-full border border-[#D7FF00]/30 bg-[#D7FF00]/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-[#D7FF00]">Admin · acesso ilimitado</span>}
               </div>
             )}
           </div>
@@ -92,27 +61,16 @@ export default function FreeGenerationHub() {
             <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#D7FF00]/10 blur-3xl" />
             <div className="relative">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-[#D7FF00] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-black">FREE</span>
-                  <AvailabilityPill available={image.available} admin={admin} />
-                </div>
+                <div className="flex flex-wrap gap-2"><span className="rounded-full bg-[#D7FF00] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-black">FREE</span><AvailabilityPill available={image.available} admin={admin} /></div>
                 <UsagePill remaining={image.remaining} limit={image.limit} unlimited={image.unlimited} />
               </div>
               <p className="mt-8 text-xs font-black uppercase tracking-[0.2em] text-[#D7FF00]">Imagem</p>
               <h2 className="mt-3 text-4xl font-black uppercase tracking-[-0.06em]">NOVA IMAGEM FREE</h2>
               <p className="mt-4 text-sm leading-7 text-white/48">Text to Image · {image.resolution || "1K"} · 1 imagem por geração · 0 créditos.</p>
               {canOpenImage ? (
-                <Link
-                  href="/dashboard/models/nova-image-free/text-to-image"
-                  className="mt-8 flex min-h-16 items-center justify-between rounded-2xl bg-[#D7FF00] px-5 text-sm font-black uppercase tracking-[0.12em] text-black no-underline"
-                >
-                  <span>{image.available ? "Gerar imagem grátis" : "Abrir gerador para teste"}</span>
-                  <span>→</span>
-                </Link>
+                <Link href="/dashboard/models/nova-image-free/text-to-image" className="mt-8 flex min-h-16 items-center justify-between rounded-2xl bg-[#D7FF00] px-5 text-sm font-black uppercase tracking-[0.12em] text-black no-underline"><span>{image.available ? "Gerar imagem grátis" : "Abrir gerador para teste"}</span><span>→</span></Link>
               ) : (
-                <div className="mt-8 flex min-h-16 items-center rounded-2xl border border-white/10 bg-white/[.035] px-5 text-sm font-black uppercase tracking-[0.12em] text-white/30">
-                  Geração de imagem em preparação
-                </div>
+                <div className="mt-8 flex min-h-16 items-center rounded-2xl border border-white/10 bg-white/[.035] px-5 text-sm font-black uppercase tracking-[0.12em] text-white/30">Geração de imagem em preparação</div>
               )}
             </div>
           </article>
@@ -121,37 +79,25 @@ export default function FreeGenerationHub() {
             <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-cyan-400/10 blur-3xl" />
             <div className="relative">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-[#D7FF00] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-black">FREE</span>
-                  <AvailabilityPill available={video.available} admin={admin} />
-                </div>
+                <div className="flex flex-wrap gap-2"><span className="rounded-full bg-[#D7FF00] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-black">FREE</span><AvailabilityPill available={video.available} admin={admin} /></div>
                 <UsagePill remaining={video.remaining} limit={video.limit} unlimited={video.unlimited} />
               </div>
               <p className="mt-8 text-xs font-black uppercase tracking-[0.2em] text-cyan-300">Vídeo</p>
               <h2 className="mt-3 text-4xl font-black uppercase tracking-[-0.06em]">NOVA VIDEO FREE</h2>
-              <p className="mt-4 text-sm leading-7 text-white/48">
-                {video.resolution || "480p"} · duração disponível: {(video.durations || [5]).map((n) => `${n}s`).join(" ou ")} · 0 créditos.
-              </p>
+              <p className="mt-4 text-sm leading-7 text-white/48">{video.resolution || "480p"} · duração disponível: {(video.durations || [5]).map((n) => `${n}s`).join(" ou ")} · 0 créditos.</p>
 
               {canOpenVideo ? (
                 <div className="mt-8 grid gap-3 sm:grid-cols-2">
-                  <Link
-                    href="/dashboard/models/nova-video-free/text-to-video"
-                    className="flex min-h-16 items-center justify-between rounded-2xl bg-[#D7FF00] px-5 text-xs font-black uppercase tracking-[0.11em] text-black no-underline"
-                  >
-                    <span>{video.available ? "Text to Video" : "Testar Text to Video"}</span><span>→</span>
-                  </Link>
-                  <Link
-                    href="/dashboard/models/nova-video-free/image-to-video"
-                    className="flex min-h-16 items-center justify-between rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 px-5 text-xs font-black uppercase tracking-[0.11em] text-[#D7FF00] no-underline"
-                  >
-                    <span>{video.available ? "Image to Video" : "Testar Image to Video"}</span><span>→</span>
-                  </Link>
+                  <Link href="/dashboard/models/nova-video-free/text-to-video" className="flex min-h-16 items-center justify-between rounded-2xl bg-[#D7FF00] px-5 text-xs font-black uppercase tracking-[0.11em] text-black no-underline"><span>{video.available ? "Text to Video" : "Testar Text to Video"}</span><span>→</span></Link>
+                  <Link href="/dashboard/models/nova-video-free/image-to-video" className="flex min-h-16 items-center justify-between rounded-2xl border border-[#D7FF00]/30 bg-[#D7FF00]/10 px-5 text-xs font-black uppercase tracking-[0.11em] text-[#D7FF00] no-underline"><span>{video.available ? "Image to Video" : "Testar Image to Video"}</span><span>→</span></Link>
+                  {speechAvailable ? (
+                    <Link href="/dashboard/models/nova-video-free/speech-to-video" className="sm:col-span-2 flex min-h-16 items-center justify-between rounded-2xl border border-fuchsia-400/30 bg-fuchsia-400/10 px-5 text-xs font-black uppercase tracking-[0.11em] text-fuchsia-200 no-underline"><span>Vídeo com fala</span><span>→</span></Link>
+                  ) : (
+                    <div className="sm:col-span-2 flex min-h-14 items-center justify-between rounded-2xl border border-white/10 bg-white/[.025] px-5 text-[10px] font-black uppercase tracking-[0.11em] text-white/30"><span>Vídeo com fala</span><span>GPU em preparação</span></div>
+                  )}
                 </div>
               ) : (
-                <div className="mt-8 flex min-h-16 items-center rounded-2xl border border-white/10 bg-white/[.035] px-5 text-sm font-black uppercase tracking-[0.12em] text-white/30">
-                  Geração de vídeo em preparação
-                </div>
+                <div className="mt-8 flex min-h-16 items-center rounded-2xl border border-white/10 bg-white/[.035] px-5 text-sm font-black uppercase tracking-[0.12em] text-white/30">Geração de vídeo em preparação</div>
               )}
             </div>
           </article>
@@ -159,10 +105,7 @@ export default function FreeGenerationHub() {
 
         <section className="mt-6 rounded-[2rem] border border-white/10 bg-white/[.025] p-5 md:p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-white/40">Quer mais qualidade e volume?</p>
-              <p className="mt-2 text-sm text-white/55">Os planos premium mantêm o acesso às opções NOVA incluídas e liberam modelos e créditos adicionais.</p>
-            </div>
+            <div><p className="text-xs font-black uppercase tracking-[0.18em] text-white/40">Quer mais qualidade e volume?</p><p className="mt-2 text-sm text-white/55">Os planos premium mantêm o acesso às opções NOVA incluídas e liberam modelos e créditos adicionais.</p></div>
             <Link href="/pricing" className="rounded-xl border border-white/10 bg-white/[.06] px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-white no-underline">Ver planos →</Link>
           </div>
         </section>
