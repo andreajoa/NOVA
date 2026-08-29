@@ -1,0 +1,28 @@
+name: Diagnose Current NOVA Modal Generation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-modal-current.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - name: Install Modal CLI
+        run: python -m pip install --upgrade "modal>=1.5,<2"
+      - name: Fetch recent production logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          modal app logs nova-video-engine --since 30m --tail 2500 --timestamps --show-function-id --show-function-call-id --show-container-id | tee modal-current.log
+          echo "--- GENERATION EVENTS ---"
+          grep -E -i "Generation job args|Creating WanTI2V|Generating video|Loading checkpoint|100%|saved|upload|callback|completed|failed|Traceback|Error|Exception|out of memory|CUDA|Killed|timed out|returned non-zero|AssertionError" modal-current.log | tail -n 400 || true
