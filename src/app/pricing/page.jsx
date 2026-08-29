@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useState } from "react";
 const plans = [
   {
@@ -17,6 +16,7 @@ const plans = [
     highlight: "",
     features: [
       "70 credits/mo",
+      "20 NOVA VIDEO generations/mo",
       "5 Nano Banana Pro Generations",
       "8 Kling 3.0 videos",
       "Fixed amount of 70 credits/mo",
@@ -44,6 +44,7 @@ const plans = [
     highlight: "Save $120 compared to monthly",
     features: [
       "500 credits/mo",
+      "20 NOVA VIDEO generations/mo",
       "38 Nano Banana Pro Generations",
       "114 Kling 3.0 videos",
       "Lowest cost per credit",
@@ -72,6 +73,7 @@ const plans = [
     highlight: "Save $360 compared to monthly",
     features: [
       "3,000 credits/mo",
+      "20 NOVA VIDEO generations/mo",
       "230 Seedance Fast videos",
       "343 Kling 3.0 videos",
       "One 365-day Unlimited video model",
@@ -100,6 +102,7 @@ const plans = [
     highlight: "Calculated for min. 2 seats",
     features: [
       "3,000 credits in total/mo",
+      "20 NOVA VIDEO generations/mo",
       "1,500 credits per seat/mo",
       "Shared credit pool",
       "Priority support",
@@ -153,13 +156,13 @@ function Pill({ children, blue = false }) {
   );
 }
 
-function PlanCard({ plan, annual }) {
+function PlanCard({ plan }) {
   const isLime = plan.tone === "lime";
   const isBlue = plan.tone === "blue" || plan.tone === "business";
-  const displayPrice = annual ? plan.price : plan.monthlyPrice;
-  const displayOldPrice = annual ? plan.oldPrice : "";
-  const displayBilling = annual ? plan.billing : "per month, billed monthly";
-  const displayHighlight = annual ? plan.highlight : "No annual commitment";
+  const displayPrice = plan.monthlyPrice;
+  const displayOldPrice = "";
+  const displayBilling = "per month, billed monthly";
+  const displayHighlight = "Renews monthly · cancel anytime";
 
   return (
     <article
@@ -213,7 +216,7 @@ function PlanCard({ plan, annual }) {
       </div>
 
       <Link
-        href={`/checkout/plan?plan=${plan.name.toLowerCase()}&billing=${annual ? "annual" : "monthly"}`}
+        href={`/checkout/plan?plan=${plan.name.toLowerCase()}&billing=monthly`}
         className={[
           "relative z-10 mt-5 grid h-12 place-items-center rounded-xl text-xs font-black uppercase tracking-[.14em] no-underline transition",
           isLime ? "bg-[#D7FF00] text-black hover:bg-[#c7ef00]" : "",
@@ -266,7 +269,6 @@ function PlanCard({ plan, annual }) {
 }
 
 export default function PricingPage() {
-  const [annual, setAnnual] = useState(true);
   const [openFaq, setOpenFaq] = useState(null);
 
   return (
@@ -280,12 +282,12 @@ export default function PricingPage() {
 
           <div className="relative z-10 flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
             <div>
-              <Pill>Limited Time</Pill>
+              <Pill>Monthly Plans</Pill>
               <h1 className="mt-5 max-w-3xl text-3xl font-black leading-tight tracking-tight text-white md:text-5xl">
-                Create without limits. Save more.
+                Create with a simple monthly subscription.
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-white/60">
-                Get <span className="font-black text-[#D7FF00]">30% OFF</span> on annual NOVA plans — including high limits, premium models and Unlimited video generation.
+                Choose the NOVA plan that fits your workflow. Paid plans renew automatically every month until you cancel.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3">
@@ -295,7 +297,7 @@ export default function PricingPage() {
             </div>
 
             <Link href="#plans" className="w-fit rounded-2xl bg-[#D7FF00] px-7 py-4 text-xs font-black uppercase tracking-[.14em] text-black no-underline hover:bg-[#c7ef00]">
-              30% Off Annual Plans
+              View Monthly Plans
             </Link>
           </div>
         </div>
@@ -306,23 +308,18 @@ export default function PricingPage() {
           <h2 className="text-4xl font-black uppercase tracking-tight md:text-5xl">Pick your plan</h2>
           <p className="mt-3 text-sm text-white/40">Scale creativity with higher limits, priority access, and early features</p>
 
-          <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[.035] px-4 py-2 text-xs text-white/45">
-            <span>Monthly</span>
-            <button
-              onClick={() => setAnnual(!annual)}
-              className={`relative h-6 w-11 rounded-full transition ${annual ? "bg-[#D7FF00]" : "bg-white/20"}`}
-              aria-label="Toggle annual billing"
-            >
-              <span className={`absolute top-1 h-4 w-4 rounded-full transition ${annual ? "left-6 bg-black" : "left-1 bg-white"}`} />
-            </button>
-            <span className="font-bold text-white">Annual</span>
-            <Pill>30% Off</Pill>
+          <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[.035] px-4 py-2 text-xs text-white/55">
+            <span className="font-bold text-white">Monthly billing</span>
+            <span>·</span>
+            <span>Renews automatically</span>
+            <span>·</span>
+            <span>Cancel anytime</span>
           </div>
         </div>
 
         <div className="mt-10 grid gap-5 lg:grid-cols-4">
           {plans.map((plan) => (
-            <PlanCard key={plan.name} plan={plan} annual={annual} />
+            <PlanCard key={plan.name} plan={plan} />
           ))}
         </div>
 
@@ -390,7 +387,7 @@ export default function PricingPage() {
           <div className="overflow-x-auto">
             <div className="min-w-[980px]">
               <div className="grid grid-cols-6 border-b border-white/8 bg-white/[.03] text-xs font-black uppercase tracking-[.14em] text-white/45">
-                <div className="p-4">Annual 30% Off</div>
+                <div className="p-4">Monthly plans</div>
                 {["Free", "Basic", "Plus", "Ultra", "Business"].map((head) => (
                   <div key={head} className="p-4 text-center">
                     <div className={head === "Plus" ? "text-[#D7FF00]" : head === "Business" ? "text-blue-400" : "text-white/65"}>{head}</div>
@@ -447,7 +444,11 @@ export default function PricingPage() {
 
               {openFaq === index && (
                 <p className="px-5 pb-5 text-sm leading-6 text-white/45">
-                  NOVA plans are designed for AI video and image generation. Credits, Unlimited access and model availability may vary depending on the selected plan and model usage.
+                  {question === "Is my subscription automatically renewed?"
+                    ? "Yes. Every paid NOVA plan renews automatically each month on the saved payment method until you cancel. The new monthly allowance is released after the renewal payment is successfully approved."
+                    : question === "How many videos can I generate?"
+                      ? "NOVA VIDEO includes 10 generations per calendar month on Free and 20 generations per paid monthly cycle on every paid plan. Admin accounts remain unlimited."
+                      : "NOVA plans are designed for AI video and image generation. Credits, Unlimited access and model availability may vary depending on the selected plan and model usage."}
                 </p>
               )}
             </div>
@@ -479,23 +480,23 @@ export default function PricingPage() {
 
             <div>
               <p className="mb-4 text-xs font-black uppercase tracking-widest text-white/30">Product</p>
-              <a href="/dashboard" className="mb-3 block text-sm text-white/35 transition hover:text-white">Studio</a>
-              <a href="/dashboard/models" className="mb-3 block text-sm text-white/35 transition hover:text-white">Models</a>
-              <a href="/pricing" className="mb-3 block text-sm text-white/35 transition hover:text-white">Pricing</a>
+              <Link href="/dashboard" className="mb-3 block text-sm text-white/35 transition hover:text-white">Studio</Link>
+              <Link href="/dashboard/models" className="mb-3 block text-sm text-white/35 transition hover:text-white">Models</Link>
+              <Link href="/pricing" className="mb-3 block text-sm text-white/35 transition hover:text-white">Pricing</Link>
             </div>
 
             <div>
               <p className="mb-4 text-xs font-black uppercase tracking-widest text-white/30">Use cases</p>
-              <a href="/product-ad-generator" className="mb-3 block text-sm text-white/35 transition hover:text-white">Product Ads</a>
-              <a href="/generate" className="mb-3 block text-sm text-white/35 transition hover:text-white">UGC Creatives</a>
-              <a href="/explore" className="mb-3 block text-sm text-white/35 transition hover:text-white">Social Videos</a>
+              <Link href="/product-ad-generator" className="mb-3 block text-sm text-white/35 transition hover:text-white">Product Ads</Link>
+              <Link href="/generate" className="mb-3 block text-sm text-white/35 transition hover:text-white">UGC Creatives</Link>
+              <Link href="/explore" className="mb-3 block text-sm text-white/35 transition hover:text-white">Social Videos</Link>
             </div>
 
             <div>
               <p className="mb-4 text-xs font-black uppercase tracking-widest text-white/30">Company</p>
-              <a href="/terms" className="mb-3 block text-sm text-white/35 transition hover:text-white">Terms</a>
-              <a href="/privacy" className="mb-3 block text-sm text-white/35 transition hover:text-white">Privacy</a>
-              <a href="/contact" className="mb-3 block text-sm text-white/35 transition hover:text-white">Contact</a>
+              <Link href="/terms" className="mb-3 block text-sm text-white/35 transition hover:text-white">Terms</Link>
+              <Link href="/privacy" className="mb-3 block text-sm text-white/35 transition hover:text-white">Privacy</Link>
+              <Link href="/contact" className="mb-3 block text-sm text-white/35 transition hover:text-white">Contact</Link>
             </div>
           </div>
 
