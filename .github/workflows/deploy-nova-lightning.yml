@@ -52,35 +52,58 @@ jobs:
         if: steps.config.outputs.configured == 'true'
         run: python -m pip install --upgrade lightning-sdk
 
-      - name: Resolve Lightning scope safely
+      - name: Resolve Lightning scope
         if: steps.config.outputs.configured == 'true'
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           import json
+          import os
           import subprocess
 
-          proc = subprocess.run(
-              ["lightning", "api", "/v1/memberships"],
-              check=True,
-              capture_output=True,
-              text=True,
-          )
-          data = json.loads(proc.stdout)
+          def api(path):
+              proc = subprocess.run(
+                  ["lightning", "api", path],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              )
+              return json.loads(proc.stdout)
+
+          data = api("/v1/memberships")
           memberships = data.get("memberships") or []
-          print(f"LIGHTNING_MEMBERSHIP_COUNT={len(memberships)}")
-          for index, membership in enumerate(memberships):
-              safe = {
-                  "index": index,
-                  "ownerType": membership.get("ownerType"),
-                  "name": membership.get("name"),
-                  "projectId": membership.get("projectId"),
-                  "ownerId": membership.get("ownerId"),
-              }
-              print("LIGHTNING_MEMBERSHIP=" + json.dumps(safe, ensure_ascii=False))
-          if not memberships:
-              raise SystemExit("No Lightning memberships were returned")
+          org_memberships = [m for m in memberships if str(m.get("ownerType") or "").lower() == "organization"]
+          if not org_memberships:
+              raise SystemExit("No organization-owned Lightning teamspace was found")
+
+          membership = org_memberships[0]
+          teamspace = str(membership.get("name") or "").strip()
+          owner_id = str(membership.get("ownerId") or "").strip()
+          if not teamspace or not owner_id:
+              raise SystemExit("Lightning membership is missing teamspace or owner id")
+
+          org_data = api(f"/v1/orgs/{owner_id}")
+          org_name = str(org_data.get("name") or "").strip()
+          if not org_name:
+              raise SystemExit("Lightning organization name could not be resolved")
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
+              handle.write(f"LIGHTNING_TEAMSPACE={teamspace}\n")
+              handle.write(f"LIGHTNING_ORG={org_name}\n")
+
+          print(f"Resolved Lightning scope: organization={org_name}, teamspace={teamspace}")
           PY
 
-      # Deployment resumes after the authenticated Lightning scope is resolved.
+      - name: Deploy Lightning workers
+        if: steps.config.outputs.configured == 'true'
+        run: python infra/lightning/deploy.py
+
+      - name: Store Lightning endpoint artifact
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-lightning-video-urls
+          path: lightning-urls.json
+          if-no-files-found: error
+          retention-days: 7
