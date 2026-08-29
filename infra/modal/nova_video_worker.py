@@ -234,6 +234,35 @@ def _prepare_normal_wan_runtime() -> None:
     init_file.write_text(source, encoding="utf-8")
 
 
+def _run_normal_segment(
+    *,
+    prompt: str,
+    aspect: str,
+    steps: int,
+    seed: int,
+    output: Path,
+    reference: Path | None = None,
+) -> None:
+    """Render one Wan TI2V segment at the model's supported 121-frame length."""
+    command = [
+        "python", str(WAN_CODE / "generate.py"),
+        "--task", "ti2v-5B",
+        "--size", _size(aspect),
+        "--ckpt_dir", str(TI2V_DIR),
+        "--offload_model", "True",
+        "--convert_model_dtype",
+        "--t5_cpu",
+        "--prompt", prompt,
+        "--frame_num", "121",
+        "--sample_steps", str(steps),
+        "--base_seed", str(seed),
+        "--save_file", str(output),
+    ]
+    if reference is not None:
+        command.extend(["--image", str(reference)])
+    subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=11 * 60)
+
+
 def _normal_generate(payload: dict) -> str:
     _prepare_normal_wan_runtime()
     _ensure_model(TI2V_REPO, TI2V_DIR)
@@ -251,7 +280,7 @@ def _normal_generate(payload: dict) -> str:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
-        segment = tmp / "segment.mp4"
+        first = tmp / "segment-1.mp4"
         reference: Path | None = None
         source_video: Path | None = None
 
@@ -264,26 +293,38 @@ def _normal_generate(payload: dict) -> str:
             _download(str(payload.get("source_video_url") or ""), source_video)
             _extract_last_frame(source_video, reference)
 
-        command = [
-            "python", str(WAN_CODE / "generate.py"),
-            "--task", "ti2v-5B",
-            "--size", _size(aspect),
-            "--ckpt_dir", str(TI2V_DIR),
-            "--offload_model", "True",
-            "--convert_model_dtype",
-            "--t5_cpu",
-            "--prompt", prompt,
-            "--frame_num", str(_frames(duration)),
-            "--sample_steps", str(steps),
-            "--base_seed", str(seed),
-            "--save_file", str(segment),
-        ]
-        if reference is not None:
-            command.extend(["--image", str(reference)])
+        _run_normal_segment(
+            prompt=prompt,
+            aspect=aspect,
+            steps=steps,
+            seed=seed,
+            output=first,
+            reference=reference,
+        )
 
-        subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=11 * 60)
+        result = first
+        if duration > 5:
+            bridge = tmp / "segment-1-last.png"
+            second = tmp / "segment-2.mp4"
+            joined = tmp / "generated-10s.mp4"
+            _extract_last_frame(first, bridge)
+            continuation_prompt = (
+                prompt
+                + "\nContinue seamlessly from the supplied reference frame. Preserve the same "
+                  "characters, wardrobe, location, lighting, camera direction and visual style. "
+                  "Advance the action naturally without restarting the scene."
+            )
+            _run_normal_segment(
+                prompt=continuation_prompt,
+                aspect=aspect,
+                steps=steps,
+                seed=(seed + 1) % 2_147_483_647,
+                output=second,
+                reference=bridge,
+            )
+            _concat(first, second, joined)
+            result = joined
 
-        result = segment
         if aspect == "1:1":
             square = tmp / "square.mp4"
             _crop_square(result, square)
@@ -293,7 +334,6 @@ def _normal_generate(payload: dict) -> str:
             _concat(source_video, result, combined)
             result = combined
         return _upload(payload, result)
-
 
 def _speech_generate(payload: dict) -> str:
     if not _speech_enabled():
@@ -373,7 +413,7 @@ def preload_models(include_speech: bool = False):
     memory=65536,
     volumes={str(MODEL_ROOT): model_volume},
     secrets=[engine_secret],
-    timeout=12 * 60,
+    timeout=18 * 60,
     scaledown_window=30,
     max_containers=2,
 )
