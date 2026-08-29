@@ -1,0 +1,129 @@
+name: Hotfix NOVA Modal Routing
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/hotfix-modal-routing.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Keep production video generation on Modal
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              if old not in text:
+                  raise SystemExit(f"Expected patch pattern not found in {path}: {old[:100]!r}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          # A serverless Modal endpoint may need more than 3.5s to wake. Health is
+          # useful for capability display, but must never prevent a real job POST.
+          replace_once(
+              "src/lib/privateGpuVideoPool.js",
+              "const timer = setTimeout(() => controller.abort(), 3500);",
+              "const timer = setTimeout(() => controller.abort(), 12_000);",
+          )
+          replace_once(
+              "src/lib/privateGpuVideoPool.js",
+              "const timer = setTimeout(() => controller.abort(), 15_000);",
+              "const timer = setTimeout(() => controller.abort(), 45_000);",
+          )
+          replace_once(
+              "src/lib/privateGpuVideoPool.js",
+              '''  for (const worker of workers) {\n    const health = await workerHealth(worker);\n    if (!health.ok || !health.tasks.has(String(input.task || \"\"))) {\n      failures.push(`${worker.id}:health`);\n      continue;\n    }\n\n    try {''',
+              '''  for (const worker of workers) {\n    // The POST is authoritative. Do not pre-gate a serverless worker on /health:\n    // a cold wake can exceed a probe timeout even though the job endpoint works.\n    try {''',
+          )
+
+          # If Modal/private GPU is configured in production, never silently fall
+          # through to Hugging Face ZeroGPU. This avoids HF shared quotas becoming
+          # an accidental production bottleneck.
+          replace_once(
+              "src/app/api/free-video-generate/route.js",
+              '''    } else if (mode === \"text-to-video\" || mode === \"image-to-video\") {\n      if (hasPrivateGpuVideoPool()) {\n        try {\n          result = await runPrivateGpuVideoPool(input, {\n            userId,\n            quotaDebited: Boolean(quota?.ok),\n            origin: req.nextUrl.origin,\n          });\n        } catch (privateError) {\n          console.warn(\"[NOVA_VIDEO] Modal/Lightning pool unavailable; using public fallback\", {\n            message: String(privateError?.message || privateError).slice(0, 800),\n          });\n        }\n      }\n\n      if (!result) {\n        result = await runSynchronousPublicGeneration({\n          input,\n          userId,\n          quota,\n          hfToken,\n        });\n      }\n''',
+              '''    } else if (mode === \"text-to-video\" || mode === \"image-to-video\") {\n      if (hasPrivateGpuVideoPool()) {\n        result = await runPrivateGpuVideoPool(input, {\n          userId,\n          quotaDebited: Boolean(quota?.ok),\n          origin: req.nextUrl.origin,\n        });\n      } else {\n        // Legacy/dev-only path. Production NOVA uses the private Modal pool.\n        result = await runSynchronousPublicGeneration({\n          input,\n          userId,\n          quota,\n          hfToken,\n        });\n      }\n''',
+          )
+
+          # Continuation follows the same rule: when the private pool exists, do
+          # not jump to an unrelated public/legacy provider after a transient error.
+          replace_once(
+              "src/app/api/free-video-generate/route.js",
+              '''      if (hasPrivateGpuVideoPool()) {\n        try {\n          result = await runPrivateGpuVideoPool(input, {\n            userId,\n            quotaDebited: Boolean(quota?.ok),\n            origin: req.nextUrl.origin,\n          });\n        } catch (privateError) {\n          console.warn(\"[NOVA_VIDEO] private continuation unavailable; using legacy fallback\", {\n            message: String(privateError?.message || privateError).slice(0, 800),\n          });\n        }\n      }\n\n      if (!result) {''',
+              '''      if (hasPrivateGpuVideoPool()) {\n        result = await runPrivateGpuVideoPool(input, {\n          userId,\n          quotaDebited: Boolean(quota?.ok),\n          origin: req.nextUrl.origin,\n        });\n      }\n\n      if (!result) {''',
+          )
+
+          # Private GPU errors should not advertise a personal Hugging Face token,
+          # especially to ADMIN. Keep the message tied to the real NOVA engine.
+          route = Path("src/app/api/free-video-generate/route.js")
+          text = route.read_text(encoding="utf-8")
+          marker = '''    const upstreamCapacityReached = isUpstreamCapacityError(error);'''
+          if marker not in text:
+              raise SystemExit("Could not locate NOVA video catch block")
+          text = text.replace(
+              marker,
+              '''    const privateGpuFailure = [\n      \"NOVA_PRIVATE_GPU_POOL_UNAVAILABLE\",\n      \"NOVA_PRIVATE_GPU_TASK_UNAVAILABLE\",\n      \"NOVA_PRIVATE_GPU_RETRY_EXHAUSTED\",\n    ].includes(String(error?.code || \"\"));\n    const upstreamCapacityReached = !privateGpuFailure && isUpstreamCapacityError(error);''',
+              1,
+          )
+          text = text.replace(
+              '''          canConnectPersonalFreeGpu: !hfToken,''',
+              '''          canConnectPersonalFreeGpu: !admin && !privateGpuFailure && !hfToken,''',
+          )
+          text = text.replace(
+              '''        message: speechUnavailable\n          ? \"NOVA VIDEO com fala está aguardando uma GPU gratuita compatível.\"\n          : admin\n            ? \"Sua conta ADMIN continua ilimitada no NOVA, mas nenhum motor gratuito conseguiu concluir esta tentativa.\"\n            : \"Não foi possível concluir este vídeo agora. A tentativa não consumiu seu limite NOVA.\",''',
+              '''        message: speechUnavailable\n          ? \"NOVA VIDEO com fala está temporariamente indisponível.\"\n          : privateGpuFailure\n            ? admin\n              ? \"Sua conta ADMIN continua ilimitada. O motor NOVA/Modal não aceitou esta tentativa; aguarde alguns instantes e tente novamente.\"\n              : \"O motor NOVA/Modal está temporariamente indisponível. A tentativa não consumiu seu limite mensal.\"\n            : admin\n              ? \"Sua conta ADMIN continua ilimitada no NOVA, mas a geração não pôde ser concluída agora.\"\n              : \"Não foi possível concluir este vídeo agora. A tentativa não consumiu seu limite NOVA.\",''',
+              1,
+          )
+          # There are two canConnect fields. The generic 503 must also be false for
+          # private GPU failures and for ADMIN.
+          generic = '''        canConnectPersonalFreeGpu: !hfToken,'''
+          if generic in text:
+              text = text.replace(
+                  generic,
+                  '''        canConnectPersonalFreeGpu: !admin && !privateGpuFailure && !hfToken,''',
+                  1,
+              )
+          route.write_text(text, encoding="utf-8")
+
+          # Next Link prefetch of protected dashboard routes can be redirected by
+          # Clerk to accounts.novvideos.online, producing harmless but noisy CORS
+          # failures. Disable prefetch for dashboard navigation; click navigation
+          # remains normal and authenticated.
+          sidebar = Path("src/components/Sidebar.jsx")
+          text = sidebar.read_text(encoding="utf-8")
+          text = text.replace("<Link\n                key={item.href}\n                href={item.href}", "<Link\n                key={item.href}\n                href={item.href}\n                prefetch={false}")
+          text = text.replace("<Link key={item.href} href={item.href} onClick={onClose}", "<Link key={item.href} href={item.href} prefetch={false} onClick={onClose}")
+          text = text.replace("<Link href=\"/dashboard\" className=\"no-underline\">", "<Link href=\"/dashboard\" prefetch={false} className=\"no-underline\">")
+          text = text.replace("<Link key={item.href} href={item.href} className=", "<Link key={item.href} href={item.href} prefetch={false} className=")
+          sidebar.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Validate patched source
+        run: |
+          node --check src/lib/privateGpuVideoPool.js
+          node --check src/app/api/free-video-generate/route.js
+          node --check src/components/Sidebar.jsx || true
+          grep -q 'privateGpuFailure' src/app/api/free-video-generate/route.js
+          grep -q 'prefetch={false}' src/components/Sidebar.jsx
+          ! grep -q 'Modal/Lightning pool unavailable; using public fallback' src/app/api/free-video-generate/route.js
+
+      - name: Commit hotfix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/privateGpuVideoPool.js src/app/api/free-video-generate/route.js src/components/Sidebar.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: keep NOVA video generation on Modal"
+          git push origin HEAD:main
