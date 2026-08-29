@@ -1,6 +1,6 @@
 name: Deploy NOVA Lightning Video Workers
 
-# Deploy trigger 2026-08-29: Lightning credentials configured; run deployment.
+# Deploy trigger 2026-08-29: target the NOVA org/teamspace created during onboarding.
 on:
   workflow_dispatch:
   push:
@@ -19,8 +19,8 @@ jobs:
     env:
       LIGHTNING_USER_ID: ${{ secrets.LIGHTNING_USER_ID }}
       LIGHTNING_API_KEY: ${{ secrets.LIGHTNING_API_KEY }}
-      LIGHTNING_TEAMSPACE: "NOVA"
-      LIGHTNING_ORG: ${{ secrets.LIGHTNING_ORG }}
+      LIGHTNING_TEAMSPACE: "deploy-model-project"
+      LIGHTNING_ORG: "NOVA"
       NOVA_VIDEO_WORKER_SECRET: ${{ secrets.NOVA_VIDEO_WORKER_SECRET }}
       NOVA_LIGHTNING_DEPLOY_SPEECH: "1"
     steps:
