@@ -1,5 +1,5 @@
 name: Deploy NOVA Video Engine
-# Secret resync trigger: 2026-08-29
+# Runtime repair deploy trigger: 2026-08-29 22:28 UTC
 
 on:
   workflow_dispatch:
