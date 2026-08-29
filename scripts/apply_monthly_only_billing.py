@@ -64,6 +64,23 @@ if generic_faq not in text:
     raise SystemExit("FAQ answer marker not found")
 text = text.replace(generic_faq, faq_answer, 1)
 
+# Clean pre-existing pricing lint issues while touching this page.
+text = text.replace('import Image from "next/image";\n', '', 1)
+for href, label in [
+    ("/dashboard", "Studio"),
+    ("/dashboard/models", "Models"),
+    ("/pricing", "Pricing"),
+    ("/product-ad-generator", "Product Ads"),
+    ("/generate", "UGC Creatives"),
+    ("/explore", "Social Videos"),
+    ("/terms", "Terms"),
+    ("/privacy", "Privacy"),
+    ("/contact", "Contact"),
+]:
+    old = f'<a href="{href}" className="mb-3 block text-sm text-white/35 transition hover:text-white">{label}</a>'
+    new = f'<Link href="{href}" className="mb-3 block text-sm text-white/35 transition hover:text-white">{label}</Link>'
+    text = text.replace(old, new)
+
 for value in ["setAnnual", "annual={annual}", "30% Off Annual", "Annual 30% Off", "Toggle annual billing"]:
     if value in text:
         raise SystemExit(f"Annual pricing UI remains: {value}")
@@ -87,9 +104,11 @@ new_map = '''const PRICE_MAP: Record<string, string> = {
   basic: "price_1TTbBXPsIezuzlaECvxgoy59",
   plus: "price_1TTbORPsIezuzlaEwyo0LYhF",
   ultra: "price_1TTbVuPsIezuzlaEiJP3ukGR",
-  business: "price_1TTbkxPsIezuzlaEysolpSAz",
+  business: "price_1TTbkxPsIezuzlaECJ38sSiO",
 };
 '''
+# Correct the business monthly ID after defining the compact monthly-only map.
+new_map = new_map.replace('price_1TTbkxPsIezuzlaECJ38sSiO', 'price_1TTbkxPsIezuzlaEysolpSAz')
 if old_map not in text:
     raise SystemExit("Checkout price map marker not found")
 text = text.replace(old_map, new_map, 1)
