@@ -1,0 +1,156 @@
+name: Apply NOVA Monthly Video Quotas
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/apply-monthly-video-quota.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply monthly quota migration
+        run: python scripts/apply_monthly_video_quota.py
+
+      - name: Harden generated quota and UI patches
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # The migration helper intentionally uses exact replacements. Fix the
+          # duplicated admin/non-admin video block by moving payment state only
+          # to the non-admin response.
+          usage = Path("src/app/api/free-usage/route.js")
+          text = usage.read_text(encoding="utf-8")
+          patched = '''      available: videoAvailable,
+              active: video.active !== false,
+              paymentRequired: video.reason === "subscription_payment_required",
+              speechAvailable,
+              capabilities: videoCapabilities,
+'''
+          original = '''      available: videoAvailable,
+              speechAvailable,
+              capabilities: videoCapabilities,
+'''
+          if patched in text:
+              text = text.replace(patched, original, 1)
+          if text.count(original) < 2:
+              raise SystemExit("Expected admin and non-admin video response blocks")
+          head, tail = text.rsplit(original, 1)
+          text = head + patched + tail
+          usage.write_text(text, encoding="utf-8")
+
+          # Require a paid latest Stripe invoice when live-refreshing an expired
+          # paid cycle. This prevents a failed renewal from unlocking a new quota.
+          quota = Path("src/lib/freeGenerationQuota.js")
+          text = quota.read_text(encoding="utf-8")
+          old = '''    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+              const { start, end, item } = subscriptionPeriod(subscription);
+              const billingInterval = normalizedBillingInterval(account?.billing_interval, item);
+              const active = subscription?.status === "active";
+'''
+          new = '''    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+                expand: ["latest_invoice"],
+              });
+              const { start, end, item } = subscriptionPeriod(subscription);
+              const billingInterval = normalizedBillingInterval(account?.billing_interval, item);
+              const latestInvoiceStatus = typeof subscription.latest_invoice === "object"
+                ? String(subscription.latest_invoice?.status || "")
+                : "";
+              const active = subscription?.status === "active" && latestInvoiceStatus === "paid";
+'''
+          if old not in text:
+              raise SystemExit("Expected Stripe cycle refresh block not found")
+          quota.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          # Finish changing every visible daily-video label to the new monthly
+          # policy. (Image quotas remain unchanged.)
+          studio = Path("src/components/NovaFreeVideoStudio.jsx")
+          text = studio.read_text(encoding="utf-8")
+          replacements = {
+              'gerações hoje.': 'gerações neste mês.',
+              'Limite diário utilizado': 'Limite mensal utilizado',
+              'nova geração diária.': 'nova geração mensal.',
+          }
+          for old, new in replacements.items():
+              text = text.replace(old, new)
+          studio.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint changed quota and billing files
+        run: |
+          npx eslint \
+            src/lib/freeGenerationQuota.js \
+            src/app/api/webhooks/stripe/route.js \
+            src/app/api/checkout/plans/session/route.ts \
+            src/app/api/free-video-generate/route.js \
+            src/app/api/free-usage/route.js \
+            src/components/NovaFreeVideoStudio.jsx
+
+      - name: Type-check NOVA
+        run: npx tsc --noEmit --pretty false
+
+      - name: Verify monthly quota contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'videoMonthlyLimit: 10' src/lib/freeGenerationQuota.js
+          grep -q 'videoMonthlyLimit: 20' src/lib/freeGenerationQuota.js
+          grep -q 'NOVA_FREE_VIDEO_MONTHLY_LIMIT_REACHED' src/app/api/free-video-generate/route.js
+          grep -q 'NOVA_VIDEO_MONTHLY_LIMIT_REACHED' src/app/api/free-video-generate/route.js
+          grep -q 'NOVA_SUBSCRIPTION_PAYMENT_REQUIRED' src/app/api/free-video-generate/route.js
+          grep -q 'invoice.payment_failed' src/app/api/webhooks/stripe/route.js
+          grep -q 'customer.subscription.deleted' src/app/api/webhooks/stripe/route.js
+          grep -q 'subscription_data' src/app/api/checkout/plans/session/route.ts
+          grep -q 'Seus vídeos grátis do mês acabaram' src/components/NovaFreeVideoStudio.jsx
+          grep -q '20 vídeos por mês' src/components/NovaFreeVideoStudio.jsx
+          if grep -q 'limite diário de NOVA VIDEO' src/components/NovaFreeVideoStudio.jsx; then
+            echo 'Daily video quota copy remains in the studio.'
+            exit 1
+          fi
+          echo 'NOVA monthly video quota contracts: OK'
+
+      - name: Commit validated implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/lib/freeGenerationQuota.js \
+            src/app/api/webhooks/stripe/route.js \
+            src/app/api/checkout/plans/session/route.ts \
+            src/app/api/free-video-generate/route.js \
+            src/app/api/free-usage/route.js \
+            src/components/NovaFreeVideoStudio.jsx
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "No implementation changes to commit."
+            exit 0
+          fi
+          git commit -m "feat: enforce monthly NOVA video quotas"
+          git push origin HEAD:main
