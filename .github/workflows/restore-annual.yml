@@ -19,8 +19,18 @@ jobs:
           from pathlib import Path
           p = Path('src/app/pricing/page.jsx')
           s = p.read_text()
+          s = s.replace('import Image from "next/image";\n', '')
+          s = s.replace('<a href="/dashboard"', '<Link href="/dashboard"').replace('</a>', '</Link>')
+          s = s.replace('<a href="/dashboard/models"', '<Link href="/dashboard/models"')
+          s = s.replace('<a href="/pricing"', '<Link href="/pricing"')
+          s = s.replace('<a href="/product-ad-generator"', '<Link href="/product-ad-generator"')
+          s = s.replace('<a href="/generate"', '<Link href="/generate"')
+          s = s.replace('<a href="/explore"', '<Link href="/explore"')
+          s = s.replace('<a href="/terms"', '<Link href="/terms"')
+          s = s.replace('<a href="/privacy"', '<Link href="/privacy"')
+          s = s.replace('<a href="/contact"', '<Link href="/contact"')
           for marker in ['      "70 credits/mo",','      "500 credits/mo",','      "3,000 credits/mo",','      "3,000 credits in total/mo",']:
-              if '20 NOVA VIDEO generations/mo' not in s[s.find(marker):s.find(marker)+120]:
+              if '20 NOVA VIDEO generations/mo' not in s[s.find(marker):s.find(marker)+140]:
                   s = s.replace(marker, marker+'\n      "20 NOVA VIDEO generations/mo",', 1)
           p.write_text(s)
           PY
@@ -36,10 +46,12 @@ jobs:
           grep -q 'videoMonthlyLimit: 20' src/lib/freeGenerationQuota.js
           grep -q 'billing !== "annual"' src/lib/freeGenerationQuota.js
           grep -q 'basic_annual' src/app/api/checkout/plans/session/route.ts
+          grep -q 'billing=${annual ? "annual" : "monthly"}' src/app/pricing/page.jsx
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/app/pricing/page.jsx src/app/api/checkout/plans/session/route.ts
+          git diff --cached --check
           git commit -m "feat: restore annual plans with monthly video quota"
           git push origin main
