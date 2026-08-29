@@ -5,6 +5,7 @@ import {
   ensureUserGenerationAccount,
   isAdminUser,
 } from "@/lib/db";
+import { isNovaAdminFromAuth } from "@/lib/novaAdminAccess";
 import {
   checkAndDebitFreeGeneration,
   getFreeGenerationPolicy,
@@ -149,7 +150,11 @@ export async function POST(req) {
   }
 
   const account = await ensureUserGenerationAccount(userId);
-  const admin = await isAdminUser(userId);
+  const admin = Boolean(
+    String(account.plan || "").toLowerCase() === "admin" ||
+    await isAdminUser(userId) ||
+    await isNovaAdminFromAuth(userId, session.sessionClaims)
+  );
   const policy = getFreeGenerationPolicy(admin ? "admin" : account.plan);
   const allowedDurations = admin ? [5, 10] : policy.videoDurations;
   const duration = normalizeDuration(body.duration || body.seconds, allowedDurations);
@@ -206,6 +211,9 @@ export async function POST(req) {
     }
   }
 
+  // ADMIN is never debited and never enters NOVA's shared daily capacity gate.
+  // Any later provider quota/capacity response is external infrastructure, not
+  // a NOVA account limit.
   const usesSharedCapacity = !admin && !policy.paid && !hfToken;
   let capacity = null;
   if (usesSharedCapacity) {
@@ -271,8 +279,6 @@ export async function POST(req) {
       engine = generated.engine || null;
       storage = "provider";
 
-      // Persistence is best-effort. A valid generated MP4 must never be turned
-      // into a 503 merely because R2 is temporarily slow or unavailable.
       try {
         videoUrl = await persistGeneratedVideo({
           userId,
@@ -287,9 +293,6 @@ export async function POST(req) {
         });
       }
 
-      // Job history is also best-effort for synchronous generations. The user
-      // already has the completed video URL, so a database write must not make
-      // a successful generation look like a failure.
       try {
         const completedJob = await createFreeVideoJob({
           userId,
@@ -331,6 +334,7 @@ export async function POST(req) {
           creditsCharged: 0,
           wallet: admin ? "admin" : "nova_included",
           unlimited: admin,
+          internalQuotaApplied: !admin,
           personalFreeGpu: Boolean(hfToken),
           ...(quota && {
             freeUsed: quota.used,
@@ -353,6 +357,7 @@ export async function POST(req) {
     const upstreamCapacityReached = isUpstreamCapacityError(error);
     console.error("[NOVA_VIDEO] generation failed", {
       mode,
+      admin,
       code: error?.code || null,
       message: error?.message || String(error),
       name: error?.name || null,
@@ -365,14 +370,17 @@ export async function POST(req) {
         {
           success: false,
           code: "NOVA_FREE_VIDEO_ENGINE_QUOTA_REACHED",
-          message: hfToken
-            ? "Sua capacidade gratuita pessoal de GPU foi utilizada por agora. Esta tentativa não consumiu seu limite NOVA."
-            : "A capacidade gratuita compartilhada de vídeo foi utilizada. Ative sua capacidade gratuita pessoal para continuar sem créditos.",
+          message: admin
+            ? "Sua conta ADMIN está ilimitada no NOVA. Os motores gratuitos externos estão sem capacidade neste momento; nenhum limite da sua conta foi aplicado."
+            : hfToken
+              ? "Sua capacidade gratuita pessoal de GPU foi utilizada por agora. Esta tentativa não consumiu seu limite NOVA."
+              : "A capacidade gratuita compartilhada de vídeo foi utilizada. Ative sua capacidade gratuita pessoal para continuar sem créditos.",
           quotaRefunded: true,
+          adminUnlimited: admin,
           personalFreeGpu: Boolean(hfToken),
           canConnectPersonalFreeGpu: !hfToken,
           ...(admin && {
-            diagnostic: String(error?.message || error || "Capacidade gratuita indisponível").slice(0, 1200),
+            diagnostic: String(error?.message || error || "Capacidade gratuita externa indisponível").slice(0, 1200),
           }),
         },
         { status: 429 }
@@ -383,8 +391,11 @@ export async function POST(req) {
       {
         success: false,
         code: error?.code || "NOVA_VIDEO_TEMPORARILY_UNAVAILABLE",
-        message: "Não foi possível concluir este vídeo agora. A tentativa não consumiu seu limite NOVA.",
+        message: admin
+          ? "Sua conta ADMIN continua ilimitada no NOVA, mas nenhum motor gratuito conseguiu concluir esta tentativa."
+          : "Não foi possível concluir este vídeo agora. A tentativa não consumiu seu limite NOVA.",
         quotaRefunded: true,
+        adminUnlimited: admin,
         canConnectPersonalFreeGpu: !hfToken,
         ...(admin && {
           diagnostic: String(error?.message || error || "Erro desconhecido").slice(0, 1200),
