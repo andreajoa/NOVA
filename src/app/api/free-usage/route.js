@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { ensureUserGenerationAccount, isAdminUser } from "@/lib/db";
+import { isNovaAdminFromAuth } from "@/lib/novaAdminAccess";
 import {
   getFreeGenerationPolicy,
   getFreeGenerationUsage,
@@ -20,7 +21,11 @@ export async function GET() {
   }
 
   const account = await ensureUserGenerationAccount(userId);
-  const admin = await isAdminUser(userId);
+  const admin = Boolean(
+    String(account.plan || "").toLowerCase() === "admin" ||
+    await isAdminUser(userId) ||
+    await isNovaAdminFromAuth(userId, session.sessionClaims)
+  );
   const policy = getFreeGenerationPolicy(account.plan);
 
   // Only expose NOVA availability, never provider/model identity.
