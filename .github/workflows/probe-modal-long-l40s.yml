@@ -1,4 +1,5 @@
 name: Probe NOVA Wan 10s on L40S
+# SDPA fallback probe: 2026-08-29
 
 on:
   workflow_dispatch:
@@ -33,6 +34,14 @@ jobs:
           )
           def long_memory_probe():
               _prepare_normal_wan_runtime()
+              model_file = WAN_CODE / "wan" / "modules" / "model.py"
+              model_source = model_file.read_text(encoding="utf-8")
+              model_source = model_source.replace(
+                  "from .attention import flash_attention",
+                  "from .attention import attention as flash_attention",
+                  1,
+              )
+              model_file.write_text(model_source, encoding="utf-8")
               _ensure_model(TI2V_REPO, TI2V_DIR)
               with tempfile.TemporaryDirectory() as tmpdir:
                   output = Path(tmpdir) / "probe.mp4"
@@ -57,5 +66,5 @@ jobs:
           python -m py_compile infra/modal/nova_video_worker.py
       - name: Install Modal CLI
         run: python -m pip install --upgrade "modal>=1.5,<2"
-      - name: Run L40S 241-frame memory probe
+      - name: Run L40S 241-frame memory probe with SDPA fallback
         run: modal run infra/modal/nova_video_worker.py::long_memory_probe
