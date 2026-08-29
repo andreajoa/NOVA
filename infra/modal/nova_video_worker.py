@@ -220,7 +220,7 @@ def _notify(payload: dict, status: str, error_code: str | None = None) -> None:
 
 
 def _prepare_normal_wan_runtime() -> None:
-    """Keep optional Wan pipelines from breaking the normal TI2V worker."""
+    """Make the normal Wan TI2V runtime self-contained on Modal GPUs."""
     init_file = WAN_CODE / "wan" / "__init__.py"
     source = init_file.read_text(encoding="utf-8")
     optional_imports = [
@@ -233,17 +233,30 @@ def _prepare_normal_wan_runtime() -> None:
             source = source.replace(needle, replacement, 1)
     init_file.write_text(source, encoding="utf-8")
 
+    # Wan's model.py calls flash_attention() directly. The base image does not
+    # ship the compiled flash-attn extension, so that path asserts before the
+    # first denoising step. Use Wan's own PyTorch SDPA fallback instead.
+    model_file = WAN_CODE / "wan" / "modules" / "model.py"
+    model_source = model_file.read_text(encoding="utf-8")
+    model_source = model_source.replace(
+        "from .attention import flash_attention",
+        "from .attention import attention as flash_attention",
+        1,
+    )
+    model_file.write_text(model_source, encoding="utf-8")
+
 
 def _run_normal_segment(
     *,
     prompt: str,
     aspect: str,
+    frames: int,
     steps: int,
     seed: int,
     output: Path,
     reference: Path | None = None,
 ) -> None:
-    """Render one Wan TI2V segment at the model's supported 121-frame length."""
+    """Render one Wan TI2V clip using the verified SDPA runtime."""
     command = [
         "python", str(WAN_CODE / "generate.py"),
         "--task", "ti2v-5B",
@@ -253,14 +266,14 @@ def _run_normal_segment(
         "--convert_model_dtype",
         "--t5_cpu",
         "--prompt", prompt,
-        "--frame_num", "121",
+        "--frame_num", str(frames),
         "--sample_steps", str(steps),
         "--base_seed", str(seed),
         "--save_file", str(output),
     ]
     if reference is not None:
         command.extend(["--image", str(reference)])
-    subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=11 * 60)
+    subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=14 * 60)
 
 
 def _normal_generate(payload: dict) -> str:
@@ -275,12 +288,12 @@ def _normal_generate(payload: dict) -> str:
 
     duration = max(5, min(10, int(payload.get("duration") or 5)))
     aspect = str(payload.get("aspect_ratio") or "16:9")
-    steps = max(4, min(50, int(os.environ.get("NOVA_WAN_SAMPLE_STEPS", "24"))))
+    steps = max(4, min(24, int(os.environ.get("NOVA_WAN_SAMPLE_STEPS", "8"))))
     seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
-        first = tmp / "segment-1.mp4"
+        segment = tmp / "segment.mp4"
         reference: Path | None = None
         source_video: Path | None = None
 
@@ -296,35 +309,14 @@ def _normal_generate(payload: dict) -> str:
         _run_normal_segment(
             prompt=prompt,
             aspect=aspect,
+            frames=_frames(duration),
             steps=steps,
             seed=seed,
-            output=first,
+            output=segment,
             reference=reference,
         )
 
-        result = first
-        if duration > 5:
-            bridge = tmp / "segment-1-last.png"
-            second = tmp / "segment-2.mp4"
-            joined = tmp / "generated-10s.mp4"
-            _extract_last_frame(first, bridge)
-            continuation_prompt = (
-                prompt
-                + "\nContinue seamlessly from the supplied reference frame. Preserve the same "
-                  "characters, wardrobe, location, lighting, camera direction and visual style. "
-                  "Advance the action naturally without restarting the scene."
-            )
-            _run_normal_segment(
-                prompt=continuation_prompt,
-                aspect=aspect,
-                steps=steps,
-                seed=(seed + 1) % 2_147_483_647,
-                output=second,
-                reference=bridge,
-            )
-            _concat(first, second, joined)
-            result = joined
-
+        result = segment
         if aspect == "1:1":
             square = tmp / "square.mp4"
             _crop_square(result, square)
@@ -408,13 +400,13 @@ def preload_models(include_speech: bool = False):
 
 @app.cls(
     image=base_image,
-    gpu="L4",
+    gpu="L40S",
     cpu=4.0,
     memory=65536,
     volumes={str(MODEL_ROOT): model_volume},
     secrets=[engine_secret],
     timeout=18 * 60,
-    scaledown_window=30,
+    scaledown_window=60,
     max_containers=2,
 )
 class NovaWanVideo:
