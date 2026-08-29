@@ -1,5 +1,5 @@
 name: Probe NOVA Modal Health
-# Segmented 10s verification: 2026-08-29 23:00 UTC
+# L40S SDPA verification: 2026-08-29 23:21 UTC
 
 on:
   workflow_dispatch:
