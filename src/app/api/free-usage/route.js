@@ -128,8 +128,6 @@ export async function GET() {
       available: videoAvailable,
       active: video.active !== false,
       paymentRequired: video.reason === "subscription_payment_required",
-      active: video.active !== false,
-      paymentRequired: video.reason === "subscription_payment_required",
       speechAvailable,
       capabilities: videoCapabilities,
     },
