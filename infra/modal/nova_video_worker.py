@@ -7,8 +7,6 @@ The HTTP endpoint only accepts work. GPU functions render in background, upload
 MP4 files directly to NOVA R2, and call NOVA's authenticated callback.
 """
 
-from __future__ import annotations
-
 import hmac
 import os
 import subprocess
@@ -33,6 +31,7 @@ NORMAL_PACKAGES = [
     "decord",
     "diffusers>=0.31,<1",
     "easydict",
+    "einops>=0.8,<1",
     "fastapi[standard]",
     "ftfy",
     "huggingface-hub>=0.36,<1",
@@ -220,7 +219,23 @@ def _notify(payload: dict, status: str, error_code: str | None = None) -> None:
         time.sleep(1 + attempt)
 
 
+def _prepare_normal_wan_runtime() -> None:
+    """Keep optional Wan pipelines from breaking the normal TI2V worker."""
+    init_file = WAN_CODE / "wan" / "__init__.py"
+    source = init_file.read_text(encoding="utf-8")
+    optional_imports = [
+        ("from .speech2video import WanS2V", "WanS2V"),
+        ("from .animate import WanAnimate", "WanAnimate"),
+    ]
+    for needle, symbol in optional_imports:
+        replacement = f"try:\n    {needle}\nexcept ImportError:\n    {symbol} = None"
+        if needle in source:
+            source = source.replace(needle, replacement, 1)
+    init_file.write_text(source, encoding="utf-8")
+
+
 def _normal_generate(payload: dict) -> str:
+    _prepare_normal_wan_runtime()
     _ensure_model(TI2V_REPO, TI2V_DIR)
     prompt = str(payload.get("prompt") or "").strip()
     task = str(payload.get("task") or "text-to-video")
@@ -332,6 +347,16 @@ def _speech_generate(payload: dict) -> str:
         return _upload(payload, result)
 
 
+@app.function(image=base_image, gpu="L4", timeout=120, memory=8192)
+def smoke_import():
+    """Fail early if the normal Wan runtime has missing imports."""
+    _prepare_normal_wan_runtime()
+    import wan  # noqa: F401
+    from einops import rearrange  # noqa: F401
+    assert wan.WanTI2V is not None
+    return {"ok": True, "wan": True, "einops": True, "ti2v": True}
+
+
 @app.function(image=base_image, volumes={str(MODEL_ROOT): model_volume}, timeout=45 * 60, memory=65536)
 def preload_models(include_speech: bool = False):
     """Download checkpoints on CPU so no GPU minutes are burned by downloads."""
@@ -417,10 +442,10 @@ def api():
         if task == "speech-video":
             if not _speech_enabled():
                 raise HTTPException(status_code=503, detail="Speech engine disabled")
-            call = NovaWanSpeechVideo().generate.spawn(payload)
+            call = await NovaWanSpeechVideo().generate.spawn.aio(payload)
             engine = "wan-s2v"
         elif task in {"text-to-video", "image-to-video", "continue-video"}:
-            call = NovaWanVideo().generate.spawn(payload)
+            call = await NovaWanVideo().generate.spawn.aio(payload)
             engine = "wan-ti2v"
         else:
             raise HTTPException(status_code=400, detail="Unsupported task")
