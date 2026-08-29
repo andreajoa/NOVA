@@ -21,6 +21,10 @@ import {
   runZeroCostVideo,
 } from "@/lib/zeroCostVideoClient";
 import {
+  hasPrivateGpuVideoPool,
+  runPrivateGpuVideoPool,
+} from "@/lib/privateGpuVideoPool";
+import {
   createFreeVideoJob,
   markFreeVideoJobCompleted,
 } from "@/lib/freeVideoJobs";
@@ -274,41 +278,68 @@ export async function POST(req) {
     let storage = null;
 
     if (mode === "text-to-video" || mode === "image-to-video") {
-      const generated = await runVerifiedVideoRuntime(input, { hfToken });
-      videoUrl = generated.videoUrl;
-      engine = generated.engine || null;
-      storage = "provider";
+      let privateQueued = false;
 
-      try {
-        videoUrl = await persistGeneratedVideo({
-          userId,
-          remoteUrl: generated.videoUrl,
-          hfToken,
-        });
-        storage = "r2";
-      } catch (persistError) {
-        console.warn("[NOVA_VIDEO] persistence skipped; returning verified provider URL", {
-          engine,
-          message: persistError?.message || String(persistError),
-        });
+      // Preferred zero-cost path: Modal first, Lightning second. They use
+      // independent compute pools, so exhausting one provider does not block
+      // the next. If neither private pool is configured/healthy, NOVA falls
+      // back to its verified public video runtimes.
+      if (hasPrivateGpuVideoPool()) {
+        try {
+          const queued = await runPrivateGpuVideoPool(input, {
+            userId,
+            quotaDebited: Boolean(quota?.ok),
+            origin: req.nextUrl.origin,
+          });
+          jobId = queued.jobId;
+          engine = queued.engine || "private-gpu";
+          storage = "r2";
+          processing = true;
+          privateQueued = true;
+        } catch (privateError) {
+          console.warn("[NOVA_VIDEO] Modal/Lightning pool unavailable; using public fallback", {
+            message: String(privateError?.message || privateError).slice(0, 800),
+          });
+        }
       }
 
-      try {
-        const completedJob = await createFreeVideoJob({
-          userId,
-          publicUrl: videoUrl,
-          quotaDebited: Boolean(quota?.ok),
-        });
-        await markFreeVideoJobCompleted(completedJob.id, videoUrl);
-        jobId = completedJob.id;
-      } catch (jobError) {
-        console.warn("[NOVA_VIDEO] completed video returned without job history", {
-          engine,
-          message: jobError?.message || String(jobError),
-        });
-      }
+      if (!privateQueued) {
+        const generated = await runVerifiedVideoRuntime(input, { hfToken });
+        videoUrl = generated.videoUrl;
+        engine = generated.engine || null;
+        storage = "provider";
 
-      processing = false;
+        try {
+          videoUrl = await persistGeneratedVideo({
+            userId,
+            remoteUrl: generated.videoUrl,
+            hfToken,
+          });
+          storage = "r2";
+        } catch (persistError) {
+          console.warn("[NOVA_VIDEO] persistence skipped; returning verified provider URL", {
+            engine,
+            message: persistError?.message || String(persistError),
+          });
+        }
+
+        try {
+          const completedJob = await createFreeVideoJob({
+            userId,
+            publicUrl: videoUrl,
+            quotaDebited: Boolean(quota?.ok),
+          });
+          await markFreeVideoJobCompleted(completedJob.id, videoUrl);
+          jobId = completedJob.id;
+        } catch (jobError) {
+          console.warn("[NOVA_VIDEO] completed video returned without job history", {
+            engine,
+            message: jobError?.message || String(jobError),
+          });
+        }
+
+        processing = false;
+      }
     } else {
       const queuedJob = await runZeroCostVideo(input, {
         userId,
