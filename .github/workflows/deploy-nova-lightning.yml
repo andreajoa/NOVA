@@ -1,6 +1,5 @@
 name: Deploy NOVA Lightning Video Workers
 
-# Deploy trigger 2026-08-29: target the NOVA org/teamspace created during onboarding.
 on:
   workflow_dispatch:
   push:
@@ -19,8 +18,6 @@ jobs:
     env:
       LIGHTNING_USER_ID: ${{ secrets.LIGHTNING_USER_ID }}
       LIGHTNING_API_KEY: ${{ secrets.LIGHTNING_API_KEY }}
-      LIGHTNING_TEAMSPACE: "deploy-model-project"
-      LIGHTNING_ORG: "NOVA"
       NOVA_VIDEO_WORKER_SECRET: ${{ secrets.NOVA_VIDEO_WORKER_SECRET }}
       NOVA_LIGHTNING_DEPLOY_SPEECH: "1"
     steps:
@@ -55,15 +52,35 @@ jobs:
         if: steps.config.outputs.configured == 'true'
         run: python -m pip install --upgrade lightning-sdk
 
-      - name: Deploy Lightning workers
+      - name: Resolve Lightning scope safely
         if: steps.config.outputs.configured == 'true'
-        run: python infra/lightning/deploy.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import subprocess
 
-      - name: Store Lightning endpoint artifact
-        if: steps.config.outputs.configured == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: nova-lightning-video-urls
-          path: lightning-urls.json
-          if-no-files-found: error
-          retention-days: 7
+          proc = subprocess.run(
+              ["lightning", "api", "/v1/memberships"],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+          data = json.loads(proc.stdout)
+          memberships = data.get("memberships") or []
+          print(f"LIGHTNING_MEMBERSHIP_COUNT={len(memberships)}")
+          for index, membership in enumerate(memberships):
+              safe = {
+                  "index": index,
+                  "ownerType": membership.get("ownerType"),
+                  "name": membership.get("name"),
+                  "projectId": membership.get("projectId"),
+                  "ownerId": membership.get("ownerId"),
+              }
+              print("LIGHTNING_MEMBERSHIP=" + json.dumps(safe, ensure_ascii=False))
+          if not memberships:
+              raise SystemExit("No Lightning memberships were returned")
+          PY
+
+      # Deployment resumes after the authenticated Lightning scope is resolved.
