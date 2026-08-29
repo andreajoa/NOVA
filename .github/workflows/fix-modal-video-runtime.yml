@@ -48,7 +48,7 @@ jobs:
               'call = await NovaWanVideo().generate.spawn.aio(payload)',
           )
 
-          helper = '''\n\ndef _prepare_normal_wan_runtime() -> None:\n    """Keep optional S2V imports from breaking the normal TI2V worker."""\n    init_file = WAN_CODE / "wan" / "__init__.py"\n    source = init_file.read_text(encoding="utf-8")\n    needle = "from .speech2video import WanS2V"\n    replacement = "try:\\n    from .speech2video import WanS2V\\nexcept ImportError:\\n    WanS2V = None"\n    if needle in source:\n        init_file.write_text(source.replace(needle, replacement, 1), encoding="utf-8")\n'''
+          helper = '''\n\ndef _prepare_normal_wan_runtime() -> None:\n    """Keep optional Wan pipelines from breaking the normal TI2V worker."""\n    init_file = WAN_CODE / "wan" / "__init__.py"\n    source = init_file.read_text(encoding="utf-8")\n    optional_imports = [\n        ("from .speech2video import WanS2V", "WanS2V"),\n        ("from .animate import WanAnimate", "WanAnimate"),\n    ]\n    for needle, symbol in optional_imports:\n        replacement = f"try:\\n    {needle}\\nexcept ImportError:\\n    {symbol} = None"\n        if needle in source:\n            source = source.replace(needle, replacement, 1)\n    init_file.write_text(source, encoding="utf-8")\n'''
           normal_marker = '\n\ndef _normal_generate(payload: dict) -> str:\n'
           if 'def _prepare_normal_wan_runtime()' not in text:
               text = text.replace(normal_marker, helper + normal_marker, 1)
@@ -59,7 +59,7 @@ jobs:
               1,
           )
 
-          smoke = '''\n\n@app.function(image=base_image, gpu="L4", timeout=120, memory=8192)\ndef smoke_import():\n    """Fail early if the normal Wan runtime has missing imports."""\n    _prepare_normal_wan_runtime()\n    import wan  # noqa: F401\n    from einops import rearrange  # noqa: F401\n    return {"ok": True, "wan": True, "einops": True}\n'''
+          smoke = '''\n\n@app.function(image=base_image, gpu="L4", timeout=120, memory=8192)\ndef smoke_import():\n    """Fail early if the normal Wan runtime has missing imports."""\n    _prepare_normal_wan_runtime()\n    import wan  # noqa: F401\n    from einops import rearrange  # noqa: F401\n    assert wan.WanTI2V is not None\n    return {"ok": True, "wan": True, "einops": True, "ti2v": True}\n'''
           marker = '\n\n@app.function(image=base_image, volumes={str(MODEL_ROOT): model_volume}, timeout=45 * 60, memory=65536)\ndef preload_models'
           if 'def smoke_import()' not in text:
               text = text.replace(marker, smoke + marker, 1)
@@ -73,6 +73,7 @@ jobs:
           grep -q 'einops>=0.8,<1' infra/modal/nova_video_worker.py
           grep -q 'spawn.aio(payload)' infra/modal/nova_video_worker.py
           grep -q 'def _prepare_normal_wan_runtime' infra/modal/nova_video_worker.py
+          grep -q 'from .animate import WanAnimate' infra/modal/nova_video_worker.py
           grep -q '_prepare_normal_wan_runtime()' infra/modal/nova_video_worker.py
           grep -q 'gpu="L4"' infra/modal/nova_video_worker.py
           grep -q 'def smoke_import' infra/modal/nova_video_worker.py
