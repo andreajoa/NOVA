@@ -1,5 +1,5 @@
 name: Deploy NOVA Video Engine
-# Runtime repair deploy trigger: 2026-08-29 22:28 UTC
+# Segmented 10s deploy trigger: 2026-08-29 22:58 UTC
 
 on:
   workflow_dispatch:
