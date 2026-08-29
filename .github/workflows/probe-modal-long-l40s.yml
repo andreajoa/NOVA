@@ -1,0 +1,61 @@
+name: Probe NOVA Wan 10s on L40S
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/probe-modal-long-l40s.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add ephemeral L40S probe
+        shell: bash
+        run: |
+          cat >> infra/modal/nova_video_worker.py <<'PY'
+
+          @app.function(
+              image=base_image,
+              gpu="L40S",
+              cpu=4.0,
+              memory=65536,
+              volumes={str(MODEL_ROOT): model_volume},
+              timeout=12 * 60,
+          )
+          def long_memory_probe():
+              _prepare_normal_wan_runtime()
+              _ensure_model(TI2V_REPO, TI2V_DIR)
+              with tempfile.TemporaryDirectory() as tmpdir:
+                  output = Path(tmpdir) / "probe.mp4"
+                  command = [
+                      "python", str(WAN_CODE / "generate.py"),
+                      "--task", "ti2v-5B",
+                      "--size", "704*1280",
+                      "--ckpt_dir", str(TI2V_DIR),
+                      "--offload_model", "True",
+                      "--convert_model_dtype",
+                      "--t5_cpu",
+                      "--prompt", "Cinematic woman preparing coffee in a modern kitchen, natural realistic movement.",
+                      "--frame_num", "241",
+                      "--sample_steps", "2",
+                      "--base_seed", "12345",
+                      "--save_file", str(output),
+                  ]
+                  started = time.time()
+                  subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=10 * 60)
+                  return {"ok": True, "seconds": round(time.time() - started, 2), "bytes": output.stat().st_size}
+          PY
+          python -m py_compile infra/modal/nova_video_worker.py
+      - name: Install Modal CLI
+        run: python -m pip install --upgrade "modal>=1.5,<2"
+      - name: Run L40S 241-frame memory probe
+        run: modal run infra/modal/nova_video_worker.py::long_memory_probe
