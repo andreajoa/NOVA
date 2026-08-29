@@ -66,7 +66,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          modal run infra/modal/nova_video_worker.py::preload_models --include-speech true
+          modal run infra/modal/nova_video_worker.py::preload_models --include-speech
 
       - name: Deploy NOVA Modal video engine
         if: steps.config.outputs.configured == 'true'
