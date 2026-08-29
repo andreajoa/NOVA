@@ -1,0 +1,38 @@
+name: Probe NOVA Modal Health
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/probe-modal-health.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Modal health endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "https://tdahma2--nova-video-engine-api.modal.run/health" \
+            | tee modal-health.json
+          echo
+          python - <<'PY'
+          import json
+          with open("modal-health.json", encoding="utf-8") as f:
+              data = json.load(f)
+          assert data.get("ok") is True, data
+          assert data.get("provider") == "modal", data
+          expected = {"text-to-video", "image-to-video", "continue-video", "speech-video"}
+          actual = set(data.get("tasks") or [])
+          missing = expected - actual
+          assert not missing, f"Missing tasks: {sorted(missing)}; response={data}"
+          print("MODAL_HEALTH_OK")
+          print("tasks=" + ",".join(sorted(actual)))
+          PY
