@@ -59,8 +59,23 @@ jobs:
               raise SystemExit("Expected Stripe cycle refresh block not found")
           quota.write_text(text.replace(old, new, 1), encoding="utf-8")
 
+          checkout = Path("src/app/api/checkout/plans/session/route.ts")
+          text = checkout.read_text(encoding="utf-8")
+          old = '  } catch (err: any) {\n    console.error("Plan checkout error:", err);\n    return NextResponse.json({ error: err.message }, { status: 500 });\n'
+          new = '  } catch (err: unknown) {\n    const message = err instanceof Error ? err.message : "Unexpected checkout error";\n    console.error("Plan checkout error:", err);\n    return NextResponse.json({ error: message }, { status: 500 });\n'
+          if old not in text:
+              raise SystemExit("Expected checkout catch block not found")
+          checkout.write_text(text.replace(old, new, 1), encoding="utf-8")
+
           studio = Path("src/components/NovaFreeVideoStudio.jsx")
           text = studio.read_text(encoding="utf-8")
+          effect = '  useEffect(() => {\n    if (usage && exhausted && !paidUser) setShowUpgradePopup(true);\n  }, [usage, exhausted, paidUser]);\n\n'
+          text = text.replace(effect, '', 1)
+          initial = '        if (!cancelled && response.ok && payload?.success) setUsage(payload);\n'
+          upgraded = '        if (!cancelled && response.ok && payload?.success) {\n          setUsage(payload);\n          const freeExhausted = !payload?.paid && !payload?.admin && Number(payload?.video?.remaining ?? 1) <= 0;\n          if (freeExhausted) setShowUpgradePopup(true);\n        }\n'
+          if initial not in text:
+              raise SystemExit("Expected initial usage load line not found")
+          text = text.replace(initial, upgraded, 1)
           for old, new in {
               'gerações hoje.': 'gerações neste mês.',
               'Limite diário utilizado': 'Limite mensal utilizado',
