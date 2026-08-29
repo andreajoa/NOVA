@@ -1,5 +1,6 @@
 name: Deploy NOVA Lightning Video Workers
 
+# Probe trigger 2026-08-29: validates configuration and deploys only when required secrets exist.
 on:
   workflow_dispatch:
   push:
