@@ -28,6 +28,17 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Patch FastAPI Request annotation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("infra/modal/nova_video_worker.py")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace("from __future__ import annotations\n\n", "", 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+
       - name: Validate worker syntax
         run: python -m py_compile infra/modal/nova_video_worker.py
 
