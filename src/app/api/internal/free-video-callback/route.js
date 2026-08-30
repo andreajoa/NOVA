@@ -5,6 +5,7 @@ import {
 } from "@/lib/freeVideoJobs";
 import { refundFreeGeneration } from "@/lib/freeGenerationQuota";
 import { retryPrivateGpuVideoJob } from "@/lib/privateGpuVideoPool";
+import { retryFreeVideoJobOnPublicFallback } from "@/lib/publicVideoJobRetry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,6 +55,31 @@ export async function POST(req) {
         });
       }
 
+      // Last resilience layer for ordinary text/image video: keep the SAME job
+      // and move it to the verified public queue. The browser continues polling
+      // one id while the server performs Modal -> Lightning -> public failover.
+      // This is the ONLY failover that does not keep spending Modal/Lightning
+      // GPU credits on an already-failing task, so it must run before we give
+      // up and mark the job failed.
+      if (["text-to-video", "image-to-video"].includes(String(job.input.task || ""))) {
+        try {
+          const publicRetry = await retryFreeVideoJobOnPublicFallback({
+            job,
+            callbackToken: token,
+          });
+          return NextResponse.json({
+            success: true,
+            retried: true,
+            engine: publicRetry.engine,
+            jobId,
+          });
+        } catch (publicError) {
+          console.warn("[NOVA_VIDEO] public fallback retry also failed", {
+            jobId,
+            message: String(publicError?.message || publicError).slice(0, 700),
+          });
+        }
+      }
     }
   }
 
