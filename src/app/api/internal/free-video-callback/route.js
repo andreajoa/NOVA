@@ -30,55 +30,88 @@ export async function POST(req) {
       : "";
   if (!status) return NextResponse.json({ success: false }, { status: 400 });
 
-  if (status === "failed") {
-    const job = await getFreeVideoJobForCallback({ jobId, callbackToken: token });
-    if (!job) return NextResponse.json({ success: false }, { status: 401 });
+  const errorCode = body?.error_code || null;
 
-    if (job.status === "processing" && job.input && job.engine) {
+  try {
+    if (status === "failed") {
+      return await handleFailedCallback(jobId, token, req, errorCode);
+    }
+
+    const finalized = await finalizeFreeVideoJob({
+      jobId,
+      callbackToken: token,
+      status,
+      errorCode,
+    });
+
+    if (!finalized.ok) {
+      const code = finalized.reason === "unauthorized"
+        ? 401
+        : finalized.reason === "not_found"
+          ? 404
+          : 400;
+      return NextResponse.json({ success: false }, { status: code });
+    }
+
+    if (finalized.shouldRefund) {
+      await refundFreeGeneration(finalized.userId, "video").catch((error) => {
+        console.error("[NOVA_VIDEO] failed to refund quota after worker failure", error?.message || error);
+      });
+    }
+
+    return NextResponse.json({ success: true, retried: false });
+  } catch (error) {
+    console.error("[NOVA_VIDEO] callback handler failed", {
+      jobId,
+      status,
+      error: error?.message || String(error),
+    });
+    return NextResponse.json({ success: false }, { status: 500 });
+  }
+}
+
+async function handleFailedCallback(jobId, token, req, errorCode) {
+  const job = await getFreeVideoJobForCallback({ jobId, callbackToken: token });
+  if (!job) return NextResponse.json({ success: false }, { status: 401 });
+
+  if (job.status === "processing" && job.input && job.engine) {
+    try {
+      const retried = await retryPrivateGpuVideoJob({
+        job,
+        callbackToken: token,
+        origin: req.nextUrl.origin,
+      });
+      return NextResponse.json({
+        success: true,
+        retried: true,
+        engine: retried.engine,
+        jobId,
+      });
+    } catch (retryError) {
+      console.warn("[NOVA_VIDEO] private GPU failover exhausted", {
+        jobId,
+        engine: job.engine,
+        message: String(retryError?.message || retryError).slice(0, 700),
+      });
+    }
+
+    if (["text-to-video", "image-to-video"].includes(String(job.input.task || ""))) {
       try {
-        const retried = await retryPrivateGpuVideoJob({
+        const publicRetry = await retryFreeVideoJobOnPublicFallback({
           job,
           callbackToken: token,
-          origin: req.nextUrl.origin,
         });
         return NextResponse.json({
           success: true,
           retried: true,
-          engine: retried.engine,
+          engine: publicRetry.engine,
           jobId,
         });
-      } catch (retryError) {
-        console.warn("[NOVA_VIDEO] private GPU failover exhausted", {
+      } catch (publicError) {
+        console.warn("[NOVA_VIDEO] public fallback retry also failed", {
           jobId,
-          engine: job.engine,
-          message: String(retryError?.message || retryError).slice(0, 700),
+          message: String(publicError?.message || publicError).slice(0, 700),
         });
-      }
-
-      // Last resilience layer for ordinary text/image video: keep the SAME job
-      // and move it to the verified public queue. The browser continues polling
-      // one id while the server performs Modal -> Lightning -> public failover.
-      // This is the ONLY failover that does not keep spending Modal/Lightning
-      // GPU credits on an already-failing task, so it must run before we give
-      // up and mark the job failed.
-      if (["text-to-video", "image-to-video"].includes(String(job.input.task || ""))) {
-        try {
-          const publicRetry = await retryFreeVideoJobOnPublicFallback({
-            job,
-            callbackToken: token,
-          });
-          return NextResponse.json({
-            success: true,
-            retried: true,
-            engine: publicRetry.engine,
-            jobId,
-          });
-        } catch (publicError) {
-          console.warn("[NOVA_VIDEO] public fallback retry also failed", {
-            jobId,
-            message: String(publicError?.message || publicError).slice(0, 700),
-          });
-        }
       }
     }
   }
@@ -86,8 +119,8 @@ export async function POST(req) {
   const finalized = await finalizeFreeVideoJob({
     jobId,
     callbackToken: token,
-    status,
-    errorCode: body?.error_code || null,
+    status: "failed",
+    errorCode,
   });
 
   if (!finalized.ok) {

@@ -114,6 +114,11 @@ def _size(aspect: str) -> str:
     return "704*1280" if str(aspect) == "9:16" else "1280*704"
 
 
+def _phase_timing(phase: str, start: float) -> None:
+    elapsed = time.time() - start
+    print(f"[NOVA_VIDEO PHASE] {phase} took {elapsed:.2f}s", flush=True)
+
+
 def _ensure_model(repo_id: str, local_dir: Path) -> None:
     marker = local_dir / ".nova-ready"
     if marker.exists():
@@ -121,7 +126,9 @@ def _ensure_model(repo_id: str, local_dir: Path) -> None:
     from huggingface_hub import snapshot_download
 
     local_dir.mkdir(parents=True, exist_ok=True)
+    t0 = time.time()
     snapshot_download(repo_id=repo_id, local_dir=str(local_dir), local_dir_use_symlinks=False)
+    _phase_timing("model_download", t0)
     marker.write_text(repo_id, encoding="utf-8")
     model_volume.commit()
 
@@ -190,9 +197,11 @@ def _upload(payload: dict, output_path: Path) -> str:
     public_url = str(target.get("public_url") or "")
     if not upload_url.startswith("https://") or not public_url.startswith("https://"):
         raise ValueError("NOVA output target is required")
+    t0 = time.time()
     with output_path.open("rb") as handle:
         response = requests.put(upload_url, data=handle, headers={"Content-Type": "video/mp4"}, timeout=240)
     response.raise_for_status()
+    _phase_timing("upload_result", t0)
     return public_url
 
 
@@ -257,6 +266,7 @@ def _run_normal_segment(
     reference: Path | None = None,
 ) -> None:
     """Render one Wan TI2V clip using the verified SDPA runtime."""
+    t0 = time.time()
     command = [
         "python", str(WAN_CODE / "generate.py"),
         "--task", "ti2v-5B",
@@ -273,12 +283,17 @@ def _run_normal_segment(
     ]
     if reference is not None:
         command.extend(["--image", str(reference)])
-    subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=14 * 60)
+    try:
+        subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=14 * 60)
+    finally:
+        _phase_timing(f"render_ti2v_{aspect}_frames{frames}_steps{steps}", t0)
 
 
 def _normal_generate(payload: dict) -> str:
     _prepare_normal_wan_runtime()
+    t0 = time.time()
     _ensure_model(TI2V_REPO, TI2V_DIR)
+    _phase_timing("runtime_prep", t0)
     prompt = str(payload.get("prompt") or "").strip()
     task = str(payload.get("task") or "text-to-video")
     if not prompt:
@@ -291,46 +306,52 @@ def _normal_generate(payload: dict) -> str:
     steps = max(4, min(24, int(os.environ.get("NOVA_WAN_SAMPLE_STEPS", "8"))))
     seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp = Path(tmpdir)
-        segment = tmp / "segment.mp4"
-        reference: Path | None = None
-        source_video: Path | None = None
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            segment = tmp / "segment.mp4"
+            reference: Path | None = None
+            source_video: Path | None = None
 
-        if task == "image-to-video":
-            reference = tmp / "reference.jpg"
-            _download(str(payload.get("image_url") or ""), reference, 20_000_000)
-        elif task == "continue-video":
-            source_video = tmp / "source.mp4"
-            reference = tmp / "last-frame.png"
-            _download(str(payload.get("source_video_url") or ""), source_video)
-            _extract_last_frame(source_video, reference)
+            if task == "image-to-video":
+                reference = tmp / "reference.jpg"
+                _download(str(payload.get("image_url") or ""), reference, 20_000_000)
+            elif task == "continue-video":
+                source_video = tmp / "source.mp4"
+                reference = tmp / "last-frame.png"
+                _download(str(payload.get("source_video_url") or ""), source_video)
+                _extract_last_frame(source_video, reference)
 
-        _run_normal_segment(
-            prompt=prompt,
-            aspect=aspect,
-            frames=_frames(duration),
-            steps=steps,
-            seed=seed,
-            output=segment,
-            reference=reference,
-        )
+            _run_normal_segment(
+                prompt=prompt,
+                aspect=aspect,
+                frames=_frames(duration),
+                steps=steps,
+                seed=seed,
+                output=segment,
+                reference=reference,
+            )
 
-        result = segment
-        if aspect == "1:1":
-            square = tmp / "square.mp4"
-            _crop_square(result, square)
-            result = square
-        if source_video is not None:
-            combined = tmp / "combined.mp4"
-            _concat(source_video, result, combined)
-            result = combined
-        return _upload(payload, result)
+            result = segment
+            if aspect == "1:1":
+                square = tmp / "square.mp4"
+                _crop_square(result, square)
+                result = square
+            if source_video is not None:
+                combined = tmp / "combined.mp4"
+                _concat(source_video, result, combined)
+                result = combined
+            return _upload(payload, result)
+    except Exception:
+        _notify(payload, "failed", "GENERATION_FAILED")
+        raise
 
 def _speech_generate(payload: dict) -> str:
     if not _speech_enabled():
         raise RuntimeError("Speech video is disabled")
+    t0 = time.time()
     _ensure_model(S2V_REPO, S2V_DIR)
+    _phase_timing("speech_runtime_prep", t0)
 
     prompt = str(payload.get("prompt") or "").strip()
     speech_text = str(payload.get("speech_text") or "").strip()
@@ -344,39 +365,47 @@ def _speech_generate(payload: dict) -> str:
     steps = max(4, min(40, int(os.environ.get("NOVA_WAN_SPEECH_STEPS", "20"))))
     seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp = Path(tmpdir)
-        reference = tmp / "reference.jpg"
-        output = tmp / "speech.mp4"
-        _download(image_url, reference, 20_000_000)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            reference = tmp / "reference.jpg"
+            output = tmp / "speech.mp4"
+            _download(image_url, reference, 20_000_000)
+            _phase_timing("speech_download_reference", time.time())
 
-        command = [
-            "python", str(WAN_CODE / "generate.py"),
-            "--task", "s2v-14B",
-            "--size", "704*1024" if aspect == "9:16" else "1024*704",
-            "--ckpt_dir", str(S2V_DIR),
-            "--offload_model", "True",
-            "--convert_model_dtype",
-            "--t5_cpu",
-            "--prompt", prompt,
-            "--image", str(reference),
-            "--enable_tts",
-            "--tts_prompt_audio", str(WAN_CODE / "examples" / "zero_shot_prompt.wav"),
-            "--tts_prompt_text", TTS_PROMPT_TEXT,
-            "--tts_text", speech_text[:500],
-            "--num_clip", str(clips),
-            "--sample_steps", str(steps),
-            "--base_seed", str(seed),
-            "--save_file", str(output),
-        ]
-        subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=15 * 60)
+            command = [
+                "python", str(WAN_CODE / "generate.py"),
+                "--task", "s2v-14B",
+                "--size", "704*1024" if aspect == "9:16" else "1024*704",
+                "--ckpt_dir", str(S2V_DIR),
+                "--offload_model", "True",
+                "--convert_model_dtype",
+                "--t5_cpu",
+                "--prompt", prompt,
+                "--image", str(reference),
+                "--enable_tts",
+                "--tts_prompt_audio", str(WAN_CODE / "examples" / "zero_shot_prompt.wav"),
+                "--tts_prompt_text", TTS_PROMPT_TEXT,
+                "--tts_text", speech_text[:500],
+                "--num_clip", str(clips),
+                "--sample_steps", str(steps),
+                "--base_seed", str(seed),
+                "--save_file", str(output),
+            ]
+            try:
+                subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=15 * 60)
+            finally:
+                _phase_timing(f"speech_render_clips{clips}_steps{steps}", time.time())
 
-        result = output
-        if aspect == "1:1":
-            square = tmp / "speech-square.mp4"
-            _crop_square(result, square)
-            result = square
-        return _upload(payload, result)
+            result = output
+            if aspect == "1:1":
+                square = tmp / "speech-square.mp4"
+                _crop_square(result, square)
+                result = square
+            return _upload(payload, result)
+    except Exception:
+        _notify(payload, "failed", "SPEECH_GENERATION_FAILED")
+        raise
 
 
 @app.function(image=base_image, gpu="L4", timeout=120, memory=8192)

@@ -15,8 +15,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 90;
 
-const DEFAULT_STALE_JOB_SECONDS = 20 * 60;
-const SPEECH_STALE_JOB_SECONDS = 35 * 60;
+const DEFAULT_STALE_JOB_SECONDS = Math.max(
+  5,
+  Number(process.env.NOVA_VIDEO_STALE_NORMAL_SECONDS || 8 * 60)
+);
+const SPEECH_STALE_JOB_SECONDS = Math.max(
+  10,
+  Number(process.env.NOVA_VIDEO_STALE_SPEECH_SECONDS || 15 * 60)
+);
 const FALLBACK_POLL_TIMEOUT_MS = 55_000;
 const FALLBACK_VIDEO_BASE = "https://lightricks-ltx-2-3.hf.space";
 

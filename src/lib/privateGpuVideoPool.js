@@ -198,8 +198,16 @@ async function submitWorker(worker, input = {}, context = {}, existingJob = null
     }
 
     if (!response.ok || (payload?.accepted !== true && payload?.status !== "processing")) {
-      const error = new Error(`NOVA ${worker.id} video worker rejected the job (${response.status || 0})`);
-      error.status = response.status || 0;
+      const status = response.status || 0;
+      const isTimeout =
+        status === 0 ||
+        /timeout|timed out|abort|network/i.test(String(error?.message || ""));
+      const code = isTimeout ? "SUBMIT_TIMEOUT" : "SUBMIT_REJECTED";
+      const error = new Error(
+        `NOVA ${worker.id} video worker ${isTimeout ? "timed out" : "rejected"} the job (${status || 0})`
+      );
+      error.code = code;
+      error.status = status;
       error.novaJob = job;
       throw error;
     }
