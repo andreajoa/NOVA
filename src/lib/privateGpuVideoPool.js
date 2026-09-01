@@ -201,15 +201,15 @@ async function submitWorker(worker, input = {}, context = {}, existingJob = null
       const status = response.status || 0;
       const isTimeout =
         status === 0 ||
-        /timeout|timed out|abort|network/i.test(String(error?.message || ""));
+        /timeout|timed out|abort|network/i.test(String(payload?.raw || text || ""));
       const code = isTimeout ? "SUBMIT_TIMEOUT" : "SUBMIT_REJECTED";
-      const error = new Error(
+      const submitError = new Error(
         `NOVA ${worker.id} video worker ${isTimeout ? "timed out" : "rejected"} the job (${status || 0})`
       );
-      error.code = code;
-      error.status = status;
-      error.novaJob = job;
-      throw error;
+      submitError.code = code;
+      submitError.status = status;
+      submitError.novaJob = job;
+      throw submitError;
     }
 
     return {

@@ -5,7 +5,7 @@ const DEFAULT_POLICY = {
   trial: {
     imageDailyLimit: 10,
     videoMonthlyLimit: 10,
-    maxVideoSeconds: 5,
+    maxVideoSeconds: 10,
   },
   paid: {
     imageDailyLimit: 10,
@@ -143,7 +143,7 @@ export function getFreeGenerationPolicy(plan = "trial") {
     imageDailyLimit,
     videoMonthlyLimit,
     maxVideoSeconds: normalizedMaxVideoSeconds,
-    videoDurations: paid && normalizedMaxVideoSeconds >= 10 ? [5, 10] : [5],
+    videoDurations: normalizedMaxVideoSeconds >= 10 ? [5, 10] : [5],
     period: paid ? null : `free:${utcMonthPeriod()}`,
     resetAt: paid ? null : nextUtcMonthReset(),
   };
