@@ -1,0 +1,58 @@
+name: Benchmark NOVA Fast Video
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/benchmark-nova-video.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Prepare exact production worker
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("infra/modal/nova_video_worker.py")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace("from __future__ import annotations\n\n", "", 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+          python infra/modal/apply_quality_patch.py
+          python -m py_compile infra/modal/nova_video_worker.py
+
+      - name: Install Modal CLI
+        run: python -m pip install --upgrade "modal>=1.4,<2"
+
+      - name: Run real 5-second H100 benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          modal run infra/modal/nova_video_worker.py::benchmark_fast_normal --duration 5 --steps 8 2>&1 | tee benchmark.log
+          grep -E "NOVA_VIDEO (PHASE|BENCHMARK)|seconds|frames|steps" benchmark.log || true
+
+      - name: Store benchmark log
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-fast-video-benchmark
+          path: benchmark.log
+          retention-days: 2
