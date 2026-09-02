@@ -1,13 +1,19 @@
-"""Apply production-safe quality fixes to the NOVA Modal video worker before deploy.
+"""Apply the measured low-latency NOVA Modal profile before deployment.
 
-Why this exists:
-- Wan2.2 TI2V-5B's upstream config uses 50 sampling steps and 121 frames (5s at 24fps).
-- NOVA had been forcing 8 sampling steps and 241 frames for a 10s render.
-- The deploy workflow patches the worker before Modal builds it, so these assertions make
-  the production transformation explicit and fail closed if the worker shape changes.
+Production evidence captured from Modal on 2026-09-02:
+- L40S + 8 steps + 241 frames completed a 10s clip in 382.46s.
+- L40S + 50 steps + 121 frames repeatedly hit the 960s subprocess timeout
+  before even the first 5s segment completed.
 
-This file is intentionally small and deterministic. Once the worker is consolidated,
-these transformations can be moved directly into nova_video_worker.py.
+The fast profile therefore prioritizes completed jobs and latency:
+- H100 (80GB class) instead of L40S.
+- Keep Wan TI2V-5B fully on GPU by removing CPU/offload flags.
+- Single-pass generation for both 5s and 10s requests.
+- Default 8 sampling steps, with a bounded 4..16 override range.
+
+Wan's upstream documentation explicitly recommends removing offload_model,
+convert_model_dtype and t5_cpu on GPUs with at least 80GB VRAM to speed up
+TI2V-5B inference.
 """
 
 from pathlib import Path
@@ -26,10 +32,6 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 def main() -> None:
     text = WORKER.read_text(encoding="utf-8")
 
-    # A single native Wan TI2V segment is 5 seconds / 121 frames. For a requested
-    # 10-second result we render two native segments and condition the second on
-    # the final frame of the first. This keeps the model inside its intended
-    # temporal regime instead of asking it for a single 241-frame diffusion pass.
     start = text.index("def _normal_generate(payload: dict) -> str:\n")
     end = text.index("\ndef _speech_generate(payload: dict) -> str:\n", start)
 
@@ -48,21 +50,22 @@ def main() -> None:
     duration = max(5, min(10, int(payload.get("duration") or 5)))
     aspect = str(payload.get("aspect_ratio") or "16:9")
 
-    # Upstream Wan2.2 TI2V-5B defaults to 50 steps. Keep a quality floor so a
-    # stale/incorrect secret can never silently push production back to 8 steps.
-    steps = max(24, min(50, int(os.environ.get("NOVA_WAN_SAMPLE_STEPS", "50"))))
+    # 8 steps is the only profile measured end-to-end on this stack that has
+    # already completed a real 10-second production render. Keep the override
+    # bounded so an accidental 50-step secret cannot silently break latency again.
+    steps = max(4, min(16, int(os.environ.get("NOVA_WAN_SAMPLE_STEPS", "8"))))
     seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
-    segment_count = 1 if duration <= 5 else 2
+    frames = _frames(duration)
     print(
-        f"[NOVA_VIDEO CONFIG] task={task} duration={duration}s segments={segment_count} "
-        f"frames_per_segment={_frames(5)} steps={steps} aspect={aspect}",
+        f"[NOVA_VIDEO CONFIG] profile=h100-fast task={task} duration={duration}s "
+        f"segments=1 frames={frames} steps={steps} aspect={aspect}",
         flush=True,
     )
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
-            first = tmp / "segment-1.mp4"
+            segment = tmp / "segment.mp4"
             reference: Path | None = None
             source_video: Path | None = None
 
@@ -71,38 +74,21 @@ def main() -> None:
                 _download(str(payload.get("image_url") or ""), reference, 20_000_000)
             elif task == "continue-video":
                 source_video = tmp / "source.mp4"
-                reference = tmp / "source-last-frame.png"
+                reference = tmp / "last-frame.png"
                 _download(str(payload.get("source_video_url") or ""), source_video)
                 _extract_last_frame(source_video, reference)
 
             _run_normal_segment(
                 prompt=prompt,
                 aspect=aspect,
-                frames=_frames(5),
+                frames=frames,
                 steps=steps,
                 seed=seed,
-                output=first,
+                output=segment,
                 reference=reference,
             )
 
-            result = first
-            if duration > 5:
-                second_reference = tmp / "segment-1-last-frame.png"
-                second = tmp / "segment-2.mp4"
-                stitched = tmp / "segment-10s.mp4"
-                _extract_last_frame(first, second_reference)
-                _run_normal_segment(
-                    prompt=prompt,
-                    aspect=aspect,
-                    frames=_frames(5),
-                    steps=steps,
-                    seed=seed + 1,
-                    output=second,
-                    reference=second_reference,
-                )
-                _concat(first, second, stitched)
-                result = stitched
-
+            result = segment
             if aspect == "1:1":
                 square = tmp / "square.mp4"
                 _crop_square(result, square)
@@ -119,21 +105,77 @@ def main() -> None:
 
     text = text[:start] + normal_generate + text[end:]
 
+    # On an H100 the 5B model fits in GPU memory. Wan upstream recommends removing
+    # these flags on >=80GB VRAM because CPU offload/T5-on-CPU materially slows inference.
     text = replace_once(
         text,
-        'subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=14 * 60)',
-        'subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=16 * 60)',
-        "normal segment subprocess timeout",
-    )
-    text = replace_once(
-        text,
-        'timeout=18 * 60,\n    scaledown_window=60,',
-        'timeout=30 * 60,\n    scaledown_window=60,',
-        "normal Modal class timeout",
+        '        "--ckpt_dir", str(TI2V_DIR),\n        "--offload_model", "True",\n        "--convert_model_dtype",\n        "--t5_cpu",\n',
+        '        "--ckpt_dir", str(TI2V_DIR),\n',
+        "normal Wan H100 full-GPU execution",
     )
 
+    text = replace_once(
+        text,
+        '    gpu="L40S",\n',
+        '    gpu="H100",\n',
+        "normal Modal GPU",
+    )
+
+    # Four containers allow multiple users to make progress without serializing all
+    # video jobs behind one or two long-running renders.
+    text = replace_once(
+        text,
+        '    max_containers=2,\n)\nclass NovaWanVideo:',
+        '    max_containers=4,\n)\nclass NovaWanVideo:',
+        "normal Modal container cap",
+    )
+
+    # Add a CLI-only benchmark function. It is not exposed through the web endpoint
+    # and lets CI measure the exact deployed inference stack without R2/callback noise.
+    benchmark_anchor = '@app.function(image=base_image, gpu="L4", timeout=120, memory=8192)\ndef smoke_import():'
+    benchmark = '''@app.function(
+    image=base_image,
+    gpu="H100",
+    cpu=4.0,
+    memory=65536,
+    volumes={str(MODEL_ROOT): model_volume},
+    timeout=14 * 60,
+)
+def benchmark_fast_normal(duration: int = 5, steps: int = 8):
+    _prepare_normal_wan_runtime()
+    _ensure_model(TI2V_REPO, TI2V_DIR)
+    duration = max(5, min(10, int(duration)))
+    steps = max(4, min(16, int(steps)))
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = Path(tmpdir) / "benchmark.mp4"
+        started = time.time()
+        _run_normal_segment(
+            prompt="A natural cinematic close-up of a person walking through a softly lit room, realistic motion, documentary style",
+            aspect="9:16",
+            frames=_frames(duration),
+            steps=steps,
+            seed=20260902,
+            output=output,
+        )
+        elapsed = time.time() - started
+        result = {
+            "ok": output.exists() and output.stat().st_size > 0,
+            "duration": duration,
+            "steps": steps,
+            "frames": _frames(duration),
+            "seconds": round(elapsed, 2),
+            "bytes": output.stat().st_size if output.exists() else 0,
+        }
+        print(f"[NOVA_VIDEO BENCHMARK] {result}", flush=True)
+        return result
+
+
+@app.function(image=base_image, gpu="L4", timeout=120, memory=8192)
+def smoke_import():'''
+    text = replace_once(text, benchmark_anchor, benchmark, "benchmark insertion")
+
     WORKER.write_text(text, encoding="utf-8")
-    print("Applied NOVA Modal quality patch: 50-step capable, native 5s segments, 10s continuity.")
+    print("Applied NOVA fast profile: H100, full-GPU Wan, single-pass, 8-step default.")
 
 
 if __name__ == "__main__":
