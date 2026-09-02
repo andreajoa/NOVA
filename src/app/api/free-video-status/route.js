@@ -15,13 +15,16 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 90;
 
+// A Modal render is asynchronous. Do not mark a valid GPU job dead while it is
+// still computing, especially during a cold start or provider retry. The age is
+// measured from updatedAt below so every retry gets its own timeout window.
 const DEFAULT_STALE_JOB_SECONDS = Math.max(
-  5,
-  Number(process.env.NOVA_VIDEO_STALE_NORMAL_SECONDS || 8 * 60)
+  60,
+  Number(process.env.NOVA_VIDEO_STALE_NORMAL_SECONDS || 20 * 60)
 );
 const SPEECH_STALE_JOB_SECONDS = Math.max(
-  10,
-  Number(process.env.NOVA_VIDEO_STALE_SPEECH_SECONDS || 15 * 60)
+  60,
+  Number(process.env.NOVA_VIDEO_STALE_SPEECH_SECONDS || 25 * 60)
 );
 const FALLBACK_POLL_TIMEOUT_MS = 55_000;
 const FALLBACK_VIDEO_BASE = "https://lightricks-ltx-2-3.hf.space";
@@ -143,7 +146,10 @@ export async function GET(req) {
     job = { ...job, status: "completed" };
   }
 
-  const age = Math.max(0, Math.floor(Date.now() / 1000) - job.createdAt);
+  // prepareFreeVideoJobRetry updates updated_at, so use it as the timeout anchor.
+  // Using createdAt here caused a retried job to be considered stale immediately.
+  const timeoutAnchor = Number(job.updatedAt || job.createdAt || 0);
+  const age = Math.max(0, Math.floor(Date.now() / 1000) - timeoutAnchor);
   const staleAfter = job.input?.task === "speech-video" ? SPEECH_STALE_JOB_SECONDS : DEFAULT_STALE_JOB_SECONDS;
   if (job.status === "processing" && age >= staleAfter) {
     const failed = await failStaleFreeVideoJob(job.id);
