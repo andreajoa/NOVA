@@ -1,5 +1,5 @@
 name: Deploy NOVA Video Engine
-# Native Wan 5s segmentation + quality deploy trigger: 2026-09-02
+# H100 low-latency Wan deploy trigger: 2026-09-02
 
 on:
   workflow_dispatch:
@@ -40,7 +40,7 @@ jobs:
           path.write_text(text, encoding="utf-8")
           PY
 
-      - name: Apply verified Wan quality patch
+      - name: Apply measured Wan fast profile
         run: python infra/modal/apply_quality_patch.py
 
       - name: Validate worker syntax
@@ -62,7 +62,7 @@ jobs:
 
       - name: Install Modal
         if: steps.config.outputs.configured == 'true'
-        run: python -m pip install --upgrade "modal>=1.1,<2"
+        run: python -m pip install --upgrade "modal>=1.4,<2"
 
       - name: Create or update NOVA engine secret
         if: steps.config.outputs.configured == 'true'
@@ -72,7 +72,7 @@ jobs:
           modal secret create nova-video-engine \
             NOVA_VIDEO_WORKER_SECRET="$NOVA_VIDEO_WORKER_SECRET" \
             NOVA_ENABLE_SPEECH="1" \
-            NOVA_WAN_SAMPLE_STEPS="50" \
+            NOVA_WAN_SAMPLE_STEPS="8" \
             NOVA_WAN_SPEECH_STEPS="20" \
             --force
 
@@ -88,7 +88,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          modal deploy infra/modal/nova_video_worker.py 2>&1 | tee modal-deploy.log
+          # Recreate terminates containers from the bad 50-step deployment so no
+          # additional jobs are accepted by stale workers after this release.
+          modal deploy --strategy recreate infra/modal/nova_video_worker.py 2>&1 | tee modal-deploy.log
           python - <<'PY'
           import json, re
           text = open("modal-deploy.log", encoding="utf-8").read()
