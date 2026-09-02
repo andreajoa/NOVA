@@ -353,13 +353,26 @@ export async function POST(req) {
       });
     } else if (mode === "text-to-video" || mode === "image-to-video") {
       if (hasPrivateGpuVideoPool()) {
-        result = await runPrivateGpuVideoPool(input, {
-          userId,
-          quotaDebited: Boolean(quota?.ok),
-          origin: req.nextUrl.origin,
-        });
+        try {
+          result = await runPrivateGpuVideoPool(input, {
+            userId,
+            quotaDebited: Boolean(quota?.ok),
+            origin: req.nextUrl.origin,
+          });
+        } catch (poolError) {
+          console.warn("[NOVA_VIDEO] private GPU pool failed; falling back to public generation", {
+            mode,
+            code: poolError?.code || null,
+            message: String(poolError?.message || poolError).slice(0, 500),
+          });
+          result = await runSynchronousPublicGeneration({
+            input,
+            userId,
+            quota,
+            hfToken,
+          });
+        }
       } else {
-        // Legacy/dev-only path. Production NOVA uses the private Modal pool.
         result = await runSynchronousPublicGeneration({
           input,
           userId,
@@ -371,11 +384,19 @@ export async function POST(req) {
       // Continuation also prefers the independent GPU pools. The legacy worker
       // remains a final fallback while Modal/Lightning are not configured.
       if (hasPrivateGpuVideoPool()) {
-        result = await runPrivateGpuVideoPool(input, {
-          userId,
-          quotaDebited: Boolean(quota?.ok),
-          origin: req.nextUrl.origin,
-        });
+        try {
+          result = await runPrivateGpuVideoPool(input, {
+            userId,
+            quotaDebited: Boolean(quota?.ok),
+            origin: req.nextUrl.origin,
+          });
+        } catch (poolError) {
+          console.warn("[NOVA_VIDEO] private GPU pool failed for continuation; trying legacy fallback", {
+            mode,
+            code: poolError?.code || null,
+            message: String(poolError?.message || poolError).slice(0, 500),
+          });
+        }
       }
 
       if (!result) {
