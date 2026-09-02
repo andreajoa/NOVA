@@ -1,5 +1,5 @@
 name: Deploy NOVA Video Engine
-# L40S SDPA deploy trigger: 2026-08-29 23:20 UTC
+# Native Wan 5s segmentation + quality deploy trigger: 2026-09-02
 
 on:
   workflow_dispatch:
@@ -40,6 +40,9 @@ jobs:
           path.write_text(text, encoding="utf-8")
           PY
 
+      - name: Apply verified Wan quality patch
+        run: python infra/modal/apply_quality_patch.py
+
       - name: Validate worker syntax
         run: python -m py_compile infra/modal/nova_video_worker.py
 
@@ -69,7 +72,7 @@ jobs:
           modal secret create nova-video-engine \
             NOVA_VIDEO_WORKER_SECRET="$NOVA_VIDEO_WORKER_SECRET" \
             NOVA_ENABLE_SPEECH="1" \
-            NOVA_WAN_SAMPLE_STEPS="8" \
+            NOVA_WAN_SAMPLE_STEPS="50" \
             NOVA_WAN_SPEECH_STEPS="20" \
             --force
 
