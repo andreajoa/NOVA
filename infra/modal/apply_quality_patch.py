@@ -4,16 +4,18 @@ Production evidence captured from Modal on 2026-09-02:
 - L40S + 8 steps + 241 frames completed a 10s clip in 382.46s.
 - L40S + 50 steps + 121 frames repeatedly hit the 960s subprocess timeout
   before even the first 5s segment completed.
+- H100 + 8 steps + 121 frames with implicit offload still took 124.84s because
+  Wan defaults offload_model=True on single-GPU runs when the flag is omitted.
 
 The fast profile therefore prioritizes completed jobs and latency:
 - H100 (80GB class) instead of L40S.
-- Keep Wan TI2V-5B fully on GPU by removing CPU/offload flags.
+- Explicitly set offload_model=False and keep T5 on GPU.
 - Single-pass generation for both 5s and 10s requests.
 - Default 8 sampling steps, with a bounded 4..16 override range.
 
-Wan's upstream documentation explicitly recommends removing offload_model,
-convert_model_dtype and t5_cpu on GPUs with at least 80GB VRAM to speed up
-TI2V-5B inference.
+Wan's upstream documentation recommends disabling CPU/offload behavior on GPUs
+with at least 80GB VRAM to speed up TI2V-5B inference. Its generate.py defaults
+offload_model to True for a single-GPU run unless False is passed explicitly.
 """
 
 from pathlib import Path
@@ -105,12 +107,12 @@ def main() -> None:
 
     text = text[:start] + normal_generate + text[end:]
 
-    # On an H100 the 5B model fits in GPU memory. Wan upstream recommends removing
-    # these flags on >=80GB VRAM because CPU offload/T5-on-CPU materially slows inference.
+    # Wan's single-GPU code defaults offload_model=True when omitted, so passing
+    # False explicitly is required. H100 has enough VRAM for the 5B profile.
     text = replace_once(
         text,
         '        "--ckpt_dir", str(TI2V_DIR),\n        "--offload_model", "True",\n        "--convert_model_dtype",\n        "--t5_cpu",\n',
-        '        "--ckpt_dir", str(TI2V_DIR),\n',
+        '        "--ckpt_dir", str(TI2V_DIR),\n        "--offload_model", "False",\n',
         "normal Wan H100 full-GPU execution",
     )
 
@@ -175,7 +177,7 @@ def smoke_import():'''
     text = replace_once(text, benchmark_anchor, benchmark, "benchmark insertion")
 
     WORKER.write_text(text, encoding="utf-8")
-    print("Applied NOVA fast profile: H100, full-GPU Wan, single-pass, 8-step default.")
+    print("Applied NOVA fast profile: H100, offload disabled, single-pass, 8-step default.")
 
 
 if __name__ == "__main__":
