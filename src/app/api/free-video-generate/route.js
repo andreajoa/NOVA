@@ -29,6 +29,7 @@ import {
   runPrivateGpuVideoPool,
 } from "@/lib/privateGpuVideoPool";
 import { runVerifiedVideoRuntime } from "@/lib/verifiedVideoRuntime";
+import { directVideoPrompt } from "@/lib/videoPromptDirector.mjs";
 import { uploadToR2 } from "@/lib/r2";
 
 export const runtime = "nodejs";
@@ -255,9 +256,9 @@ export async function POST(req) {
   );
   const policy = getFreeGenerationPolicy(admin ? "admin" : account.plan);
   const allowedDurations = admin ? [5, 10] : policy.videoDurations;
-  const duration = normalizeDuration(body.duration || body.seconds, allowedDurations);
+  const selectedDuration = normalizeDuration(body.duration || body.seconds, allowedDurations);
 
-  if (!duration) {
+  if (!selectedDuration) {
     return NextResponse.json(
       {
         success: false,
@@ -268,6 +269,19 @@ export async function POST(req) {
       { status: 400 }
     );
   }
+
+  const director = directVideoPrompt({
+    prompt,
+    negativePrompt: body.negative_prompt,
+    selectedDuration,
+    selectedAspectRatio: normalizeAspect(body.aspect_ratio),
+    allowedDurations,
+    supportedAspects: ["16:9", "9:16", "1:1"],
+    supportedFps: [24],
+  });
+  const duration = director.applied.duration;
+  const aspectRatio = director.applied.aspectRatio;
+  const fps = director.applied.fps;
 
   let imageUrl = "";
   let sourceVideoUrl = "";
@@ -359,16 +373,17 @@ export async function POST(req) {
 
   const input = {
     task: mode,
-    prompt,
-    ...(body.negative_prompt && { negative_prompt: String(body.negative_prompt).slice(0, 1200) }),
+    prompt: director.prompt,
+    ...(director.negativePrompt && { negative_prompt: director.negativePrompt.slice(0, 1200) }),
     ...(imageUrl && { image_url: imageUrl }),
     ...(sourceVideoUrl && { source_video_url: sourceVideoUrl }),
     ...(speechText && { speech_text: speechText.slice(0, 500) }),
     duration,
     resolution: "480p",
-    aspect_ratio: normalizeAspect(body.aspect_ratio),
-    frames_per_second: 24,
-    num_frames: (duration * 24) + 1,
+    aspect_ratio: aspectRatio,
+    frames_per_second: fps,
+    num_frames: (duration * fps) + 1,
+    director: director.providerHints,
     ...(Number.isFinite(Number(body.seed)) && { seed: Number(body.seed) }),
   };
 
@@ -387,7 +402,8 @@ export async function POST(req) {
         origin: req.nextUrl.origin,
       });
     } else if (mode === "text-to-video" || mode === "image-to-video") {
-      if (hasPrivateGpuVideoPool()) {
+      const usePrivatePool = hasPrivateGpuVideoPool() && !director.providerHints.audioRequired;
+      if (usePrivatePool) {
         try {
           result = await runPrivateGpuVideoPool(input, {
             userId,
@@ -469,6 +485,7 @@ export async function POST(req) {
         ...(result?.storage && { storage: result.storage }),
         mode,
         seconds: duration,
+        promptDirector: director.publicSummary,
         billing: {
           creditsCharged: 0,
           wallet: admin ? "admin" : "nova_included",
