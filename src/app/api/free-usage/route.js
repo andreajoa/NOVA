@@ -6,9 +6,10 @@ import {
   getFreeGenerationPolicy,
   getFreeGenerationUsage,
 } from "@/lib/freeGenerationQuota";
-import { canUseCloudflareWorkersAI } from "@/lib/cloudflareAiClient";
+import { isFreeImageRuntimeHealthy } from "@/lib/cloudflareAiClient";
 import { isZeroCostVideoWorkerHealthy } from "@/lib/zeroCostVideoClient";
 import { getPrivateGpuVideoCapabilities } from "@/lib/privateGpuVideoPool";
+import { isVerifiedVideoRuntimeHealthy } from "@/lib/verifiedVideoRuntime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,11 +30,8 @@ export async function GET() {
   );
   const policy = getFreeGenerationPolicy(account.plan);
 
-  const imageAvailable = Boolean(
-    process.env.NOVA_IMAGE_FREE_ENGINE_MODEL && canUseCloudflareWorkersAI()
-  );
-
-  const [privateGpu, legacyVideoAvailable] = await Promise.all([
+  const [imageAvailable, privateGpu, publicVideoAvailable, legacyVideoAvailable] = await Promise.all([
+    isFreeImageRuntimeHealthy().catch(() => false),
     getPrivateGpuVideoCapabilities().catch(() => ({
       available: false,
       textToVideo: false,
@@ -42,24 +40,27 @@ export async function GET() {
       speechVideo: false,
       providers: [],
     })),
+    isVerifiedVideoRuntimeHealthy().catch(() => false),
     isZeroCostVideoWorkerHealthy().catch(() => false),
   ]);
 
-  // Text/image video still has the public HF pool as a fallback. Speech video
-  // is only exposed when a private GPU reports that Wan S2V is actually ready.
+  // Text/image generation is online only when a private GPU or at least one
+  // verified public runtime is reachable. Continuation has its own legacy
+  // fallback, so its availability is tracked separately.
   const videoAvailable = Boolean(
     privateGpu.textToVideo ||
     privateGpu.imageToVideo ||
-    legacyVideoAvailable
+    publicVideoAvailable
   );
   const speechAvailable = Boolean(privateGpu.speechVideo);
 
   const videoCapabilities = {
-    textToVideo: Boolean(privateGpu.textToVideo || legacyVideoAvailable),
-    imageToVideo: Boolean(privateGpu.imageToVideo || legacyVideoAvailable),
+    textToVideo: Boolean(privateGpu.textToVideo || publicVideoAvailable),
+    imageToVideo: Boolean(privateGpu.imageToVideo || publicVideoAvailable),
     continueVideo: Boolean(privateGpu.continueVideo || legacyVideoAvailable),
     speechVideo: speechAvailable,
     privateGpu: Boolean(privateGpu.available),
+    publicFallback: Boolean(publicVideoAvailable),
   };
 
   if (admin) {

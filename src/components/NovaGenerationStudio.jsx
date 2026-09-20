@@ -38,8 +38,16 @@ function getModel(modelKey) {
 
 function getEntries(forceType) {
   if (forceType === "image") return Object.entries(novaModels.image || {});
-  if (forceType === "video") return Object.entries(novaModels.video || {});
-  return [...Object.entries(novaModels.image || {}), ...Object.entries(novaModels.video || {})];
+
+  // NOVA VIDEO FREE has a dedicated async studio/endpoint. Keeping it out of
+  // the generic studio prevents it from being sent to /api/generate, which
+  // intentionally rejects the included video model.
+  const videoEntries = Object.entries(novaModels.video || {}).filter(
+    ([key]) => key !== "nova-video-free"
+  );
+
+  if (forceType === "video") return videoEntries;
+  return [...Object.entries(novaModels.image || {}), ...videoEntries];
 }
 
 function bestModeKey(model) {

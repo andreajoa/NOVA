@@ -148,7 +148,37 @@ async function runVerifiedFreeImage({ prompt, seed } = {}) {
 }
 
 export function canUseCloudflareWorkersAI() {
-  return true;
+  return Boolean(credentials());
+}
+
+const IMAGE_HEALTH_CACHE_MS = 30_000;
+let imageHealthCache = { checkedAt: 0, available: false };
+
+export async function isFreeImageRuntimeHealthy() {
+  const now = Date.now();
+  if (now - imageHealthCache.checkedAt < IMAGE_HEALTH_CACHE_MS) {
+    return imageHealthCache.available;
+  }
+
+  const probe = withTimeout(4000);
+  let fallbackAvailable = false;
+  try {
+    const response = await fetch(`${HF_IMAGE_BASE}/config`, {
+      method: "GET",
+      cache: "no-store",
+      signal: probe.controller.signal,
+      headers: { "User-Agent": "NOVA-free-image-health/1.0" },
+    });
+    fallbackAvailable = response.ok;
+  } catch {
+    fallbackAvailable = false;
+  } finally {
+    clearTimeout(probe.timer);
+  }
+
+  const available = fallbackAvailable || Boolean(credentials());
+  imageHealthCache = { checkedAt: now, available };
+  return available;
 }
 
 async function runPrimaryCloudflareImage({ model, prompt, steps = 4, seed } = {}) {

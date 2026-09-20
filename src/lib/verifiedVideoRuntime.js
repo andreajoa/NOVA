@@ -140,6 +140,42 @@ function providerPool(input) {
   return [LTX_PROVIDER];
 }
 
+const HEALTH_CACHE_MS = 30_000;
+let healthCache = { checkedAt: 0, available: false };
+
+async function probeProviderHealth(provider) {
+  const timeout = withTimeout(4000);
+  try {
+    const response = await fetch(`${provider.base}/config`, {
+      method: "GET",
+      cache: "no-store",
+      signal: timeout.controller.signal,
+      headers: { "User-Agent": "NOVA-free-video-health/1.0" },
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout.timer);
+  }
+}
+
+export async function isVerifiedVideoRuntimeHealthy() {
+  const now = Date.now();
+  if (now - healthCache.checkedAt < HEALTH_CACHE_MS) return healthCache.available;
+
+  const providers = [
+    LTX_PROVIDER,
+    LTX_FAST_PROVIDER,
+    WAN_T2V_PROVIDER,
+    WAN_I2V_PROVIDER,
+  ];
+  const checks = await Promise.all(providers.map((provider) => probeProviderHealth(provider)));
+  const available = checks.some(Boolean);
+  healthCache = { checkedAt: now, available };
+  return available;
+}
+
 function requestHeaders(hfToken, extra = {}) {
   return {
     ...extra,

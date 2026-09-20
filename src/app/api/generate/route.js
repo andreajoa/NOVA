@@ -13,10 +13,7 @@ import {
   reserveCloudflareFreeImage,
   refundCloudflareFreeImage,
 } from "@/lib/freeProviderBudget";
-import {
-  canUseCloudflareWorkersAI,
-  runCloudflareImage,
-} from "@/lib/cloudflareAiClient";
+import { runCloudflareImage } from "@/lib/cloudflareAiClient";
 import { freeImageDimensions } from "@/lib/openModelWorkflows";
 import {
   debitApiCredits,
@@ -232,7 +229,7 @@ function mediaExists(value, seen = new Set()) {
 async function executeGeneration(selection, input) {
   if (selection.engine === "nova-native-image") {
     const configuredModel = process.env.NOVA_IMAGE_FREE_ENGINE_MODEL;
-    if (!configuredModel || !canUseCloudflareWorkersAI()) {
+    if (!configuredModel) {
       const error = new Error("NOVA image free engine is not configured");
       error.code = "NOVA_FREE_ENGINE_NOT_CONFIGURED";
       throw error;

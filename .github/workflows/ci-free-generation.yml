@@ -116,6 +116,10 @@ jobs:
           grep -q -- '--tts_prompt_text' infra/modal/nova_video_worker.py
           grep -q 'isNovaAdminUser' src/lib/db.ts
           grep -q 'BUILT_IN_ADMIN_EMAIL_HASHES' src/lib/novaAdminAccess.js
+          grep -q 'key !== "nova-video-free"' src/components/NovaGenerationStudio.jsx
+          grep -q 'isFreeImageRuntimeHealthy' src/app/api/free-usage/route.js
+          grep -q 'isVerifiedVideoRuntimeHealthy' src/app/api/free-usage/route.js
+          grep -q 'runPublicGenerationWithQueueFallback' src/app/api/free-video-generate/route.js
 
           if grep -q 'useSearchParams' src/app/oauth/callback/huggingface/page.jsx; then
             echo 'OAuth callback must not read search params during prerender.'
