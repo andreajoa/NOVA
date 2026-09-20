@@ -37,12 +37,14 @@ NORMAL_PACKAGES = [
     "huggingface-hub>=0.36,<1",
     "imageio[ffmpeg]>=2.37,<3",
     "imageio-ffmpeg>=0.5,<1",
+    "kokoro>=0.9.2,<1",
     "numpy<2",
     "opencv-python-headless>=4.9",
     "pillow",
     "requests>=2.32,<3",
     "safetensors",
     "sentencepiece>=0.2,<1",
+    "soundfile>=0.12,<1",
     "tokenizers",
     "torch>=2.7,<3",
     "torchaudio",
@@ -76,7 +78,7 @@ SPEECH_PACKAGES = [
 
 base_image = (
     modal.Image.debian_slim(python_version="3.11")
-    .apt_install("ffmpeg", "git", "libgl1", "libglib2.0-0", "libsndfile1")
+    .apt_install("ffmpeg", "git", "libgl1", "libglib2.0-0", "libsndfile1", "espeak-ng", "fonts-dejavu-core")
     .uv_pip_install(*NORMAL_PACKAGES)
     .run_commands("git clone --depth 1 https://github.com/Wan-Video/Wan2.2.git /opt/Wan2.2")
     .env(
@@ -105,9 +107,12 @@ def _speech_enabled() -> bool:
     return str(os.environ.get("NOVA_ENABLE_SPEECH", "0")).lower() in {"1", "true", "yes"}
 
 
-def _frames(seconds: int) -> int:
-    # Wan TI2V requires 4n+1 frames. At 24 fps this maps 5s->121, 10s->241.
-    return (max(5, min(10, int(seconds))) * 24) + 1
+def _frames(seconds: float) -> int:
+    # Wan TI2V requires 4n+1 frames. Keep segment timing close to the requested
+    # beat while allowing 2-10 second director segments.
+    seconds = max(2.0, min(10.0, float(seconds)))
+    frames = max(49, int(round(seconds * 24)))
+    return (frames // 4) * 4 + 1
 
 
 def _size(aspect: str) -> str:
