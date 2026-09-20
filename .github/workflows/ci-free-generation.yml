@@ -8,6 +8,7 @@ on:
       - feat/free-open-image-video
       - feat/complex-video-prompt-director
       - fix/free-video-quality-pipeline
+      - fix/free-video-motion-quality-gate
     paths:
       - "src/app/api/free-usage/**"
       - "src/app/api/free-video-generate/**"
@@ -138,6 +139,10 @@ jobs:
           grep -q '_overlay_director_captions' infra/modal/nova_video_worker.py
           grep -q '_build_director_audio' infra/modal/nova_video_worker.py
           grep -q 'smoke_complex_director' infra/modal/nova_video_worker.py
+          grep -q '_motion_quality_ok' infra/modal/nova_video_worker.py
+          grep -q 'NOVA_LOW_MOTION_QUALITY' infra/modal/nova_video_worker.py
+          grep -q 'complex director failure will not degrade' src/app/api/internal/free-video-callback/route.js
+          grep -q 'NOVA_COMPLEX_VIDEO_DIRECTOR_UNAVAILABLE' src/app/api/free-video-generate/route.js
           grep -q 'const workers = workersForInput(input);' src/lib/privateGpuVideoPool.js
           grep -q 'const workers = workersForTask(task);' src/lib/privateGpuVideoPool.js
           if grep -q 'normal_generate = ' infra/modal/apply_quality_patch.py; then
