@@ -101,6 +101,13 @@ jobs:
           print(f"NOVA Modal endpoint: {url or 'not printed by CLI'}")
           PY
 
+      - name: Smoke test complex director
+        if: steps.config.outputs.configured == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          modal run infra/modal/nova_video_worker.py::smoke_complex_director
+
       - name: Store Modal endpoint artifact
         if: steps.config.outputs.configured == 'true'
         uses: actions/upload-artifact@v4
