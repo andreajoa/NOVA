@@ -236,6 +236,122 @@ def _trim_video(source: Path, output: Path, seconds: float) -> None:
     )
 
 
+def _motion_quality_metrics(video_path: Path) -> dict:
+    """Measure whether a clip contains non-rigid scene motion, not just camera drift."""
+    import cv2
+    import numpy as np
+
+    capture = cv2.VideoCapture(str(video_path))
+    frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    if frame_count < 3:
+        capture.release()
+        return {"raw": 0.0, "residual": 0.0, "pairs": 0}
+
+    sample_count = min(9, frame_count)
+    indexes = sorted(set(
+        int(round(i * (frame_count - 1) / max(1, sample_count - 1)))
+        for i in range(sample_count)
+    ))
+    frames = []
+    for index in indexes:
+        capture.set(cv2.CAP_PROP_POS_FRAMES, index)
+        ok, frame = capture.read()
+        if not ok or frame is None:
+            continue
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        height, width = gray.shape[:2]
+        scale = min(1.0, 384.0 / max(width, 1))
+        if scale < 1.0:
+            gray = cv2.resize(
+                gray,
+                (max(32, int(width * scale)), max(32, int(height * scale))),
+                interpolation=cv2.INTER_AREA,
+            )
+        frames.append(gray)
+    capture.release()
+
+    raw_scores = []
+    residual_scores = []
+    for previous, current in zip(frames, frames[1:]):
+        if previous.shape != current.shape:
+            continue
+
+        raw = float(np.mean(cv2.absdiff(previous, current)))
+        raw_scores.append(raw)
+
+        points = cv2.goodFeaturesToTrack(
+            previous,
+            maxCorners=180,
+            qualityLevel=0.01,
+            minDistance=6,
+            blockSize=5,
+        )
+        if points is None or len(points) < 8:
+            residual_scores.append(raw)
+            continue
+
+        tracked, status, _ = cv2.calcOpticalFlowPyrLK(
+            previous,
+            current,
+            points,
+            None,
+            winSize=(21, 21),
+            maxLevel=3,
+        )
+        if tracked is None or status is None:
+            residual_scores.append(raw)
+            continue
+
+        valid = status.reshape(-1) == 1
+        source = points.reshape(-1, 2)[valid]
+        destination = tracked.reshape(-1, 2)[valid]
+        if len(source) < 8:
+            residual_scores.append(raw)
+            continue
+
+        matrix, _ = cv2.estimateAffinePartial2D(
+            source,
+            destination,
+            method=cv2.RANSAC,
+            ransacReprojThreshold=2.5,
+        )
+        if matrix is None:
+            residual_scores.append(raw)
+            continue
+
+        aligned = cv2.warpAffine(
+            previous,
+            matrix,
+            (current.shape[1], current.shape[0]),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_REFLECT,
+        )
+        residual_scores.append(float(np.mean(cv2.absdiff(aligned, current))))
+
+    if not raw_scores:
+        return {"raw": 0.0, "residual": 0.0, "pairs": 0}
+
+    raw_median = float(np.median(np.asarray(raw_scores, dtype=np.float32)))
+    residual_median = float(np.median(np.asarray(residual_scores or raw_scores, dtype=np.float32)))
+    return {
+        "raw": round(raw_median, 4),
+        "residual": round(residual_median, 4),
+        "pairs": len(raw_scores),
+    }
+
+
+def _motion_quality_ok(video_path: Path) -> tuple[bool, dict]:
+    metrics = _motion_quality_metrics(video_path)
+    raw = float(metrics.get("raw") or 0.0)
+    residual = float(metrics.get("residual") or 0.0)
+
+    # Be intentionally conservative: only reject clips that look like a still
+    # frame / Ken Burns camera move. Natural subtle acting should clear this.
+    nearly_frozen = raw < 1.15 and residual < 0.55
+    camera_only = raw < 6.0 and residual < 0.48 and residual < (raw * 0.12)
+    return (not (nearly_frozen or camera_only)), metrics
+
+
 def _director_timeline(payload: dict) -> list[dict]:
     raw = payload.get("director_timeline")
     if not isinstance(raw, list):
@@ -305,22 +421,57 @@ def _render_director_sequence(
     clips: list[Path] = []
     reference = initial_reference
     for index, beat in enumerate(timeline):
-        seconds = max(2.0, min(10.0, float(beat["end"]) - float(beat["start"])))
-        clip = tmp / f"director-{index:02d}.mp4"
+        exact_seconds = max(0.35, float(beat["end"]) - float(beat["start"]))
+        render_seconds = max(2.0, min(10.0, exact_seconds))
         prompt = _segment_prompt(payload, beat, index, len(timeline))
-        _run_normal_segment(
-            prompt=prompt,
-            aspect=aspect,
-            frames=_frames(seconds),
-            steps=steps,
-            seed=seed + index,
-            output=clip,
-            reference=reference,
-        )
-        clips.append(clip)
+
+        accepted: Path | None = None
+        last_metrics = {}
+        for attempt in range(2):
+            raw_clip = tmp / f"director-{index:02d}-raw-{attempt}.mp4"
+            exact_clip = tmp / f"director-{index:02d}-exact-{attempt}.mp4"
+            attempt_prompt = prompt
+            if attempt:
+                attempt_prompt += (
+                    "\nQUALITY RETRY: show unmistakable non-rigid human movement inside the frame. "
+                    "Hands, eyes, facial muscles and posture must visibly change over time. "
+                    "Do not solve motion with only a camera zoom, pan or parallax."
+                )
+
+            _run_normal_segment(
+                prompt=attempt_prompt,
+                aspect=aspect,
+                frames=_frames(render_seconds),
+                steps=steps,
+                seed=seed + index + (attempt * 1009),
+                output=raw_clip,
+                reference=reference,
+            )
+
+            # Wan uses 4n+1 frame counts, so normalize every rendered shot back
+            # to the exact TIMED BEAT duration before concatenation.
+            _trim_video(raw_clip, exact_clip, exact_seconds)
+            motion_ok, last_metrics = _motion_quality_ok(exact_clip)
+            print(
+                f"[NOVA_VIDEO QUALITY] beat={index} attempt={attempt + 1} "
+                f"raw={last_metrics.get('raw')} residual={last_metrics.get('residual')} "
+                f"accepted={motion_ok}",
+                flush=True,
+            )
+            if motion_ok:
+                accepted = exact_clip
+                break
+
+        if accepted is None:
+            raise RuntimeError(
+                "NOVA_LOW_MOTION_QUALITY: "
+                f"beat={index} raw={last_metrics.get('raw')} residual={last_metrics.get('residual')}"
+            )
+
+        clips.append(accepted)
         if index < len(timeline) - 1:
             reference = tmp / f"director-{index:02d}-last.png"
-            _extract_last_frame(clip, reference)
+            _extract_last_frame(accepted, reference)
 
     combined = tmp / "director-combined.mp4"
     _concat_many(clips, combined)
