@@ -138,6 +138,8 @@ jobs:
           grep -q '_overlay_director_captions' infra/modal/nova_video_worker.py
           grep -q '_build_director_audio' infra/modal/nova_video_worker.py
           grep -q 'smoke_complex_director' infra/modal/nova_video_worker.py
+          grep -q 'const workers = workersForInput(input);' src/lib/privateGpuVideoPool.js
+          grep -q 'const workers = workersForTask(task);' src/lib/privateGpuVideoPool.js
           if grep -q 'normal_generate = ' infra/modal/apply_quality_patch.py; then
             echo 'Modal quality patch must not replace the director generation function.'
             exit 1
