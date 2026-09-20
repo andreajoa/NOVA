@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { inspectVideoPrompt } from "@/lib/videoPromptDirector.mjs";
 
 const ASPECTS = ["16:9", "9:16", "1:1"];
 const HF_TOKEN_KEY = "nova_hf_access_token";
@@ -98,6 +99,13 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
     return values.filter((n) => n === 5 || n === 10);
   }, [videoUsage]);
   const effectiveDuration = durations.includes(duration) ? duration : (durations[0] || 5);
+  const promptInsight = useMemo(() => inspectVideoPrompt(prompt), [prompt]);
+  const directedDuration = durations.includes(Number(promptInsight.requestedDuration))
+    ? Number(promptInsight.requestedDuration)
+    : effectiveDuration;
+  const directedAspect = ASPECTS.includes(promptInsight.aspectRatio)
+    ? promptInsight.aspectRatio
+    : aspectRatio;
 
   const unlimited = Boolean(usage?.admin || videoUsage?.unlimited);
   const paidUser = Boolean(usage?.paid);
@@ -220,7 +228,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
     }
   }
 
-  async function startGeneration({ continueFrom = "", seconds = effectiveDuration } = {}) {
+  async function startGeneration({ continueFrom = "", seconds = directedDuration } = {}) {
     if (!prompt.trim() && !continuePrompt.trim()) {
       setError("Descreva o vídeo que você quer criar.");
       return;
@@ -262,7 +270,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
           mode: requestMode,
           prompt: String(continueFrom ? (continuePrompt || prompt) : prompt).trim(),
           negative_prompt: negativePrompt,
-          aspect_ratio: aspectRatio,
+          aspect_ratio: continueFrom ? aspectRatio : directedAspect,
           duration: seconds,
           seconds,
           ...(hfToken && { hf_token: hfToken }),
@@ -277,7 +285,8 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
       if (response.ok && payload?.success && payload?.processing === false && payload?.videoUrl) {
         setShowHfConnect(false);
         setResultUrl(payload.videoUrl);
-        setTotalSeconds((current) => continueFrom ? current + seconds : seconds);
+        const generatedSeconds = Number(payload.seconds) || seconds;
+        setTotalSeconds((current) => continueFrom ? current + generatedSeconds : generatedSeconds);
         setStatus("Vídeo pronto.");
         setLoading(false);
         setJobId("");
@@ -302,7 +311,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
       await refreshUsage();
       setJobId(payload.jobId);
       setStatus("Vídeo na fila de geração...");
-      await pollJob(payload.jobId, seconds, !continueFrom);
+      await pollJob(payload.jobId, Number(payload.seconds) || seconds, !continueFrom);
     } catch (err) {
       setLoading(false);
       setStatus("");
@@ -362,6 +371,22 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
               className="mt-2 min-h-[180px] w-full resize-none rounded-3xl border border-white/10 bg-black/35 px-5 py-5 text-sm leading-7 text-white outline-none placeholder:text-white/20 focus:border-[#D7FF00]/45"
             />
 
+            {promptInsight.complex && (
+              <div className="mt-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/[.06] px-4 py-3 text-[11px] leading-5 text-cyan-100/75">
+                <span className="font-black uppercase tracking-[0.12em] text-cyan-300">NOVA Prompt Director ativo</span>
+                <span className="ml-2">
+                  {[
+                    promptInsight.beatCount ? `${promptInsight.beatCount} cenas` : null,
+                    promptInsight.requestedDuration ? `${promptInsight.requestedDuration}s` : null,
+                    promptInsight.aspectRatio || null,
+                    promptInsight.fps ? `${promptInsight.fps}fps` : null,
+                    promptInsight.hasNarration ? "narração" : null,
+                    promptInsight.hasCaptions ? "captions" : null,
+                  ].filter(Boolean).join(" · ")}
+                </span>
+              </div>
+            )}
+
             <label className="mt-4 block text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Prompt negativo · opcional</label>
             <textarea
               value={negativePrompt}
@@ -390,14 +415,14 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Duração desta geração</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               {durations.map((item) => (
-                <Choice key={item} active={effectiveDuration === item} onClick={() => setDuration(item)} disabled={loading}>{item}s</Choice>
+                <Choice key={item} active={directedDuration === item} onClick={() => setDuration(item)} disabled={loading}>{item}s</Choice>
               ))}
             </div>
 
             <p className="mt-6 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Formato</p>
             <div className="mt-3 grid grid-cols-3 gap-2">
               {ASPECTS.map((item) => (
-                <Choice key={item} active={aspectRatio === item} onClick={() => setAspectRatio(item)} disabled={loading}>{item}</Choice>
+                <Choice key={item} active={directedAspect === item} onClick={() => setAspectRatio(item)} disabled={loading}>{item}</Choice>
               ))}
             </div>
 
@@ -413,7 +438,7 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
               disabled={loading || exhausted || !prompt.trim()}
               className="mt-5 min-h-16 w-full rounded-2xl bg-[#D7FF00] px-5 text-sm font-black uppercase tracking-[0.13em] text-black disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {loading ? (status || "Gerando...") : exhausted ? "Limite mensal utilizado" : `Gerar vídeo · ${effectiveDuration}s`}
+              {loading ? (status || "Gerando...") : exhausted ? "Limite mensal utilizado" : `Gerar vídeo · ${directedDuration}s`}
             </button>
 
             {jobId && <p className="mt-3 text-center text-xs text-white/35">Processando com segurança. Você pode manter esta página aberta.</p>}

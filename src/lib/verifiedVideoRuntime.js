@@ -123,6 +123,13 @@ function dimensionsForFastAspect(aspect) {
 function providerPool(input) {
   const seconds = Number(input.duration || 5);
 
+  // Prompts with narration, dialogue, music or explicit audio requirements
+  // must stay on a joint audio-video engine. Silent WAN/LTX-Video fallbacks
+  // would return a technically valid MP4 that does not satisfy the prompt.
+  if (input?.director?.audioRequired) {
+    return [LTX_PROVIDER];
+  }
+
   if (input.task === "image-to-video" && seconds <= WAN_I2V_PROVIDER.maxSeconds) {
     return [LTX_PROVIDER, WAN_I2V_PROVIDER, LTX_FAST_PROVIDER];
   }
