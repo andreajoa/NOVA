@@ -148,7 +148,26 @@ async function runVerifiedFreeImage({ prompt, seed } = {}) {
 }
 
 export function canUseCloudflareWorkersAI() {
-  return true;
+  return Boolean(credentials());
+}
+
+export async function isFreeImageRuntimeHealthy() {
+  const probe = withTimeout(4000);
+  try {
+    const response = await fetch(`${HF_IMAGE_BASE}/config`, {
+      method: "GET",
+      cache: "no-store",
+      signal: probe.controller.signal,
+      headers: { "User-Agent": "NOVA-free-image-health/1.0" },
+    });
+    if (response.ok) return true;
+  } catch {
+    // Cloudflare can still be available even if the public fallback is down.
+  } finally {
+    clearTimeout(probe.timer);
+  }
+
+  return Boolean(credentials());
 }
 
 async function runPrimaryCloudflareImage({ model, prompt, steps = 4, seed } = {}) {
