@@ -394,6 +394,8 @@ export async function POST(req) {
     ...input,
     prompt: director.visualPrompt || director.prompt,
     director_timeline: director.beats,
+    director_visual_style: director.visualStyle || "",
+    director_ending: director.endingDirection || "",
     director_voiceover: director.voiceoverDirection || "",
     director_original_prompt: director.originalPrompt,
   };
