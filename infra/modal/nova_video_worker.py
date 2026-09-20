@@ -194,6 +194,352 @@ def _concat(first: Path, second: Path, output: Path) -> None:
     )
 
 
+
+def _concat_many(clips: list[Path], output: Path) -> None:
+    if not clips:
+        raise ValueError("No video clips to concatenate")
+    if len(clips) == 1:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(clips[0]), "-c", "copy", str(output)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return
+    manifest = output.with_suffix(".txt")
+    manifest.write_text(
+        "".join(f"file '{clip.as_posix()}'\n" for clip in clips),
+        encoding="utf-8",
+    )
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(manifest),
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+            "-pix_fmt", "yuv420p", "-an", str(output),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _trim_video(source: Path, output: Path, seconds: float) -> None:
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-i", str(source), "-t", f"{float(seconds):.3f}",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+            "-pix_fmt", "yuv420p", "-an", str(output),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _director_timeline(payload: dict) -> list[dict]:
+    raw = payload.get("director_timeline")
+    if not isinstance(raw, list):
+        return []
+    timeline = []
+    for item in raw[:6]:
+        if not isinstance(item, dict):
+            continue
+        try:
+            start = float(item.get("start"))
+            end = float(item.get("end"))
+        except (TypeError, ValueError):
+            continue
+        if end <= start:
+            continue
+        timeline.append(
+            {
+                "start": max(0.0, start),
+                "end": max(0.0, end),
+                "visual": str(item.get("visual") or "").strip(),
+                "camera": str(item.get("camera") or "").strip(),
+                "narration": str(item.get("narration") or "").strip(),
+                "caption": str(item.get("caption") or "").strip(),
+                "audio": str(item.get("audio") or "").strip(),
+            }
+        )
+    return timeline
+
+
+def _segment_prompt(payload: dict, beat: dict, index: int, total: int) -> str:
+    style = str(payload.get("director_visual_style") or "").strip()
+    ending = str(payload.get("director_ending") or "").strip()
+    visual = str(beat.get("visual") or "").strip()
+    camera = str(beat.get("camera") or "").strip()
+
+    lines = [
+        f"Shot {index + 1} of {total}.",
+        "Live-action cinematic footage with genuine physical movement.",
+        "Keep the same person's identity, face, hair, wardrobe and environment stable.",
+        "Natural realistic anatomy, hands and fingers. No morphing, no melting, no duplicated features.",
+        "Do not make a still photograph with digital zoom. The subject must move, blink, breathe and react naturally.",
+    ]
+    if visual:
+        lines.append("ACTION: " + visual)
+    if camera:
+        lines.append("CAMERA: " + camera)
+    if style:
+        lines.append("STYLE: " + style)
+    if index == total - 1 and ending:
+        lines.append("ENDING CAMERA ACTION: " + ending)
+    lines.append("No subtitles, captions or lower-third text overlays.")
+    return "\n".join(lines)
+
+
+def _render_director_sequence(
+    payload: dict,
+    tmp: Path,
+    aspect: str,
+    steps: int,
+    seed: int,
+    initial_reference: Path | None = None,
+) -> Path | None:
+    timeline = _director_timeline(payload)
+    if len(timeline) < 2:
+        return None
+
+    clips: list[Path] = []
+    reference = initial_reference
+    for index, beat in enumerate(timeline):
+        seconds = max(2.0, min(10.0, float(beat["end"]) - float(beat["start"])))
+        clip = tmp / f"director-{index:02d}.mp4"
+        prompt = _segment_prompt(payload, beat, index, len(timeline))
+        _run_normal_segment(
+            prompt=prompt,
+            aspect=aspect,
+            frames=_frames(seconds),
+            steps=steps,
+            seed=seed + index,
+            output=clip,
+            reference=reference,
+        )
+        clips.append(clip)
+        if index < len(timeline) - 1:
+            reference = tmp / f"director-{index:02d}-last.png"
+            _extract_last_frame(clip, reference)
+
+    combined = tmp / "director-combined.mp4"
+    _concat_many(clips, combined)
+    total_seconds = max(float(item["end"]) for item in timeline)
+    trimmed = tmp / "director-trimmed.mp4"
+    _trim_video(combined, trimmed, total_seconds)
+    return trimmed
+
+
+def _looks_portuguese(text: str) -> bool:
+    value = f" {str(text or '').lower()} "
+    clues = [
+        " até ", " não ", " mãos ", " quando ", " dela ", " dele ",
+        " apareceu ", " lista ", " dia ", " nome ", " brasileira", " brasileiro",
+        " portugu", "pt-br",
+    ]
+    return any(clue in value for clue in clues)
+
+
+def _tts_config(payload: dict, narration_text: str) -> tuple[str, str, float]:
+    direction = str(payload.get("director_voiceover") or "")
+    combined = f"{direction} {narration_text}".lower()
+    portuguese = _looks_portuguese(combined)
+    female = "female" in combined or "femin" in combined or "woman" in combined or "mulher" in combined
+    male = "male" in combined or "mascul" in combined or "man " in combined or "homem" in combined
+
+    if portuguese:
+        voice = "pm_alex" if male and not female else "pf_dora"
+        lang = "p"
+    else:
+        voice = "am_adam" if male and not female else "af_heart"
+        lang = "a"
+
+    speed = 0.96 if any(word in combined for word in ["warm", "emotional", "documentary", "calm", "natural"]) else 1.0
+    return lang, voice, speed
+
+
+def _synthesize_kokoro(text: str, output: Path, lang: str, voice: str, speed: float) -> None:
+    import numpy as np
+    import soundfile as sf
+    from kokoro import KPipeline
+
+    pipeline = KPipeline(lang_code=lang)
+    chunks = []
+    for _, _, audio in pipeline(text, voice=voice, speed=speed):
+        chunks.append(np.asarray(audio, dtype=np.float32))
+    if not chunks:
+        raise RuntimeError("Kokoro returned no audio")
+    data = np.concatenate(chunks)
+    sf.write(str(output), data, 24000)
+
+
+def _fit_audio_to_window(source: Path, output: Path, target_seconds: float) -> None:
+    import soundfile as sf
+
+    duration = float(sf.info(str(source)).duration or 0.0)
+    target = max(0.25, float(target_seconds))
+    if duration <= 0:
+        raise RuntimeError("Generated narration is empty")
+
+    filters = []
+    if duration > target:
+        ratio = duration / target
+        while ratio > 2.0:
+            filters.append("atempo=2.0")
+            ratio /= 2.0
+        while ratio < 0.5:
+            filters.append("atempo=0.5")
+            ratio /= 0.5
+        filters.append(f"atempo={ratio:.5f}")
+    filters.append(f"apad=pad_dur={target:.3f}")
+    filters.append(f"atrim=duration={target:.3f}")
+
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-i", str(source),
+            "-af", ",".join(filters),
+            "-ar", "48000", "-ac", "2", str(output),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _make_piano_note(output: Path, seconds: float = 0.9) -> None:
+    expr = (
+        "0.22*(sin(2*PI*261.63*t)*exp(-3.2*t)"
+        "+0.45*sin(2*PI*523.25*t)*exp(-4.2*t)"
+        "+0.20*sin(2*PI*784.88*t)*exp(-5.0*t))"
+    )
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-f", "lavfi",
+            "-i", f"aevalsrc={expr}:s=48000:d={float(seconds):.3f}",
+            "-ac", "2", str(output),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _build_director_audio(payload: dict, tmp: Path, total_seconds: float) -> Path | None:
+    timeline = _director_timeline(payload)
+    narration_items = [item for item in timeline if item.get("narration")]
+    has_piano = any("piano" in str(item.get("audio") or "").lower() for item in timeline)
+    if not narration_items and not has_piano:
+        return None
+
+    narration_text = " ".join(str(item.get("narration") or "") for item in narration_items)
+    lang, voice, speed = _tts_config(payload, narration_text)
+    inputs = []
+    filters = []
+    mix_labels = []
+
+    for index, item in enumerate(narration_items):
+        raw = tmp / f"voice-{index:02d}-raw.wav"
+        fitted = tmp / f"voice-{index:02d}.wav"
+        window = max(0.35, float(item["end"]) - float(item["start"]))
+        _synthesize_kokoro(str(item["narration"]), raw, lang, voice, speed)
+        _fit_audio_to_window(raw, fitted, window)
+        inputs.extend(["-i", str(fitted)])
+        delay_ms = max(0, int(round(float(item["start"]) * 1000)))
+        filters.append(f"[{len(mix_labels)}:a]adelay={delay_ms}|{delay_ms}[a{len(mix_labels)}]")
+        mix_labels.append(f"[a{len(mix_labels)}]")
+
+    if has_piano:
+        piano_item = next(item for item in timeline if "piano" in str(item.get("audio") or "").lower())
+        piano = tmp / "piano.wav"
+        _make_piano_note(piano)
+        input_index = len(mix_labels)
+        inputs.extend(["-i", str(piano)])
+        delay_ms = max(0, int(round(float(piano_item["start"]) * 1000)))
+        filters.append(f"[{input_index}:a]adelay={delay_ms}|{delay_ms}[a{input_index}]")
+        mix_labels.append(f"[a{input_index}]")
+
+    mixed = tmp / "director-audio.wav"
+    filters.append(
+        "".join(mix_labels) +
+        f"amix=inputs={len(mix_labels)}:normalize=0:duration=longest,"
+        f"atrim=duration={float(total_seconds):.3f},alimiter=limit=0.95[aout]"
+    )
+    subprocess.run(
+        [
+            "ffmpeg", "-y", *inputs,
+            "-filter_complex", ";".join(filters),
+            "-map", "[aout]", "-ar", "48000", "-ac", "2", str(mixed),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return mixed
+
+
+def _wrapped_caption(text: str, width: int) -> str:
+    import textwrap
+
+    words = " ".join(str(text or "").split())
+    return "\n".join(textwrap.wrap(words, width=max(12, width), break_long_words=False))
+
+
+def _overlay_director_captions(source: Path, payload: dict, output: Path, aspect: str) -> bool:
+    timeline = [item for item in _director_timeline(payload) if item.get("caption")]
+    if not timeline:
+        return False
+
+    filters = []
+    for index, item in enumerate(timeline):
+        caption_file = output.with_name(f"caption-{index:02d}.txt")
+        width = 28 if aspect == "9:16" else 44
+        caption_file.write_text(_wrapped_caption(str(item["caption"]), width), encoding="utf-8")
+        start = float(item["start"])
+        end = float(item["end"])
+        fontsize = 36 if aspect == "9:16" else 32
+        margin = 130 if aspect == "9:16" else 75
+        filters.append(
+            "drawtext="
+            "fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:"
+            f"textfile='{caption_file.as_posix()}':"
+            "fontcolor=white:"
+            f"fontsize={fontsize}:"
+            "line_spacing=5:"
+            "box=1:boxcolor=black@0.58:boxborderw=12:"
+            "x=(w-text_w)/2:"
+            f"y=h-text_h-{margin}:"
+            f"enable='between(t,{start:.3f},{end:.3f})'"
+        )
+
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-i", str(source),
+            "-vf", ",".join(filters),
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+            "-pix_fmt", "yuv420p", "-an", str(output),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return True
+
+
+def _mux_director_audio(video: Path, audio: Path, output: Path, seconds: float) -> None:
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-i", str(video), "-i", str(audio),
+            "-t", f"{float(seconds):.3f}",
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+            "-movflags", "+faststart", str(output),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 def _upload(payload: dict, output_path: Path) -> str:
     import requests
 
