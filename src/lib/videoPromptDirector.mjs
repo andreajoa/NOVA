@@ -375,6 +375,8 @@ export function directVideoPrompt(options = {}) {
   return {
     prompt: directed,
     visualPrompt,
+    visualStyle: style,
+    endingDirection: ending,
     voiceoverDirection: voiceover,
     negativePrompt: clean(options.negativePrompt),
     originalPrompt: original,
