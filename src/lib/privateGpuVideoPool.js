@@ -52,6 +52,28 @@ function workersForTask(task) {
   return workerConfigs().filter((worker) => worker.declaredTasks.has(task));
 }
 
+function workersForInput(input = {}) {
+  const task = String(input.task || "text-to-video");
+  const workers = workersForInput(input);
+  const director = input?.director || {};
+  const requiresDirectorWorker = Boolean(
+    director.complex &&
+    (
+      director.audioRequired ||
+      director.hasCaptions ||
+      Number(director.beatCount || 0) > 1
+    )
+  );
+
+  // The Modal worker performs NOVA's multi-shot render + deterministic
+  // narration/caption post-production. Lightning remains a general video
+  // fallback, but must not silently drop director features.
+  if (requiresDirectorWorker) {
+    return workers.filter((worker) => worker.id === "modal");
+  }
+  return workers;
+}
+
 export function hasPrivateGpuVideoPool() {
   return workerConfigs().length > 0;
 }
@@ -279,7 +301,7 @@ export async function retryPrivateGpuVideoJob({ job, callbackToken, origin }) {
   }
 
   const task = String(job.input.task || "");
-  const workers = workersForTask(task);
+  const workers = workersForInput(job.input);
   const currentIndex = workers.findIndex((worker) => worker.id === job.engine);
   const remaining = currentIndex >= 0 ? workers.slice(currentIndex + 1) : workers;
 
