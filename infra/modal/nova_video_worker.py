@@ -654,7 +654,7 @@ def _normal_generate(payload: dict) -> str:
 
     duration = max(5, min(10, int(payload.get("duration") or 5)))
     aspect = str(payload.get("aspect_ratio") or "16:9")
-    steps = max(4, min(24, int(os.environ.get("NOVA_WAN_SAMPLE_STEPS", "8"))))
+    steps = max(8, min(24, int(os.environ.get("NOVA_WAN_SAMPLE_STEPS", "14"))))
     seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
 
     try:
@@ -673,25 +673,60 @@ def _normal_generate(payload: dict) -> str:
                 _download(str(payload.get("source_video_url") or ""), source_video)
                 _extract_last_frame(source_video, reference)
 
-            _run_normal_segment(
-                prompt=prompt,
-                aspect=aspect,
-                frames=_frames(duration),
-                steps=steps,
-                seed=seed,
-                output=segment,
-                reference=reference,
-            )
+            directed = None
+            if task in {"text-to-video", "image-to-video"}:
+                directed = _render_director_sequence(
+                    payload=payload,
+                    tmp=tmp,
+                    aspect=aspect,
+                    steps=steps,
+                    seed=seed,
+                    initial_reference=reference,
+                )
 
-            result = segment
+            if directed is None:
+                _run_normal_segment(
+                    prompt=prompt,
+                    aspect=aspect,
+                    frames=_frames(duration),
+                    steps=steps,
+                    seed=seed,
+                    output=segment,
+                    reference=reference,
+                )
+                result = segment
+            else:
+                result = directed
+
             if aspect == "1:1":
                 square = tmp / "square.mp4"
                 _crop_square(result, square)
                 result = square
+
             if source_video is not None:
                 combined = tmp / "combined.mp4"
                 _concat(source_video, result, combined)
                 result = combined
+
+            # Captions and narration are deterministic post-production. This
+            # keeps typography exact and lets Wan spend its capacity on motion,
+            # anatomy, camera and continuity.
+            if source_video is None and _director_timeline(payload):
+                captioned = tmp / "captioned.mp4"
+                if _overlay_director_captions(result, payload, captioned, aspect):
+                    result = captioned
+
+                timeline = _director_timeline(payload)
+                total_seconds = max(
+                    float(duration),
+                    max((float(item["end"]) for item in timeline), default=float(duration)),
+                )
+                audio = _build_director_audio(payload, tmp, total_seconds)
+                if audio is not None:
+                    mixed = tmp / "final-with-audio.mp4"
+                    _mux_director_audio(result, audio, mixed, total_seconds)
+                    result = mixed
+
             return _upload(payload, result)
     except Exception:
         _notify(payload, "failed", "GENERATION_FAILED")
