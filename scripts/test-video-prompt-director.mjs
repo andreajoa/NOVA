@@ -55,6 +55,13 @@ assert.match(
   /ATÉ HOJE, A MARIANA SENTE O TREMOR NAS MÃOS/
 );
 assert.match(directed.prompt, /fast whip pan to the right with motion blur/);
+assert.match(directed.visualPrompt, /genuine live-action motion/i);
+assert.match(directed.visualPrompt, /Do not render subtitles, captions, lower thirds/i);
+assert.doesNotMatch(directed.visualPrompt, /ATÉ HOJE, A MARIANA SENTE O TREMOR NAS MÃOS/);
+assert.equal(directed.visualStyle.includes("Fujifilm X-T5"), true);
+assert.equal(directed.endingDirection.includes("whip pan"), true);
+assert.equal(directed.beats[0].narration.startsWith("Até hoje"), true);
+
 
 const constrained = directVideoPrompt({
   prompt: complexPrompt,

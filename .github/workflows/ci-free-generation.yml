@@ -7,6 +7,7 @@ on:
       - main
       - feat/free-open-image-video
       - feat/complex-video-prompt-director
+      - fix/free-video-quality-pipeline
     paths:
       - "src/app/api/free-usage/**"
       - "src/app/api/free-video-generate/**"
@@ -131,6 +132,18 @@ jobs:
           grep -q 'directVideoPrompt' src/app/api/free-video-generate/route.js
           grep -q 'NOVA Prompt Director ativo' src/components/NovaFreeVideoStudio.jsx
           grep -q 'audioRequired' src/lib/verifiedVideoRuntime.js
+          grep -q 'director_timeline' src/app/api/free-video-generate/route.js
+          grep -q 'kokoro>=0.9.2' infra/modal/nova_video_worker.py
+          grep -q '_render_director_sequence' infra/modal/nova_video_worker.py
+          grep -q '_overlay_director_captions' infra/modal/nova_video_worker.py
+          grep -q '_build_director_audio' infra/modal/nova_video_worker.py
+          grep -q 'smoke_complex_director' infra/modal/nova_video_worker.py
+          grep -q 'const workers = workersForInput(input);' src/lib/privateGpuVideoPool.js
+          grep -q 'const workers = workersForTask(task);' src/lib/privateGpuVideoPool.js
+          if grep -q 'normal_generate = ' infra/modal/apply_quality_patch.py; then
+            echo 'Modal quality patch must not replace the director generation function.'
+            exit 1
+          fi
 
           if grep -q 'useSearchParams' src/app/oauth/callback/huggingface/page.jsx; then
             echo 'OAuth callback must not read search params during prerender.'

@@ -40,7 +40,7 @@ jobs:
           path.write_text(text, encoding="utf-8")
           PY
 
-      - name: Apply measured Wan fast profile
+      - name: Apply measured Wan quality profile
         run: python infra/modal/apply_quality_patch.py
 
       - name: Validate worker syntax
@@ -72,7 +72,7 @@ jobs:
           modal secret create nova-video-engine \
             NOVA_VIDEO_WORKER_SECRET="$NOVA_VIDEO_WORKER_SECRET" \
             NOVA_ENABLE_SPEECH="1" \
-            NOVA_WAN_SAMPLE_STEPS="8" \
+            NOVA_WAN_SAMPLE_STEPS="12" \
             NOVA_WAN_SPEECH_STEPS="20" \
             --force
 
@@ -100,6 +100,13 @@ jobs:
               json.dump({"url": url}, handle, indent=2)
           print(f"NOVA Modal endpoint: {url or 'not printed by CLI'}")
           PY
+
+      - name: Smoke test complex director
+        if: steps.config.outputs.configured == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          modal run infra/modal/nova_video_worker.py::smoke_complex_director
 
       - name: Store Modal endpoint artifact
         if: steps.config.outputs.configured == 'true'
