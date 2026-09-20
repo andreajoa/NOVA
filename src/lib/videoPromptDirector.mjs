@@ -189,6 +189,45 @@ function numberText(value) {
   return n.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }
 
+function buildVisualPrompt(data) {
+  const lines = [
+    "NOVA VISUAL DIRECTOR",
+    "Generate genuine live-action motion, not a still image with zoom or pan.",
+    "Human anatomy must remain stable: consistent face, realistic hands and fingers, natural blinking, breathing and micro-expressions.",
+    "Avoid morphing, melting, duplicated fingers, warped eyes, frozen poses, slideshow motion and Ken Burns effects.",
+    "Preserve the same person, wardrobe and environment across the sequence.",
+  ];
+
+  if (data.prefix) {
+    lines.push("", "MASTER VISUAL DIRECTION:", data.prefix);
+  }
+
+  if (data.beats.length) {
+    lines.push("", "SHOT TIMELINE:");
+    for (const beat of data.beats) {
+      lines.push("[" + numberText(beat.start) + "s-" + numberText(beat.end) + "s]");
+      if (beat.visual) lines.push("VISUAL ACTION: " + beat.visual);
+      if (beat.camera) lines.push("CAMERA: " + beat.camera);
+      lines.push("The subject must physically act and react during this beat; do not hold a static pose.");
+    }
+  }
+
+  if (data.style) {
+    lines.push("", "VISUAL STYLE / CAMERA / LIGHTING:", data.style);
+  }
+
+  if (data.ending) {
+    lines.push("", "FINAL CAMERA ACTION:", data.ending);
+  }
+
+  lines.push(
+    "",
+    "Do not render subtitles, captions, lower thirds or narration text inside the generated image. Those are composited after generation."
+  );
+
+  return lines.join("\n");
+}
+
 function buildDirectedPrompt(data) {
   const lines = [
     "NOVA VIDEO DIRECTOR - EXECUTION SCRIPT",
@@ -324,8 +363,19 @@ export function directVideoPrompt(options = {}) {
       })
     : original;
 
+  const visualPrompt = summary.complex
+    ? buildVisualPrompt({
+        prefix,
+        style,
+        ending,
+        beats: scaledBeats,
+      })
+    : original;
+
   return {
     prompt: directed,
+    visualPrompt,
+    voiceoverDirection: voiceover,
     negativePrompt: clean(options.negativePrompt),
     originalPrompt: original,
     applied: {
