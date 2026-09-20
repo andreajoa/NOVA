@@ -372,6 +372,14 @@ def _synthesize_kokoro(text: str, output: Path, lang: str, voice: str, speed: fl
     data = np.concatenate(chunks)
     sf.write(str(output), data, 24000)
 
+    marker = MODEL_ROOT / ".nova-kokoro-ready"
+    if not marker.exists():
+        marker.write_text("hexgrad/Kokoro-82M", encoding="utf-8")
+        try:
+            model_volume.commit()
+        except Exception:
+            pass
+
 
 def _fit_audio_to_window(source: Path, output: Path, target_seconds: float) -> None:
     import soundfile as sf
@@ -792,6 +800,75 @@ def _speech_generate(payload: dict) -> str:
     except Exception:
         _notify(payload, "failed", "SPEECH_GENERATION_FAILED")
         raise
+
+
+@app.function(
+    image=base_image,
+    gpu="H100",
+    cpu=4.0,
+    memory=65536,
+    volumes={str(MODEL_ROOT): model_volume},
+    timeout=12 * 60,
+)
+def smoke_complex_director():
+    """Render a short real multi-shot sample including pt-BR TTS and captions."""
+    _prepare_normal_wan_runtime()
+    _ensure_model(TI2V_REPO, TI2V_DIR)
+    payload = {
+        "prompt": "Brazilian documentary reconstruction, natural live-action motion.",
+        "duration": 4,
+        "aspect_ratio": "16:9",
+        "director_visual_style": "handheld documentary camera, realistic skin, soft window light",
+        "director_voiceover": "real Brazilian female documentary narrator, warm and natural",
+        "director_timeline": [
+            {
+                "start": 0,
+                "end": 2,
+                "visual": "close-up of a woman's trembling hands holding a smartphone, natural finger motion",
+                "camera": "subtle handheld close-up",
+                "narration": "Até hoje, ela lembra daquele momento.",
+                "caption": "ATÉ HOJE, ELA LEMBRA DAQUELE MOMENTO",
+                "audio": "",
+            },
+            {
+                "start": 2,
+                "end": 4,
+                "visual": "camera moves to her emotional face as she starts to smile through tears",
+                "camera": "gentle push-in then slight pull-back",
+                "narration": "O nome dela apareceu na lista.",
+                "caption": "O NOME DELA APARECEU NA LISTA",
+                "audio": "",
+            },
+        ],
+    }
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        visual = _render_director_sequence(
+            payload=payload,
+            tmp=tmp,
+            aspect="16:9",
+            steps=8,
+            seed=20260920,
+        )
+        if visual is None or not visual.exists():
+            raise RuntimeError("Director smoke did not render a visual sequence")
+        captioned = tmp / "captioned.mp4"
+        if not _overlay_director_captions(visual, payload, captioned, "16:9"):
+            raise RuntimeError("Director smoke did not render captions")
+        audio = _build_director_audio(payload, tmp, 4.0)
+        if audio is None or not audio.exists():
+            raise RuntimeError("Director smoke did not synthesize narration")
+        final = tmp / "final.mp4"
+        _mux_director_audio(captioned, audio, final, 4.0)
+        if not final.exists() or final.stat().st_size < 50_000:
+            raise RuntimeError("Director smoke final MP4 is invalid")
+        return {
+            "ok": True,
+            "bytes": final.stat().st_size,
+            "timeline_beats": 2,
+            "captions": True,
+            "pt_br_tts": True,
+        }
 
 
 @app.function(image=base_image, gpu="L4", timeout=120, memory=8192)
