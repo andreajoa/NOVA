@@ -387,6 +387,17 @@ export async function POST(req) {
     ...(Number.isFinite(Number(body.seed)) && { seed: Number(body.seed) }),
   };
 
+  // Private NOVA workers render visuals separately from narration/captions so
+  // complex prompts do not force one diffusion pass to solve motion, anatomy,
+  // speech and typography at the same time.
+  const privateInput = {
+    ...input,
+    prompt: director.visualPrompt || director.prompt,
+    director_timeline: director.beats,
+    director_voiceover: director.voiceoverDirection || "",
+    director_original_prompt: director.originalPrompt,
+  };
+
   try {
     let result = null;
 
@@ -396,16 +407,15 @@ export async function POST(req) {
         error.code = "NOVA_SPEECH_VIDEO_ENGINE_UNAVAILABLE";
         throw error;
       }
-      result = await runPrivateGpuVideoPool(input, {
+      result = await runPrivateGpuVideoPool(privateInput, {
         userId,
         quotaDebited: Boolean(quota?.ok),
         origin: req.nextUrl.origin,
       });
     } else if (mode === "text-to-video" || mode === "image-to-video") {
-      const usePrivatePool = hasPrivateGpuVideoPool() && !director.providerHints.audioRequired;
-      if (usePrivatePool) {
+      if (hasPrivateGpuVideoPool()) {
         try {
-          result = await runPrivateGpuVideoPool(input, {
+          result = await runPrivateGpuVideoPool(privateInput, {
             userId,
             quotaDebited: Boolean(quota?.ok),
             origin: req.nextUrl.origin,
