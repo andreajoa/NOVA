@@ -95,7 +95,11 @@ async function handleFailedCallback(jobId, token, req, errorCode) {
       });
     }
 
-    if (["text-to-video", "image-to-video"].includes(String(job.input.task || ""))) {
+    const complexDirector = Boolean(job.input?.director?.complex);
+    if (
+      !complexDirector &&
+      ["text-to-video", "image-to-video"].includes(String(job.input.task || ""))
+    ) {
       try {
         const publicRetry = await retryFreeVideoJobOnPublicFallback({
           job,
@@ -113,6 +117,11 @@ async function handleFailedCallback(jobId, token, req, errorCode) {
           message: String(publicError?.message || publicError).slice(0, 700),
         });
       }
+    } else if (complexDirector) {
+      console.warn("[NOVA_VIDEO] complex director failure will not degrade to single-pass public video", {
+        jobId,
+        engine: job.engine,
+      });
     }
   }
 
