@@ -24,16 +24,20 @@ export function canUseZeroCostVideoWorker() {
 
 export async function isZeroCostVideoWorkerHealthy() {
   const worker = privateWorkerConfig();
-  if (!worker) {
-    // The public fallback is queue-based and can cold-start. Treat it as
-    // available here and let the actual submit return a precise failure if the
-    // upstream queue is temporarily unavailable.
-    return true;
-  }
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 4000);
+
   try {
+    if (!worker) {
+      const response = await fetch(`${FALLBACK_GRADIO_BASE}/config`, {
+        method: "GET",
+        cache: "no-store",
+        signal: controller.signal,
+        headers: { "User-Agent": "NOVA-free-video-health/1.0" },
+      });
+      return response.ok;
+    }
+
     const response = await fetch(`${worker.url}/health`, {
       method: "GET",
       cache: "no-store",
