@@ -186,6 +186,41 @@ async function runSynchronousPublicGeneration({ input, userId, quota, hfToken })
   };
 }
 
+async function runPublicGenerationWithQueueFallback({
+  input,
+  userId,
+  quota,
+  hfToken,
+  origin,
+}) {
+  try {
+    return await runSynchronousPublicGeneration({ input, userId, quota, hfToken });
+  } catch (syncError) {
+    console.warn("[NOVA_VIDEO] synchronous public pool failed; trying async queue", {
+      task: input.task,
+      code: syncError?.code || null,
+      message: String(syncError?.message || syncError).slice(0, 500),
+    });
+
+    if (!canUseZeroCostVideoWorker() || !(await isZeroCostVideoWorkerHealthy())) {
+      throw syncError;
+    }
+
+    const queued = await runZeroCostVideo(input, {
+      userId,
+      quotaDebited: Boolean(quota?.ok),
+      origin,
+    });
+
+    return {
+      processing: true,
+      jobId: queued.jobId,
+      engine: "legacy-free",
+      storage: "provider",
+    };
+  }
+}
+
 export async function POST(req) {
   const session = await auth();
   const userId = session.userId || null;
@@ -365,19 +400,21 @@ export async function POST(req) {
             code: poolError?.code || null,
             message: String(poolError?.message || poolError).slice(0, 500),
           });
-          result = await runSynchronousPublicGeneration({
+          result = await runPublicGenerationWithQueueFallback({
             input,
             userId,
             quota,
             hfToken,
+            origin: req.nextUrl.origin,
           });
         }
       } else {
-        result = await runSynchronousPublicGeneration({
+        result = await runPublicGenerationWithQueueFallback({
           input,
           userId,
           quota,
           hfToken,
+          origin: req.nextUrl.origin,
         });
       }
     } else {
