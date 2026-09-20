@@ -40,7 +40,7 @@ jobs:
           path.write_text(text, encoding="utf-8")
           PY
 
-      - name: Apply measured Wan fast profile
+      - name: Apply measured Wan quality profile
         run: python infra/modal/apply_quality_patch.py
 
       - name: Validate worker syntax
@@ -72,7 +72,7 @@ jobs:
           modal secret create nova-video-engine \
             NOVA_VIDEO_WORKER_SECRET="$NOVA_VIDEO_WORKER_SECRET" \
             NOVA_ENABLE_SPEECH="1" \
-            NOVA_WAN_SAMPLE_STEPS="8" \
+            NOVA_WAN_SAMPLE_STEPS="12" \
             NOVA_WAN_SPEECH_STEPS="20" \
             --force
 
