@@ -1,8 +1,9 @@
 const SUPPORTED_ASPECTS = ["16:9", "9:16", "1:1"];
 const SUPPORTED_FPS = [24];
-
-const FIELD_NAMES = [
+const BEAT_FIELDS = new Set([
   "VISUAL",
+  "ACTION",
+  "CAMERA",
   "NARRATION",
   "NARRATOR",
   "CAPTION",
@@ -12,9 +13,7 @@ const FIELD_NAMES = [
   "MUSIC",
   "DIALOGUE",
   "DIALOG",
-  "CAMERA",
-  "ACTION",
-];
+]);
 
 function clean(value) {
   return String(value || "")
@@ -23,142 +22,159 @@ function clean(value) {
     .trim();
 }
 
-function unquote(value) {
+function stripQuotes(value) {
   const raw = clean(value);
-  if (
-    raw.length >= 2 &&
-    ((raw.startsWith('"') && raw.endsWith('"')) ||
-      (raw.startsWith("'") && raw.endsWith("'")))
-  ) {
+  if (raw.length < 2) return raw;
+  const first = raw[0];
+  const last = raw[raw.length - 1];
+  if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
     return raw.slice(1, -1).trim();
   }
   return raw;
 }
 
-function normalizeAspect(value) {
-  const raw = String(value || "").trim();
-  return SUPPORTED_ASPECTS.includes(raw) ? raw : null;
-}
-
 function firstAspect(text) {
-  const match = String(text || "").match(/\b(16\s*:\s*1|9\s*:\*16|1\s*:\s*1)\b/);
-  return match ? normalizeAspect(match[1].replace(/\s+/g, "")) : null;
+  const match = clean(text).match(/\b(16\s*:\s*9|9\s*:\s*16|1\s*:\s*1)\b/);
+  if (!match) return null;
+  return match[1].replace(/\s+/g, "");
 }
 
 function firstFps(text) {
-  const match = String(text || "").match(/\b(\d̻1,3}(?:\.\d+)?)\s*fps\b/i);
+  const match = clean(text).match(/\b(\d{1,3}(?:\.\d+)?)\s*fps\b/i);
   return match ? Number(match[1]) : null;
 }
 
-function splitFieldSegments(body) {
-  const names = FIELD_NAMES.join("|");
-  const re = new RegExp(
-    `(?:^|\\|)\\s*(${names})\\s*:\\s*([\\s\\S]*?)(?=\\s*\\|\\s*(?:\${names})\\s*:|$)`,
-    "gi"
-  );
+function labelIndex(text, label, from = 0) {
+  const source = String(text || "");
+  const upper = source.toUpperCase();
+  const needle = String(label || "").toUpperCase() + ":";
+  if (from === 0 && upper.startsWith(needle)) return 0;
+  const index = upper.indexOf("\n" + needle, from);
+  return index >= 0 ? index + 1 : -1;
+}
+
+function extractSection(text, label, nextLabels = []) {
+  const source = clean(text);
+  const start = labelIndex(source, label, 0);
+  if (start < 0) return "";
+  const bodyStart = start + String(label).length + 1;
+  let end = source.length;
+  for (const next of nextLabels) {
+    const index = labelIndex(source, next, bodyStart);
+    if (index >= 0 && index < end) end = index;
+  }
+  return clean(source.slice(bodyStart, end));
+}
+
+function firstTopLevelIndex(text) {
+  const labels = ["VOICEOVER", "TIMED BEATS", "STYLE", "ENDS", "END"];
+  const indexes = labels.map((label) => labelIndex(text, label, 0)).filter((value) => value >= 0);
+  return indexes.length ? Math.min(...indexes) : -1;
+}
+
+function promptPrefix(text) {
+  const source = clean(text);
+  const index = firstTopLevelIndex(source);
+  return index >= 0 ? clean(source.slice(0, index)) : source;
+}
+
+function nextTopLevelIndex(text, from) {
+  const labels = ["STYLE", "ENDS", "END", "VOICEOVER", "TIMED BEATS"];
+  const indexes = labels.map((label) => labelIndex(text, label, from)).filter((value) => value >= 0);
+  return indexes.length ? Math.min(...indexes) : -1;
+}
+
+function parseBeatFields(body) {
   const fields = {};
-  for (const match of body.matchAll(re)) {
-    const key = String(match[1] || "").toUpperCase();
-    const value = clean(match[2]);
-    if (value) fields[key] = value;
+  const parts = String(body || "").split(/\s*\|\s*/);
+  for (const part of parts) {
+    const colon = part.indexOf(":");
+    if (colon <= 0) continue;
+    const label = part.slice(0, colon).trim().toUpperCase();
+    if (!BEAT_FIELDS.has(label)) continue;
+    const value = clean(part.slice(colon + 1));
+    if (value) fields[label] = value;
   }
   return fields;
 }
 
 function parseTimedBeats(text) {
   const source = clean(text);
-  const range = /(?:^|\n)\s*(\d+(?:\.\\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)\s*s?\s*\\|/g;
-  const matches = [...source.matchAll(range)];
+  const re = /(?:^|\n)\s*(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)\s*s?\s*\|/g;
+  const matches = [...source.matchAll(re)];
   if (!matches.length) return [];
 
-  return matches
-    .map((match, index) => {
-      const start = Number(match[1]);
-      const end = Number(match[2]);
-      const from = (match.index || 0) + match[0].length;
-      const to = index + 1 < matches.length ? matches[index + 1].index : source.length;
-      const body = source.slice(from, to).trim();
-      const fields = splitFieldSegments(body);
-
-      return {
-        start,
-        end,
-        visual: fields.VISUAL  || fields.ACTION || "",
-        narration: unquote(fields.NARRATION || fields.NARRATOR || fields.DIALOGUE || fields.DIALOG || ""),
-        caption: unquote(fields.CAPTION || fields.CAPTIONS || ""),
-        audio: fields.AUDIO || fields.SFX || fields.MUSIC || "",
-        camera: fields.CAMERA || "",
-        raw: body,
-      };
-    })
-    .filter((beat) => Number.isFinite(beat.start) && Number.isFinite(beat.end) && beat.end > beat.start);
-}
-
-function section(text, label, followingLabels = []) {
-  const escaped = [label, ...followingLabels]
-    .map((item) => String(item).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join("|");
-  const own = String(label).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(
-    `(?:^|\\n)\\s*\${own}\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*(?:${escaped})\\s*:|$)`,
-    "i"
-  );
-  return clean(text.match(re)?[1] || "");
-}
-
-function promptPrefix(text) {
-  const source = clean(text);
-  const indexCandidates = [
-    source.search(/(?:^|\n)\s*VOICEOVER\s*:/i),
-    source.search(/(?:^|\n)\s*TIMED\s+BEATS\s*:/i),
-    source.search(/(?:^|\n)\s*STYLE\s*:/i),
-    source.search(/(?:^|\n)\s*ENDS?\s*:/i),
-  ].filter((index) => index >= 0);
-  if (!indexCandidates.length) return source;
-  return clean(source.slice(0, Math.min(...indexCandidates)));
+  return matches.map((match, index) => {
+    const start = Number(match[1]);
+    const end = Number(match[2]);
+    const bodyStart = (match.index || 0) + match[0].length;
+    let bodyEnd = index + 1 < matches.length ? matches[index + 1].index : source.length;
+    const topLevelEnd = nextTopLevelIndex(source, bodyStart);
+    if (topLevelEnd >= 0 && topLevelEnd < bodyEnd) bodyEnd = topLevelEnd;
+    const fields = parseBeatFields(source.slice(bodyStart, bodyEnd));
+    return {
+      start,
+      end,
+      visual: fields.VISUAL || fields.ACTION || "",
+      camera: fields.CAMERA || "",
+      narration: stripQuotes(
+        fields.NARRATION || fields.NARRATOR || fields.DIALOGUE || fields.DIALOG || ""
+      ),
+      caption: stripQuotes(fields.CAPTION || fields.CAPTIONS || ""),
+      audio: fields.AUDIO || fields.SFX || fields.MUSIC || "",
+    };
+  }).filter((beat) => {
+    return Number.isFinite(beat.start) && Number.isFinite(beat.end) && beat.end > beat.start;
+  });
 }
 
 function requestedDurationFrom(text, beats) {
   if (beats.length) {
-    const end = Math.max(...beats.map((beat) => beat.end));
-    if (Number.isFinite(end) && end > 0) return end;
+    const value = Math.max(...beats.map((beat) => beat.end));
+    if (Number.isFinite(value) && value > 0) return value;
   }
-
-  const head = clean(text).slice(0, 800);
+  const head = clean(text).slice(0, 900);
   const match = head.match(/\b(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/i);
   return match ? Number(match[1]) : null;
 }
 
-function audioSignals(text, beats, voiceover) {
-  const source = String(text || "");
-  const hasBeatNarration = beats.some((beat) => beat.narration);
-  const hasBeatAudio = beats.some((beat) => beat.audio);
-  const explicit = /\b(VOICEOVER|NARRATION|NARRATOR|DIALOGUE|DIALOG|SFX|MUSIC|AUDIO!\s*:/i.test(source);
-  const spoken = /\b(real human voice|human voice|voice[- ]?over|off[- ]screen narration|narrator|spoken|speaks?|says?)\b/i.test(source);
-  return Boolean(voiceover || hasBeatNarration || hasBeatAudio || explicit || spoken);
+function detectAudio(text, beats, voiceover) {
+  const source = clean(text);
+  if (voiceover) return true;
+  if (beats.some((beat) => beat.narration || beat.audio)) return true;
+  return /\b(?:VOICEOVER|NARRATION|NARRATOR|DIALOGUE|DIALOG|AUDIO|SFX|MUSIC)\s*:/i.test(source) ||
+    /\b(?:human voice|voice[- ]?over|off[- ]screen narration|narrator|spoken|speaks?|says?)\b/i.test(source);
 }
 
-function pickDuration(requested, selected, allowed) {
-  const values = [...new Set((allowed || []).map(Number).filter((n) => Number.isFinite(n) && n > 0))].sort(
-    (a, b) => a - b
-  );
-  const selectedNumber = Number(selected);
-  if (requested && values.includes(Number(requested))) return Number(requested);
-  if (values.includes(selectedNumber)) return selectedNumber;
-  return values[0] || 5;
+function pickDuration(requested, selected, allowedDurations) {
+  const allowed = [...new Set((allowedDurations || []).map(Number).filter((n) => Number.isFinite(n) && n > 0))]
+    .sort((a, b) => a - b);
+  if (requested && allowed.includes(Number(requested))) return Number(requested);
+  if (allowed.includes(Number(selected))) return Number(selected);
+  return allowed[0] || 5;
 }
 
-function pickFps(requested, supported = SUPPORTED_FPS) {
-  const values = (supported || []).map(Number).filter((n) => Number.isFinite(n) && n > 0);
-  if (requested && values.includes(Number(requested))) return Number(requested);
-  return values[0] || 24;
+function pickAspect(requested, selected, supportedAspects) {
+  const supported = Array.isArray(supportedAspects) && supportedAspects.length
+    ? supportedAspects
+    : SUPPORTED_ASPECTS;
+  if (requested && supported.includes(requested)) return requested;
+  if (supported.includes(selected)) return selected;
+  return supported[0] || "16:9";
+}
+
+function pickFps(requested, supportedFps) {
+  const supported = (supportedFps || SUPPORTED_FPS)
+    .map(Number)
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (requested && supported.includes(Number(requested))) return Number(requested);
+  return supported[0] || 24;
 }
 
 function scaleBeats(beats, requestedDuration, appliedDuration) {
   if (!beats.length) return [];
   const base = Number(requestedDuration) || Math.max(...beats.map((beat) => beat.end));
-  const applied = Number(appliedDuration) || base;
-  const scale = base > 0 ? applied / base : 1;
+  const scale = base > 0 ? Number(appliedDuration) / base : 1;
   return beats.map((beat) => ({
     ...beat,
     start: Number((beat.start * scale).toFixed(2)),
@@ -166,92 +182,78 @@ function scaleBeats(beats, requestedDuration, appliedDuration) {
   }));
 }
 
-function formatSeconds(value) {
+function numberText(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "0";
-  return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  if (Number.isInteger(n)) return String(n);
+  return n.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }
 
-function buildDirectedPrompt({
-  original,
-  prefix,
-  voiceover,
-  style,
-  ending,
-  beats,
-  duration,
-  aspect,
-  fps,
-  requestedDuration,
-  requestedFps,
-}) {
+function buildDirectedPrompt(data) {
   const lines = [
-    "NOVA VIDEO DIRECTOR — EXECUTION SCRIPT",
-    `Create ONE continuous ${formatSeconds(duration)}-second audiovisual sequence.`,
-    `HARD RUNTIME SETTINGS: duration ${formatSeconds(duration)}s; aspect ratio ${aspect}; frame rate ${formatSeconds(fps)} fps.`,
-    "Follow the timeline in chronological order. Preserve subject identity, wardrobe, location continuity and screen direction across every beat.",
+    "NOVA VIDEO DIRECTOR - EXECUTION SCRIPT",
+    "Create ONE continuous " + numberText(data.duration) + "-second audiovisual sequence.",
+    "HARD RUNTIME SETTINGS: duration " + numberText(data.duration) + "s; aspect ratio " +
+      data.aspect + "; frame rate " + numberText(data.fps) + " fps.",
+    "Follow the timeline in chronological order.",
+    "Preserve subject identity, wardrobe, location continuity and screen direction across every beat.",
     "Do not invent extra scenes, extra people, extra logos, extra captions or extra written text unless explicitly requested.",
   ];
 
-  if (requestedDuration && Number(requestedDuration) !== Number(duration)) {
+  if (data.requestedDuration && Number(data.requestedDuration) !== Number(data.duration)) {
     lines.push(
-      `TIMING ADAPTATION: the source requested ${formatSeconds(requestedDuration)}s, but this runtime is ${formatSeconds(duration)}s. The beat timings below have already been proportionally remapped; follow the remapped times.`
+      "TIMING ADAPTATION: source requested " + numberText(data.requestedDuration) +
+      "s, but this runtime is " + numberText(data.duration) +
+      "s. Beat timings below are already proportionally remapped."
     );
   }
 
-  if (requestedFps && Number(requestedFps) !== Number(fps)) {
+  if (data.requestedFps && Number(data.requestedFps) !== Number(data.fps)) {
     lines.push(
-      `FRAME-RATE ADAPTATION: the source requested ${formatSeconds(requestedFps)} fps; render the same motion intent at the supported ${formatSeconds(fps)} fps.`
+      "FRAME-RATE ADAPTATION: source requested " + numberText(data.requestedFps) +
+      " fps; preserve the same motion intent at " + numberText(data.fps) + " fps."
     );
   }
 
-  if (prefix) {
-    lines.push("", "MASTER DIRECTION:", prefix);
-  }
+  if (data.prefix) lines.push("", "MASTER DIRECTION:", data.prefix);
 
-  if (voiceover) {
+  if (data.voiceover) {
     lines.push(
       "",
       "VOICE / AUDIO DIRECTION:",
-      voiceover,
-      "Treat quoted narration as exact spoken wording. Do not paraphrase it. Keep narration off-screen unless the source explicitly requests visible speech."
+      data.voiceover,
+      "Treat quoted narration as exact spoken wording. Do not paraphrase it.",
+      "Keep narration off-screen unless visible speech is explicitly requested."
     );
   }
 
-  if (beats.length) {
-    lines.push("", "TIMELINE — obey these beats as closely as possible:");
-    for (const beat of beats) {
-      lines.push(`[${formatSeconds(beat.start)}s-${formatSeconds(beat.end)}s]`);
-      if (beat.visual) lines.push(`VISUAL: ${beat.visual}`);
-      if (beat.camera) lines.push(`CAMERA: ${beat.camera}`);
+  if (data.beats.length) {
+    lines.push("", "TIMELINE - obey these beats as closely as possible:");
+    for (const beat of data.beats) {
+      lines.push("[" + numberText(beat.start) + "s-" + numberText(beat.end) + "s]");
+      if (beat.visual) lines.push("VISUAL: " + beat.visual);
+      if (beat.camera) lines.push("CAMERA: " + beat.camera);
       if (beat.narration) {
-        lines.push(`NARRATION — Exact words, do not paraphrase: "${beat.narration}"`);
+        lines.push('NARRATION - exact words, do not paraphrase: "' + beat.narration + '"');
       }
       if (beat.caption) {
         lines.push(
-          `ON-SCREEN CAPTION — render only this requested caption, spelled exactly if the model can render text: "${beat.caption}"`
+          'ON-SCREEN CAPTION - render only this requested caption, spelled exactly if possible: "' +
+            beat.caption + '"'
         );
       }
-      if (beat.audio) lines.push(`AUDIO / MUSIC / SFX: ${beat.audio}`);
+      if (beat.audio) lines.push("AUDIO / MUSIC / SFX: " + beat.audio);
     }
   }
 
-  if (style) {
-    lines.push("", "VISUAL STYLE / CAMERA / LIGHTING:", style);
-  }
-
-  if (ending) {
-    lines.push("", "FINAL SHOT / ENDING:", ending);
-  }
-
-  if (!prefix && !voiceover && !style && !ending && !beats.length) {
-    lines.push("", "SOURCE DIRECTION:", original);
-  }
+  if (data.style) lines.push("", "VISUAL STYLE / CAMERA / LIGHTING:", data.style);
+  if (data.ending) lines.push("", "FINAL SHOT / ENDING:", data.ending);
 
   lines.push(
     "",
-    "EXECUTION PRIORITY: ",
-    "1) temporal order and requested actions; 2) subject continuity; 3) camera and composition; 4) synchronized narration/audio; 5) requested on-screen text; 6) aesthetic style.",
+    "EXECUTION PRIORITY:",
+    "1) temporal order and requested actions; 2) subject continuity; 3) camera and composition; " +
+      "4) synchronized narration/audio; 5) requested on-screen text; 6) aesthetic style.",
     "If two instructions conflict, prefer the instruction tied to a specific timestamp."
   );
 
@@ -261,15 +263,15 @@ function buildDirectedPrompt({
 export function inspectVideoPrompt(prompt) {
   const original = clean(prompt);
   const beats = parseTimedBeats(original);
+  const prefix = promptPrefix(original);
+  const voiceover = extractSection(original, "VOICEOVER", ["TIMED BEATS", "STYLE", "ENDS", "END"]);
   const requestedDuration = requestedDurationFrom(original, beats);
-  const aspectRatio = firstAspect(promptPrefix(original)) || firstAspect(original);
-  const fps = firstFps(promptPrefix(original)) || firstFps(original);
-  const voiceover = section(original, "VOICEOVER", ["TIMED BEATS", "STYLE", "ENDS", "END"]);
+  const aspectRatio = firstAspect(prefix) || firstAspect(original);
+  const fps = firstFps(prefix) || firstFps(original);
   const hasNarration = Boolean(voiceover || beats.some((beat) => beat.narration));
   const hasCaptions = beats.some((beat) => beat.caption);
-  const audioRequired = audioSignals(original, beats, voiceover);
-  const complex =
-    beats.length > 0 ||
+  const audioRequired = detectAudio(original, beats, voiceover);
+  const complex = beats.length > 0 ||
     /\b(?:VOICEOVER|TIMED\s+BEATS|STYLE|ENDS?|NARRATION|CAPTION|CAMERA|AUDIO|SFX|MUSIC)\s*:/i.test(original) ||
     original.length >= 700;
 
@@ -285,41 +287,30 @@ export function inspectVideoPrompt(prompt) {
   };
 }
 
-export function directVideoPrompt({
-  prompt,
-  negativePrompt = "",
-  selectedDuration = 5,
-  selectedAspectRatio = "16:9",
-  allowedDurations = [5, 10],
-  supportedAspects = SUPPORTED_ASPECTS,
-  supportedFps = SUPPORTED_FPS,
-} = {}) {
-  const original = clean(prompt);
-  const beats = parseTimedBeats(original);
-  const requestedDuration = requestedDurationFrom(original, beats);
-  const requestedAspect = firstAspect(promptPrefix(original)) || firstAspect(original);
-  const requestedFps = firstFps(promptPrefix(original)) || firstFps(original);
-  const appliedDuration = pickDuration(requestedDuration, selectedDuration, allowedDurations);
-  const allowedAspects = Array.isArray(supportedAspects) && supportedAspects.length
-    ? supportedAspects
-    : SUPPORTED_ASPECTS;
-  const appliedAspect =
-    (requestedAspect && allowedAspects.includes(requestedAspect) && requestedAspect) ||
-    (allowedAspects.includes(selectedAspectRatio) && selectedAspectRatio) ||
-    allowedAspects[0] ||
-    "16:9";
-  const appliedFps = pickFps(requestedFps, supportedFps);
+export function directVideoPrompt(options = {}) {
+  const original = clean(options.prompt);
+  const selectedDuration = Number(options.selectedDuration || 5);
+  const selectedAspectRatio = options.selectedAspectRatio || "16:9";
+  const allowedDurations = options.allowedDurations || [5, 10];
+  const supportedAspects = options.supportedAspects || SUPPORTED_ASPECTS;
+  const supportedFps = options.supportedFps || SUPPORTED_FPS;
 
-  const voiceover = section(original, "VOICEOVER", ["TIMED􂅁TS", "STYLE", "ENDS", "END"]);
-  const style = section(original, "STYLE", ["ENDS", "END"]);
-  const ending = section(original, "ENDS", ["END"]) || section(original, "END");
+  const beats = parseTimedBeats(original);
   const prefix = promptPrefix(original);
+  const voiceover = extractSection(original, "VOICEOVER", ["TIMED BEATS", "STYLE", "ENDS", "END"]);
+  const style = extractSection(original, "STYLE", ["ENDS", "END"]);
+  const ending = extractSection(original, "ENDS", ["END"]) || extractSection(original, "END");
+  const requestedDuration = requestedDurationFrom(original, beats);
+  const requestedAspect = firstAspect(prefix) || firstAspect(original);
+  const requestedFps = firstFps(prefix) || firstFps(original);
+  const appliedDuration = pickDuration(requestedDuration, selectedDuration, allowedDurations);
+  const appliedAspect = pickAspect(requestedAspect, selectedAspectRatio, supportedAspects);
+  const appliedFps = pickFps(requestedFps, supportedFps);
   const scaledBeats = scaleBeats(beats, requestedDuration, appliedDuration);
   const summary = inspectVideoPrompt(original);
 
-  const directedPrompt = summary.complex
+  const directed = summary.complex
     ? buildDirectedPrompt({
-        original,
         prefix,
         voiceover,
         style,
@@ -334,16 +325,24 @@ export function directVideoPrompt({
     : original;
 
   return {
-    prompt: directedPrompt,
-    negativePrompt: clean(negativePrompt),
+    prompt: directed,
+    negativePrompt: clean(options.negativePrompt),
     originalPrompt: original,
-    applied: {},
-    requested: {},
+    applied: {
+      duration: appliedDuration,
+      aspectRatio: appliedAspect,
+      fps: appliedFps,
+    },
+    requested: {
+      duration: requestedDuration,
+      aspectRatio: requestedAspect,
+      fps: requestedFps,
+    },
     beats: scaledBeats,
     publicSummary: {
       ...summary,
       appliedDuration,
-      appliedAspectRatio, appliedAspect,
+      appliedAspectRatio: appliedAspect,
       appliedFps,
       optimized: summary.complex,
     },
