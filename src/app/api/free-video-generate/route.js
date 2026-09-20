@@ -423,11 +423,21 @@ export async function POST(req) {
             origin: req.nextUrl.origin,
           });
         } catch (poolError) {
-          console.warn("[NOVA_VIDEO] private GPU pool failed; falling back to public generation", {
+          console.warn("[NOVA_VIDEO] private GPU pool failed", {
             mode,
+            complexDirector: Boolean(director.providerHints.complex),
             code: poolError?.code || null,
             message: String(poolError?.message || poolError).slice(0, 500),
           });
+
+          // Complex prompts rely on NOVA's private director for multi-shot
+          // rendering, deterministic captions and separate narration. Falling
+          // back to a single public diffusion pass would silently regress to
+          // the low-motion / distorted result this pipeline was built to fix.
+          if (director.providerHints.complex) {
+            throw poolError;
+          }
+
           result = await runPublicGenerationWithQueueFallback({
             input,
             userId,
@@ -437,6 +447,12 @@ export async function POST(req) {
           });
         }
       } else {
+        if (director.providerHints.complex) {
+          const error = new Error("NOVA complex video director is temporarily unavailable");
+          error.code = "NOVA_COMPLEX_VIDEO_DIRECTOR_UNAVAILABLE";
+          throw error;
+        }
+
         result = await runPublicGenerationWithQueueFallback({
           input,
           userId,
