@@ -283,7 +283,7 @@ export async function runPrivateGpuVideoPool(input = {}, context = {}) {
   if (!context.userId) throw new Error("NOVA private GPU video job requires a user");
 
   const task = String(input.task || "text-to-video");
-  const workers = workersForTask(task);
+  const workers = workersForInput(input);
   if (!workers.length) {
     const error = new Error(`NOVA private GPU pool has no worker configured for ${task}`);
     error.code = "NOVA_PRIVATE_GPU_TASK_UNAVAILABLE";
