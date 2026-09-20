@@ -137,6 +137,11 @@ jobs:
           grep -q '_render_director_sequence' infra/modal/nova_video_worker.py
           grep -q '_overlay_director_captions' infra/modal/nova_video_worker.py
           grep -q '_build_director_audio' infra/modal/nova_video_worker.py
+          grep -q 'smoke_complex_director' infra/modal/nova_video_worker.py
+          if grep -q 'normal_generate = ' infra/modal/apply_quality_patch.py; then
+            echo 'Modal quality patch must not replace the director generation function.'
+            exit 1
+          fi
 
           if grep -q 'useSearchParams' src/app/oauth/callback/huggingface/page.jsx; then
             echo 'OAuth callback must not read search params during prerender.'
