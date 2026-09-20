@@ -54,7 +54,7 @@ function workersForTask(task) {
 
 function workersForInput(input = {}) {
   const task = String(input.task || "text-to-video");
-  const workers = workersForInput(input);
+  const workers = workersForTask(task);
   const director = input?.director || {};
   const requiresDirectorWorker = Boolean(
     director.complex &&
