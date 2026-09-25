@@ -30,6 +30,7 @@ import {
 } from "@/lib/privateGpuVideoPool";
 import { runVerifiedVideoRuntime } from "@/lib/verifiedVideoRuntime";
 import { directVideoPrompt } from "@/lib/videoPromptDirector.mjs";
+import { applyPlanToDirector, planVideoWithLlm } from "@/lib/videoPlanDirector.mjs";
 import { uploadToR2 } from "@/lib/r2";
 
 export const runtime = "nodejs";
@@ -270,7 +271,7 @@ export async function POST(req) {
     );
   }
 
-  const director = directVideoPrompt({
+  let director = directVideoPrompt({
     prompt,
     negativePrompt: body.negative_prompt,
     selectedDuration,
@@ -371,6 +372,22 @@ export async function POST(req) {
     }
   }
 
+  // Free-text requests (the normal case) are planned by the LLM director into
+  // shots, narration, on-screen text, music mood and transitions. Runs after
+  // quota so refused requests never spend an LLM call; any failure keeps the
+  // regex director's result.
+  if (
+    !director.providerHints.complex &&
+    (mode === "text-to-video" || mode === "image-to-video")
+  ) {
+    const plan = await planVideoWithLlm({
+      prompt: director.originalPrompt,
+      duration,
+      aspectRatio,
+    });
+    if (plan) director = applyPlanToDirector(director, plan);
+  }
+
   const input = {
     task: mode,
     prompt: director.prompt,
@@ -398,6 +415,8 @@ export async function POST(req) {
     director_ending: director.endingDirection || "",
     director_voiceover: director.voiceoverDirection || "",
     director_original_prompt: director.originalPrompt,
+    director_music: director.musicMood || "",
+    director_language: director.language || "",
   };
 
   try {
@@ -434,7 +453,10 @@ export async function POST(req) {
           // rendering, deterministic captions and separate narration. Falling
           // back to a single public diffusion pass would silently regress to
           // the low-motion / distorted result this pipeline was built to fix.
-          if (director.providerHints.complex) {
+          // LLM-planned videos come from ordinary free-text prompts, so a
+          // single-pass public render of the planned English prompt is still
+          // a better outcome for the customer than an error.
+          if (director.providerHints.complex && !director.providerHints.llmPlanned) {
             throw poolError;
           }
 
@@ -447,7 +469,7 @@ export async function POST(req) {
           });
         }
       } else {
-        if (director.providerHints.complex) {
+        if (director.providerHints.complex && !director.providerHints.llmPlanned) {
           const error = new Error("NOVA complex video director is temporarily unavailable");
           error.code = "NOVA_COMPLEX_VIDEO_DIRECTOR_UNAVAILABLE";
           throw error;

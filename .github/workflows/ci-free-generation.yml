@@ -36,6 +36,8 @@ on:
       - "src/lib/r2.ts"
       - "src/lib/verifiedVideoRuntime.js"
       - "src/lib/videoPromptDirector.mjs"
+      - "src/lib/videoPlanDirector.mjs"
+      - "scripts/test-video-plan-director.mjs"
       - "scripts/test-video-prompt-director.mjs"
       - "src/lib/zeroCostVideoClient.js"
       - "infra/modal/**"
@@ -89,11 +91,16 @@ jobs:
             src/lib/r2.ts \
             src/lib/verifiedVideoRuntime.js \
             src/lib/videoPromptDirector.mjs \
+            src/lib/videoPlanDirector.mjs \
+            scripts/test-video-plan-director.mjs \
             src/lib/zeroCostVideoClient.js \
             scripts/test-video-prompt-director.mjs
 
       - name: Validate complex video prompt director
         run: node scripts/test-video-prompt-director.mjs
+
+      - name: Validate LLM video plan director
+        run: node scripts/test-video-plan-director.mjs
 
       - name: Validate TypeScript database module
         run: npx tsc --noEmit --pretty false
@@ -131,6 +138,9 @@ jobs:
           grep -q 'isVerifiedVideoRuntimeHealthy' src/app/api/free-usage/route.js
           grep -q 'runPublicGenerationWithQueueFallback' src/app/api/free-video-generate/route.js
           grep -q 'directVideoPrompt' src/app/api/free-video-generate/route.js
+          grep -q 'planVideoWithLlm' src/app/api/free-video-generate/route.js
+          grep -q '_xfade_many' infra/modal/nova_video_worker.py
+          grep -q 'sidechaincompress' infra/modal/nova_video_worker.py
           grep -q 'NOVA Prompt Director ativo' src/components/NovaFreeVideoStudio.jsx
           grep -q 'audioRequired' src/lib/verifiedVideoRuntime.js
           grep -q 'director_timeline' src/app/api/free-video-generate/route.js

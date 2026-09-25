@@ -223,6 +223,73 @@ def _concat_many(clips: list[Path], output: Path) -> None:
     )
 
 
+# ffmpeg xfade transitions the director may ask for. "cut" keeps a hard cut.
+XFADE_TRANSITIONS = {
+    "fade", "dissolve", "slideleft", "slideright", "wipeleft", "circleopen", "smoothleft",
+}
+XFADE_SECONDS = 0.45
+
+
+def _transition_name(value) -> str:
+    name = str(value or "").strip().lower()
+    return name if name in XFADE_TRANSITIONS else "cut"
+
+
+def _video_seconds(path: Path) -> float:
+    probe = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", str(path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return float(probe.stdout.strip() or 0.0)
+
+
+def _xfade_many(clips: list[Path], transitions: list[str], output: Path) -> None:
+    """Join clips with the director's transitions.
+
+    Every clip except the last must carry XFADE_SECONDS of extra footage when
+    its transition is not a cut; the overlap is consumed by the transition so
+    the joined video keeps the timeline's exact length.
+    """
+    if len(clips) < 2 or all(name == "cut" for name in transitions[:-1]):
+        _concat_many(clips, output)
+        return
+
+    inputs = []
+    for clip in clips:
+        inputs.extend(["-i", str(clip)])
+    filters = []
+    previous = "[0:v]"
+    elapsed = _video_seconds(clips[0])
+    for index in range(1, len(clips)):
+        name = transitions[index - 1]
+        label = f"[v{index}]"
+        # A cut is an xfade too short to see; this keeps one filter graph.
+        duration = XFADE_SECONDS if name != "cut" else 0.04
+        kind = name if name != "cut" else "fade"
+        offset = max(0.0, elapsed - duration)
+        filters.append(
+            f"{previous}[{index}:v]xfade=transition={kind}:duration={duration:.3f}:offset={offset:.3f}{label}"
+        )
+        previous = label
+        elapsed = offset + _video_seconds(clips[index])
+    subprocess.run(
+        [
+            "ffmpeg", "-y", *inputs,
+            "-filter_complex", ";".join(filters),
+            "-map", previous, "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+            "-pix_fmt", "yuv420p", "-an", str(output),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 def _trim_video(source: Path, output: Path, seconds: float) -> None:
     subprocess.run(
         [
@@ -376,6 +443,7 @@ def _director_timeline(payload: dict) -> list[dict]:
                 "narration": str(item.get("narration") or "").strip(),
                 "caption": str(item.get("caption") or "").strip(),
                 "audio": str(item.get("audio") or "").strip(),
+                "transition": _transition_name(item.get("transition")),
             }
         )
     return timeline
@@ -422,6 +490,9 @@ def _render_director_sequence(
     reference = initial_reference
     for index, beat in enumerate(timeline):
         exact_seconds = max(0.35, float(beat["end"]) - float(beat["start"]))
+        # Shots followed by a transition keep extra footage for the overlap.
+        if index < len(timeline) - 1 and beat.get("transition", "cut") != "cut":
+            exact_seconds += XFADE_SECONDS
         render_seconds = max(2.0, min(10.0, exact_seconds))
         prompt = _segment_prompt(payload, beat, index, len(timeline))
 
@@ -474,7 +545,7 @@ def _render_director_sequence(
             _extract_last_frame(accepted, reference)
 
     combined = tmp / "director-combined.mp4"
-    _concat_many(clips, combined)
+    _xfade_many(clips, [beat.get("transition", "cut") for beat in timeline], combined)
     total_seconds = max(float(item["end"]) for item in timeline)
     trimmed = tmp / "director-trimmed.mp4"
     _trim_video(combined, trimmed, total_seconds)
@@ -491,12 +562,26 @@ def _looks_portuguese(text: str) -> bool:
     return any(clue in value for clue in clues)
 
 
+# Kokoro voices for languages the LLM director can report besides pt/en.
+KOKORO_LANGUAGES = {
+    "es": ("e", "ef_dora", "em_alex"),
+    "fr": ("f", "ff_siwis", "ff_siwis"),
+    "it": ("i", "if_sara", "im_nicola"),
+}
+
+
 def _tts_config(payload: dict, narration_text: str) -> tuple[str, str, float]:
     direction = str(payload.get("director_voiceover") or "")
     combined = f"{direction} {narration_text}".lower()
-    portuguese = _looks_portuguese(combined)
+    language = str(payload.get("director_language") or "").lower()
+    portuguese = language.startswith("pt") or (not language and _looks_portuguese(combined))
     female = "female" in combined or "femin" in combined or "woman" in combined or "mulher" in combined
     male = "male" in combined or "mascul" in combined or "man " in combined or "homem" in combined
+
+    other = KOKORO_LANGUAGES.get(language[:2])
+    if other and not portuguese:
+        lang, female_voice, male_voice = other
+        return lang, (male_voice if male and not female else female_voice), 1.0
 
     if portuguese:
         voice = "pm_alex" if male and not female else "pf_dora"
@@ -532,97 +617,142 @@ def _synthesize_kokoro(text: str, output: Path, lang: str, voice: str, speed: fl
             pass
 
 
-def _fit_audio_to_window(source: Path, output: Path, target_seconds: float) -> None:
+# Narration may be sped up this much at most; beyond it voices sound unnatural.
+MAX_NARRATION_SPEEDUP = 1.2
+
+
+def _audio_seconds(path: Path) -> float:
     import soundfile as sf
 
-    duration = float(sf.info(str(source)).duration or 0.0)
-    target = max(0.25, float(target_seconds))
-    if duration <= 0:
-        raise RuntimeError("Generated narration is empty")
-
-    filters = []
-    if duration > target:
-        ratio = duration / target
-        while ratio > 2.0:
-            filters.append("atempo=2.0")
-            ratio /= 2.0
-        while ratio < 0.5:
-            filters.append("atempo=0.5")
-            ratio /= 0.5
-        filters.append(f"atempo={ratio:.5f}")
-    filters.append(f"apad=pad_dur={target:.3f}")
-    filters.append(f"atrim=duration={target:.3f}")
-
-    subprocess.run(
-        [
-            "ffmpeg", "-y", "-i", str(source),
-            "-af", ",".join(filters),
-            "-ar", "48000", "-ac", "2", str(output),
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    return float(sf.info(str(path)).duration or 0.0)
 
 
-def _make_piano_note(output: Path, seconds: float = 0.9) -> None:
-    expr = (
-        "0.22*(sin(2*PI*261.63*t)*exp(-3.2*t)"
-        "+0.45*sin(2*PI*523.25*t)*exp(-4.2*t)"
-        "+0.20*sin(2*PI*784.88*t)*exp(-5.0*t))"
-    )
-    subprocess.run(
-        [
-            "ffmpeg", "-y", "-f", "lavfi",
-            "-i", f"aevalsrc={expr}:s=48000:d={float(seconds):.3f}",
-            "-ac", "2", str(output),
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+def _place_narration(durations: list[float], starts: list[float], total: float) -> tuple[list[float], float]:
+    """Return (start times, tempo) that keep every line intact and in order.
+
+    Lines start at their shot when possible, otherwise right after the previous
+    line. When the lines cannot fit inside the video even back-to-back, one
+    global tempo up to MAX_NARRATION_SPEEDUP is applied instead of squeezing
+    each line into its own window (which produced chipmunk voices).
+    """
+    gap = 0.15
+    usable = max(0.5, total - 0.2)
+    spoken = sum(durations) + gap * max(0, len(durations) - 1)
+    tempo = min(MAX_NARRATION_SPEEDUP, max(1.0, spoken / usable))
+    scaled = [value / tempo for value in durations]
+
+    placed = []
+    cursor = 0.0
+    for start, length in zip(starts, scaled):
+        begin = max(start, cursor)
+        placed.append(begin)
+        cursor = begin + length + gap
+    overflow = (placed[-1] + scaled[-1]) - usable if placed else 0.0
+    if overflow > 0:
+        # Pull everything earlier, never before 0.
+        placed = [max(0.0, value - overflow) for value in placed]
+        for index in range(1, len(placed)):
+            placed[index] = max(placed[index], placed[index - 1] + scaled[index - 1] + gap * 0.5)
+    return placed, tempo
+
+
+def _music_track(payload: dict, tmp: Path, total_seconds: float) -> Path | None:
+    """Pick a licensed track for the director's mood from NOVA's music library.
+
+    NOVA_MUSIC_LIBRARY_URL points to a JSON manifest {"moods": {"calm": [url, ...]}}.
+    Without a library the video simply has no music bed.
+    """
+    import json
+
+    import requests
+
+    mood = str(payload.get("director_music") or "").strip().lower()
+    if not mood:
+        audio_hints = " ".join(str(item.get("audio") or "") for item in _director_timeline(payload)).lower()
+        mood = "calm" if "piano" in audio_hints else ""
+    library_url = str(os.environ.get("NOVA_MUSIC_LIBRARY_URL") or "")
+    if not mood or mood == "none" or not library_url.startswith("https://"):
+        return None
+    try:
+        manifest = requests.get(library_url, timeout=20).json()
+        moods = manifest.get("moods") or {}
+        tracks = [url for url in (moods.get(mood) or moods.get("cinematic") or []) if str(url).startswith("https://")]
+        if not tracks:
+            return None
+        seed = int(payload.get("seed") or 0) or int(time.time())
+        source = tmp / "music-source"
+        _download(tracks[seed % len(tracks)], source, 25_000_000)
+        bed = tmp / "music-bed.wav"
+        fade_out = max(0.0, float(total_seconds) - 0.9)
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", str(source),
+                "-af", f"atrim=duration={float(total_seconds):.3f},afade=t=in:d=0.6,afade=t=out:st={fade_out:.3f}:d=0.9",
+                "-ar", "48000", "-ac", "2", str(bed),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return bed
+    except Exception as error:
+        print(f"[NOVA_VIDEO] music library unavailable: {str(error)[:200]}", flush=True)
+        return None
 
 
 def _build_director_audio(payload: dict, tmp: Path, total_seconds: float) -> Path | None:
     timeline = _director_timeline(payload)
     narration_items = [item for item in timeline if item.get("narration")]
-    has_piano = any("piano" in str(item.get("audio") or "").lower() for item in timeline)
-    if not narration_items and not has_piano:
+    music = _music_track(payload, tmp, total_seconds)
+    if not narration_items and music is None:
         return None
 
-    narration_text = " ".join(str(item.get("narration") or "") for item in narration_items)
-    lang, voice, speed = _tts_config(payload, narration_text)
+    total = float(total_seconds)
     inputs = []
     filters = []
-    mix_labels = []
+    voice_label = None
 
-    for index, item in enumerate(narration_items):
-        raw = tmp / f"voice-{index:02d}-raw.wav"
-        fitted = tmp / f"voice-{index:02d}.wav"
-        window = max(0.35, float(item["end"]) - float(item["start"]))
-        _synthesize_kokoro(str(item["narration"]), raw, lang, voice, speed)
-        _fit_audio_to_window(raw, fitted, window)
-        inputs.extend(["-i", str(fitted)])
-        delay_ms = max(0, int(round(float(item["start"]) * 1000)))
-        filters.append(f"[{len(mix_labels)}:a]adelay={delay_ms}|{delay_ms}[a{len(mix_labels)}]")
-        mix_labels.append(f"[a{len(mix_labels)}]")
+    if narration_items:
+        narration_text = " ".join(str(item.get("narration") or "") for item in narration_items)
+        lang, voice, speed = _tts_config(payload, narration_text)
+        raws = []
+        for index, item in enumerate(narration_items):
+            raw = tmp / f"voice-{index:02d}-raw.wav"
+            _synthesize_kokoro(str(item["narration"]), raw, lang, voice, speed)
+            raws.append(raw)
+        durations = [_audio_seconds(raw) for raw in raws]
+        starts, tempo = _place_narration(durations, [float(item["start"]) for item in narration_items], total)
+        labels = []
+        for index, (raw, begin) in enumerate(zip(raws, starts)):
+            inputs.extend(["-i", str(raw)])
+            delay_ms = max(0, int(round(begin * 1000)))
+            chain = f"[{index}:a]aresample=48000,aformat=channel_layouts=stereo"
+            if tempo > 1.001:
+                chain += f",atempo={tempo:.4f}"
+            filters.append(f"{chain},adelay={delay_ms}|{delay_ms}[n{index}]")
+            labels.append(f"[n{index}]")
+        filters.append(
+            "".join(labels) +
+            f"amix=inputs={len(labels)}:normalize=0:duration=longest,apad,atrim=duration={total:.3f}[voice]"
+        )
+        voice_label = "[voice]"
 
-    if has_piano:
-        piano_item = next(item for item in timeline if "piano" in str(item.get("audio") or "").lower())
-        piano = tmp / "piano.wav"
-        _make_piano_note(piano)
-        input_index = len(mix_labels)
-        inputs.extend(["-i", str(piano)])
-        delay_ms = max(0, int(round(float(piano_item["start"]) * 1000)))
-        filters.append(f"[{input_index}:a]adelay={delay_ms}|{delay_ms}[a{input_index}]")
-        mix_labels.append(f"[a{input_index}]")
+    if music is not None:
+        music_index = len(inputs) // 2
+        inputs.extend(["-i", str(music)])
+        filters.append(f"[{music_index}:a]volume=0.55,apad,atrim=duration={total:.3f}[music]")
+        if voice_label:
+            # Duck the music under the voice so narration stays intelligible.
+            filters.append("[voice]asplit=2[voicemix][voicekey]")
+            filters.append("[music][voicekey]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=350[ducked]")
+            filters.append("[ducked][voicemix]amix=inputs=2:normalize=0:duration=first[premaster]")
+        else:
+            filters.append("[music]anull[premaster]")
+    else:
+        filters.append("[voice]anull[premaster]")
 
+    filters.append(f"[premaster]loudnorm=I=-15:TP=-1.5:LRA=11,atrim=duration={total:.3f}[aout]")
     mixed = tmp / "director-audio.wav"
-    filters.append(
-        "".join(mix_labels) +
-        f"amix=inputs={len(mix_labels)}:normalize=0:duration=longest,"
-        f"atrim=duration={float(total_seconds):.3f},alimiter=limit=0.95[aout]"
-    )
     subprocess.run(
         [
             "ffmpeg", "-y", *inputs,
@@ -655,18 +785,27 @@ def _overlay_director_captions(source: Path, payload: dict, output: Path, aspect
         caption_file.write_text(_wrapped_caption(str(item["caption"]), width), encoding="utf-8")
         start = float(item["start"])
         end = float(item["end"])
-        fontsize = 36 if aspect == "9:16" else 32
-        margin = 130 if aspect == "9:16" else 75
+        fade = min(0.3, max(0.05, (end - start) / 4))
+        fontsize = 46 if aspect == "9:16" else 40
+        margin = 150 if aspect == "9:16" else 80
+        # Alpha ramps in and out so text never pops on or off between shots.
+        alpha = (
+            f"if(lt(t,{start:.3f}),0,if(lt(t,{start + fade:.3f}),(t-{start:.3f})/{fade:.3f},"
+            f"if(lt(t,{end - fade:.3f}),1,if(lt(t,{end:.3f}),({end:.3f}-t)/{fade:.3f},0))))"
+        )
         filters.append(
             "drawtext="
             "fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:"
             f"textfile='{caption_file.as_posix()}':"
             "fontcolor=white:"
             f"fontsize={fontsize}:"
-            "line_spacing=5:"
-            "box=1:boxcolor=black@0.58:boxborderw=12:"
+            "line_spacing=8:"
+            "borderw=3:bordercolor=black@0.85:"
+            "shadowx=2:shadowy=3:shadowcolor=black@0.6:"
+            "box=1:boxcolor=black@0.28:boxborderw=18:"
             "x=(w-text_w)/2:"
             f"y=h-text_h-{margin}:"
+            f"alpha='{alpha}':"
             f"enable='between(t,{start:.3f},{end:.3f})'"
         )
 
