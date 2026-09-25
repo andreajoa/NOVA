@@ -36,6 +36,7 @@ on:
       - "src/lib/falModels.js"
       - "src/lib/falEndpointInputs.js"
       - "scripts/test-fal-catalog.mjs"
+      - "scripts/test-free-image-engine.mjs"
       - "src/lib/r2.ts"
       - "src/lib/verifiedVideoRuntime.js"
       - "src/lib/videoPromptDirector.mjs"
@@ -107,6 +108,9 @@ jobs:
 
       - name: Validate paid model catalog
         run: node scripts/test-fal-catalog.mjs
+
+      - name: Validate free image engine
+        run: node scripts/test-free-image-engine.mjs
 
       - name: Validate TypeScript database module
         run: npx tsc --noEmit --pretty false

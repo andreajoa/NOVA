@@ -251,6 +251,8 @@ async function executeGeneration(selection, input) {
         prompt: input.prompt,
         steps: 4,
         seed: input.seed,
+        width: input.image_size?.width,
+        height: input.image_size?.height,
       });
       if (!mediaExists(output)) throw new Error("NOVA image engine returned no media");
       return { provider: "nova", output };

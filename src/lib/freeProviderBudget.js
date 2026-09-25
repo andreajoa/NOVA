@@ -1,6 +1,8 @@
 import { d1Rows, queryD1 } from "@/lib/db";
 
-const DEFAULT_CLOUDFLARE_IMAGE_DAILY_CAP = 150;
+// FLUX.2 klein 4B uses ~104 neurons per 1024px image (FLUX.1 schnell ~58);
+// 80 images plus the video planner stay inside the free 10k neurons/day.
+const DEFAULT_CLOUDFLARE_IMAGE_DAILY_CAP = 80;
 let ensureTablePromise = null;
 
 function utcPeriod(date = new Date()) {
