@@ -11,7 +11,7 @@ on:
         default: "true"
         required: false
       entrypoint:
-        description: "sample_studio (EN UGC) or sample_ugc_pt (PT UGC: native speech vs dub)"
+        description: "sample_studio (EN UGC), sample_ugc_pt (PT UGC) or sample_free_image_models (free image model benchmark)"
         default: "sample_studio"
         required: false
 
@@ -33,6 +33,7 @@ jobs:
       - name: Install Modal
         run: python -m pip install --upgrade "modal>=1.4,<2"
       - name: Preload studio weights on CPU
+        if: inputs.entrypoint != 'sample_free_image_models'
         run: modal run infra/modal/nova_video_worker.py::preload_studio
       - name: Render studio samples
         shell: bash
@@ -40,6 +41,8 @@ jobs:
           set -euo pipefail
           if [ "${{ inputs.entrypoint }}" = "sample_ugc_pt" ]; then
             modal run infra/modal/nova_video_worker.py::sample_ugc_pt
+          elif [ "${{ inputs.entrypoint }}" = "sample_free_image_models" ]; then
+            modal run infra/modal/nova_video_worker.py::sample_free_image_models
           else
             if [ "${{ inputs.video }}" = "true" ]; then flag="--video"; else flag="--no-video"; fi
             modal run infra/modal/nova_video_worker.py::sample_studio $flag

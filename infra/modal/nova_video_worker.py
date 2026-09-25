@@ -2066,6 +2066,57 @@ def sample_ugc_keyframe(payload: dict) -> bytes:
     return _ugc_keyframe(payload)
 
 
+FREE_IMAGE_PROMPTS = {
+    "creator": "Candid smartphone photo of a friendly young woman in her twenties with curly brown hair, natural "
+               "makeup, oversized cream hoodie, standing in a bright modern bathroom, looking at the camera with a "
+               "warm smile, realistic skin texture, UGC creator style.",
+    "product": "Studio product photo of a small frosted glass serum bottle with a gold dropper cap, the label reads "
+               "\"GLOW\" in elegant black serif letters and \"Vitamin C Serum 30ml\" below, on a clean white "
+               "background, soft shadow, e-commerce packshot, ultra sharp.",
+    "poster": "Cinematic advertising poster: a glass perfume bottle floating above a calm turquoise ocean at golden "
+              "hour, splashes frozen in mid-air, the headline \"FEEL THE TIDE\" in bold white sans-serif at the top, "
+              "luxury magazine quality, ultra detailed.",
+}
+
+
+@app.function(image=studio_image, gpu="L4", cpu=4.0, memory=32768, volumes={str(MODEL_ROOT): model_volume},
+              timeout=30 * 60)
+def benchmark_free_image_model(repo: str) -> dict:
+    """Render the free-image QA prompts with a 4-step model (same seeds)."""
+    import io
+
+    import torch
+    from diffusers import Flux2KleinPipeline, FluxPipeline
+
+    cls = Flux2KleinPipeline if "FLUX.2" in repo else FluxPipeline
+    t0 = time.time()
+    pipe = cls.from_pretrained(repo, torch_dtype=torch.bfloat16)
+    pipe.enable_model_cpu_offload()
+    load = time.time() - t0
+    out = {"load_s": round(load, 1)}
+    for name, prompt in FREE_IMAGE_PROMPTS.items():
+        t1 = time.time()
+        extra = {"guidance_scale": 1.0} if cls is Flux2KleinPipeline else {"guidance_scale": 0.0, "max_sequence_length": 256}
+        image = pipe(prompt=prompt, width=1024, height=1024, num_inference_steps=4,
+                     generator=torch.Generator(device="cpu").manual_seed(7), **extra).images[0]
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        out[name] = buffer.getvalue()
+        out[f"{name}_s"] = round(time.time() - t1, 1)
+    return out
+
+
+@app.local_entrypoint()
+def sample_free_image_models():
+    os.makedirs("samples", exist_ok=True)
+    for label, repo in (("schnell", "black-forest-labs/FLUX.1-schnell"), ("klein4b", "black-forest-labs/FLUX.2-klein-4B")):
+        result = benchmark_free_image_model.remote(repo)
+        for name in FREE_IMAGE_PROMPTS:
+            open(f"samples/{label}-{name}.png", "wb").write(result[name])
+        print(f"[SAMPLE] {label}: load {result['load_s']}s | " +
+              " ".join(f"{n} {result[n + '_s']}s" for n in FREE_IMAGE_PROMPTS), flush=True)
+
+
 @app.function(image=base_image, gpu="L4", timeout=120, memory=8192)
 def smoke_import():
     """Fail early if the normal Wan runtime has missing imports."""
