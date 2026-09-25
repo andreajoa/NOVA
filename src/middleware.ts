@@ -24,6 +24,8 @@ const isPublicRoute = createRouteMatcher([
   '/robots.txt',
   '/googlef88c1df448f5c76f.html',
   '/ai(.*)',
+  // CC0 music library fetched by the GPU worker without a session.
+  '/music(.*)',
 ])
 
 export default clerkMiddleware(async (auth, req: NextRequest) => {

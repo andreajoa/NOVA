@@ -1,0 +1,6 @@
+Music in this folder comes from FreePD.com (Kevin MacLeod and contributors).
+License: Creative Commons CC0 1.0 Universal Public Domain Dedication.
+FreePD's legal page stated: "This music is all licensed CC0 1.0 Universal Public Domain Dedication",
+with commercial use (including ads and films) allowed and no attribution required.
+Source files were retrieved from the Internet Archive snapshots of https://freepd.com/music/
+(freepd.com went offline in 2025). Files here are 30-second, loudness-normalized excerpts.

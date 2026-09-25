@@ -74,6 +74,7 @@ jobs:
             NOVA_ENABLE_SPEECH="1" \
             NOVA_WAN_SAMPLE_STEPS="12" \
             NOVA_WAN_SPEECH_STEPS="20" \
+            NOVA_MUSIC_LIBRARY_URL="https://www.novvideos.online/music/manifest.json" \
             --force
 
       - name: Preload Wan checkpoints on CPU

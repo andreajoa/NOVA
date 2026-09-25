@@ -13,8 +13,15 @@
 //
 // Any failure (no key, timeout, bad JSON, unknown model) returns null and the
 // caller keeps the regex director's result, so this never blocks generation.
+//
+// Default provider is Cloudflare Workers AI on the account NOVA already uses for
+// free images: it runs inside the 10k neurons/day free allocation. The 8B fp8
+// fast model costs ~27 neurons per plan (vs ~81 for the JSON-mode 8B), which
+// with the 30-video daily capacity cap stays beside the image cap. OpenAI is an
+// opt-in alternative (NOVA_DIRECTOR_PROVIDER=openai) because it is metered.
 
-const DEFAULT_MODELS = ["gpt-4.1-mini", "gpt-4o-mini"];
+const CLOUDFLARE_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8-fast";
+const OPENAI_MODELS = ["gpt-4.1-mini", "gpt-4o-mini"];
 const REQUEST_TIMEOUT_MS = 12000;
 
 // Pace used to size narration: relaxed pt-BR/en voice-over speed. The worker
@@ -215,76 +222,131 @@ export function applyPlanToDirector(director, plan) {
   };
 }
 
-function modelCandidates(env) {
-  const configured = oneLine(env.NOVA_DIRECTOR_MODEL);
-  return configured ? [configured] : DEFAULT_MODELS;
+// Small models sometimes wrap JSON in prose or code fences.
+export function extractJson(text) {
+  if (text && typeof text === "object") return text;
+  const raw = String(text || "");
+  const first = raw.indexOf("{");
+  const last = raw.lastIndexOf("}");
+  if (first < 0 || last <= first) throw new Error("director LLM returned no JSON object");
+  return JSON.parse(raw.slice(first, last + 1));
 }
 
-async function requestPlan({ prompt, duration, aspectRatio, model, apiKey, fetchImpl }) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const system = SYSTEM_PROMPT
+function systemPrompt(duration) {
+  return SYSTEM_PROMPT
     .replace("MAX_SHOTS", String(maxShotsFor(duration)))
     .replace("TOTAL_SECONDS", String(duration));
+}
+
+function userPrompt({ prompt, duration, aspectRatio }) {
+  return `Total duration: ${duration} seconds. Aspect ratio: ${aspectRatio}.\nCustomer request:\n${prompt}`;
+}
+
+async function postJson(fetchImpl, url, headers, body) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetchImpl("https://api.openai.com/v1/chat/completions", {
+    const response = await fetchImpl(url, {
       method: "POST",
       signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        response_format: { type: "json_object" },
-        max_completion_tokens: 1200,
-        messages: [
-          { role: "system", content: system },
-          {
-            role: "user",
-            content: `Total duration: ${duration} seconds. Aspect ratio: ${aspectRatio}.\nCustomer request:\n${prompt}`,
-          },
-        ],
-      }),
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     });
     const text = await response.text();
     if (!response.ok) {
       const error = new Error(`director LLM HTTP ${response.status}: ${text.slice(0, 300)}`);
       error.status = response.status;
-      error.modelMissing = response.status === 404 || /model_not_found|does not exist/i.test(text);
+      error.modelMissing = response.status === 404 || /model_not_found|does not exist|no such model/i.test(text);
       throw error;
     }
-    const content = JSON.parse(text)?.choices?.[0]?.message?.content;
-    return JSON.parse(String(content || ""));
+    return JSON.parse(text);
   } finally {
     clearTimeout(timer);
   }
 }
 
-export async function planVideoWithLlm(options = {}) {
-  const env = options.env || process.env;
-  const fetchImpl = options.fetchImpl || fetch;
+function cloudflareCredentials(env) {
+  const accountId = oneLine(env.CLOUDFLARE_ACCOUNT_ID);
+  const apiToken = oneLine(env.CLOUDFLARE_AI_API_TOKEN || env.CLOUDFLARE_API_TOKEN);
+  return accountId && apiToken ? { accountId, apiToken } : null;
+}
+
+async function planWithCloudflare(request, env, fetchImpl) {
+  const creds = cloudflareCredentials(env);
+  if (!creds) return null;
+  const model = oneLine(env.NOVA_DIRECTOR_MODEL) || CLOUDFLARE_MODEL;
+  const payload = await postJson(
+    fetchImpl,
+    `https://api.cloudflare.com/client/v4/accounts/${creds.accountId}/ai/run/${model}`,
+    { Authorization: `Bearer ${creds.apiToken}` },
+    {
+      messages: [
+        { role: "system", content: systemPrompt(request.duration) },
+        { role: "user", content: userPrompt(request) },
+      ],
+      max_tokens: 1200,
+      temperature: 0.3,
+    },
+  );
+  return { raw: extractJson(payload?.result?.response), model };
+}
+
+async function planWithOpenAi(request, env, fetchImpl) {
   const apiKey = oneLine(env.OPENAI_API_KEY);
-  const prompt = clean(options.prompt).slice(0, 4000);
-  const duration = Number(options.duration) || 5;
-  const aspectRatio = options.aspectRatio || "16:9";
-
-  if (!apiKey || !prompt || String(env.NOVA_LLM_DIRECTOR || "1") === "0") return null;
-
-  for (const model of modelCandidates(env)) {
+  if (!apiKey) return null;
+  const configured = oneLine(env.NOVA_DIRECTOR_MODEL);
+  for (const model of configured ? [configured] : OPENAI_MODELS) {
     try {
-      const raw = await requestPlan({ prompt, duration, aspectRatio, model, apiKey, fetchImpl });
-      const plan = normalizePlan(raw, { duration });
-      if (plan) return { ...plan, model };
-      console.warn("[NOVA_VIDEO] LLM director returned an unusable plan", { model });
-      return null;
+      const payload = await postJson(
+        fetchImpl,
+        "https://api.openai.com/v1/chat/completions",
+        { Authorization: `Bearer ${apiKey}` },
+        {
+          model,
+          response_format: { type: "json_object" },
+          max_completion_tokens: 1200,
+          messages: [
+            { role: "system", content: systemPrompt(request.duration) },
+            { role: "user", content: userPrompt(request) },
+          ],
+        },
+      );
+      return { raw: extractJson(payload?.choices?.[0]?.message?.content), model };
     } catch (error) {
-      console.warn("[NOVA_VIDEO] LLM director failed", {
-        model,
-        message: String(error?.message || error).slice(0, 300),
-      });
-      if (!error?.modelMissing) return null;
+      if (!error?.modelMissing) throw error;
+      console.warn("[NOVA_VIDEO] LLM director model unavailable", { model });
     }
   }
   return null;
+}
+
+export async function planVideoWithLlm(options = {}) {
+  const env = options.env || process.env;
+  const fetchImpl = options.fetchImpl || fetch;
+  const request = {
+    prompt: clean(options.prompt).slice(0, 4000),
+    duration: Number(options.duration) || 5,
+    aspectRatio: options.aspectRatio || "16:9",
+  };
+  if (!request.prompt || String(env.NOVA_LLM_DIRECTOR || "1") === "0") return null;
+
+  const provider = oneLine(env.NOVA_DIRECTOR_PROVIDER || "cloudflare").toLowerCase();
+  try {
+    const result = provider === "openai"
+      ? await planWithOpenAi(request, env, fetchImpl)
+      : await planWithCloudflare(request, env, fetchImpl);
+    if (!result) return null;
+    const plan = normalizePlan(result.raw, { duration: request.duration });
+    if (!plan) {
+      console.warn("[NOVA_VIDEO] LLM director returned an unusable plan", { provider, model: result.model });
+      return null;
+    }
+    return { ...plan, provider, model: result.model };
+  } catch (error) {
+    console.warn("[NOVA_VIDEO] LLM director failed", {
+      provider,
+      message: String(error?.message || error).slice(0, 300),
+    });
+    return null;
+  }
 }

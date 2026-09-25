@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { directVideoPrompt } from "../src/lib/videoPromptDirector.mjs";
 import {
   applyPlanToDirector,
+  extractJson,
   maxShotsFor,
   normalizePlan,
   planVideoWithLlm,
@@ -93,48 +94,71 @@ assert.equal(directed.musicMood, "lofi");
 assert.match(directed.prompt, /No text, letters, subtitles or logos/);
 assert.doesNotMatch(directed.prompt, /Música|narração/i);
 
-// planVideoWithLlm: request shape, model fallback and failure handling.
-const calls = [];
-const okFetch = async (url, init) => {
+// Default provider: Cloudflare Workers AI (free allocation), tolerant of small
+// models wrapping the JSON in prose or code fences.
+const cfEnv = { CLOUDFLARE_ACCOUNT_ID: "acct", CLOUDFLARE_AI_API_TOKEN: "tok" };
+const cfCalls = [];
+const cfFetch = async (url, init) => {
+  cfCalls.push(url);
   const body = JSON.parse(init.body);
-  calls.push(body.model);
-  if (body.model === "gpt-4.1-mini") {
-    return new Response(JSON.stringify({ error: { code: "model_not_found" } }), { status: 404 });
-  }
-  assert.equal(url, "https://api.openai.com/v1/chat/completions");
-  assert.equal(body.response_format.type, "json_object");
+  assert.equal(init.headers.Authorization, "Bearer tok");
   assert.match(body.messages[0].content, /at most 2 shots/);
-  return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(llmPlan) } }] }));
+  const wrapped = "Here is the plan:\n```json\n" + JSON.stringify(llmPlan) + "\n```";
+  return new Response(JSON.stringify({ success: true, result: { response: wrapped } }));
 };
 const planned = await planVideoWithLlm({
   prompt: customerPrompt,
   duration: 5,
   aspectRatio: "9:16",
-  env: { OPENAI_API_KEY: "test" },
-  fetchImpl: okFetch,
+  env: cfEnv,
+  fetchImpl: cfFetch,
 });
-assert.deepEqual(calls, ["gpt-4.1-mini", "gpt-4o-mini"]);
-assert.equal(planned.model, "gpt-4o-mini");
+assert.deepEqual(cfCalls, [
+  "https://api.cloudflare.com/client/v4/accounts/acct/ai/run/@cf/meta/llama-3.1-8b-instruct-fp8-fast",
+]);
+assert.equal(planned.provider, "cloudflare");
 assert.equal(planned.beats.length, 2);
 
+// JSON mode responses may already be objects.
+assert.deepEqual(extractJson({ a: 1 }), { a: 1 });
+assert.deepEqual(extractJson('noise {"shots": []} trailing'), { shots: [] });
+
+// OpenAI is opt-in only (metered) and falls back across missing models.
+const oaCalls = [];
+const oaFetch = async (url, init) => {
+  const body = JSON.parse(init.body);
+  oaCalls.push(body.model);
+  if (body.model === "gpt-4.1-mini") {
+    return new Response(JSON.stringify({ error: { code: "model_not_found" } }), { status: 404 });
+  }
+  assert.equal(url, "https://api.openai.com/v1/chat/completions");
+  assert.equal(body.response_format.type, "json_object");
+  return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(llmPlan) } }] }));
+};
 const quiet = console.warn;
 console.warn = () => {};
 try {
-  assert.equal(await planVideoWithLlm({ prompt: customerPrompt, env: {} }), null, "no key -> keep regex director");
-  assert.equal(
-    await planVideoWithLlm({ prompt: customerPrompt, env: { OPENAI_API_KEY: "k", NOVA_LLM_DIRECTOR: "0" } }),
-    null,
-  );
+  const viaOpenAi = await planVideoWithLlm({
+    prompt: customerPrompt,
+    duration: 5,
+    env: { OPENAI_API_KEY: "k", NOVA_DIRECTOR_PROVIDER: "openai" },
+    fetchImpl: oaFetch,
+  });
+  assert.deepEqual(oaCalls, ["gpt-4.1-mini", "gpt-4o-mini"]);
+  assert.equal(viaOpenAi.model, "gpt-4o-mini");
+
+  // An OpenAI key alone never triggers metered calls.
+  let called = false;
+  const spy = async () => { called = true; return new Response("{}"); };
+  assert.equal(await planVideoWithLlm({ prompt: customerPrompt, env: { OPENAI_API_KEY: "k" }, fetchImpl: spy }), null);
+  assert.equal(called, false);
+
+  assert.equal(await planVideoWithLlm({ prompt: customerPrompt, env: {} }), null, "no credentials -> keep regex director");
+  assert.equal(await planVideoWithLlm({ prompt: customerPrompt, env: { ...cfEnv, NOVA_LLM_DIRECTOR: "0" } }), null);
   const serverError = async () => new Response("boom", { status: 500 });
-  assert.equal(
-    await planVideoWithLlm({ prompt: customerPrompt, env: { OPENAI_API_KEY: "k" }, fetchImpl: serverError }),
-    null,
-  );
-  const badJson = async () => new Response(JSON.stringify({ choices: [{ message: { content: "not json" } }] }));
-  assert.equal(
-    await planVideoWithLlm({ prompt: customerPrompt, env: { OPENAI_API_KEY: "k" }, fetchImpl: badJson }),
-    null,
-  );
+  assert.equal(await planVideoWithLlm({ prompt: customerPrompt, env: cfEnv, fetchImpl: serverError }), null);
+  const noJson = async () => new Response(JSON.stringify({ result: { response: "I cannot help with that." } }));
+  assert.equal(await planVideoWithLlm({ prompt: customerPrompt, env: cfEnv, fetchImpl: noJson }), null);
 } finally {
   console.warn = quiet;
 }
