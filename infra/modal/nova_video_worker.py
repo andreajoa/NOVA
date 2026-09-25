@@ -1702,6 +1702,14 @@ def sample_render_ltx(payload: dict) -> bytes:
     return _sample_bytes(_ltx_generate, {**payload, "engine": "ltx-speech"})
 
 
+@app.function(image=base_image, cpu=4.0, memory=8192,
+              volumes={str(MODEL_ROOT): model_volume}, secrets=[engine_secret], timeout=14 * 60)
+def sample_render_ltx_keyframe(payload: dict, keyframe: bytes) -> bytes:
+    engine = next((name for name in payload.get("engine_order") or [] if name.startswith("ltx")), "ltx")
+    job = {**payload, "engine": engine, "task": "image-to-video", "reference_bytes": keyframe}
+    return _sample_bytes(_ltx_generate, job)
+
+
 @app.local_entrypoint()
 def sample_engines(engines: str = "ltx-speech,wan-speech"):
     """Plan the sample script and render it with each engine (manual QA)."""
@@ -1721,6 +1729,208 @@ def sample_engines(engines: str = "ltx-speech,wan-speech"):
             print(f"[SAMPLE] {engine}: {len(data)} bytes in {time.time() - t0:.0f}s", flush=True)
         except Exception as error:
             print(f"[SAMPLE] {engine} failed after {time.time() - t0:.0f}s: {str(error)[:300]}", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# NOVA Image Studio: Qwen-Image-2512 (text-to-image) and Qwen-Image-Edit-2511
+# (edit / multi-image composition, e.g. avatar + product), both Apache-2.0,
+# with the Apache-2.0 Lightning LoRAs for 8-step inference. Each pipeline
+# needs most of an 80 GB GPU, so each gets its own class.
+# ---------------------------------------------------------------------------
+STUDIO_GEN_REPO = "Qwen/Qwen-Image-2512"
+STUDIO_EDIT_REPO = "Qwen/Qwen-Image-Edit-2511"
+STUDIO_GEN_LORA = ("lightx2v/Qwen-Image-2512-Lightning", "Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors")
+STUDIO_EDIT_LORA = ("lightx2v/Qwen-Image-Edit-2511-Lightning", "Qwen-Image-Edit-2511-Lightning-8steps-V1.0-bf16.safetensors")
+STUDIO_STEPS = 8
+STUDIO_SIZES = {"9:16": (928, 1664), "16:9": (1664, 928), "1:1": (1328, 1328), "4:5": (1104, 1376), "3:4": (1104, 1472)}
+
+studio_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("libgl1", "libglib2.0-0")
+    .uv_pip_install(
+        "torch>=2.7,<3",
+        "diffusers==0.40.0",
+        "transformers>=4.56,<5",
+        "accelerate>=1.6,<2",
+        "peft>=0.17,<1",
+        "safetensors",
+        "sentencepiece",
+        "pillow",
+        "requests>=2.32,<3",
+        "huggingface-hub>=0.36,<1",
+    )
+    .env({"HF_HOME": str(MODEL_ROOT), "HF_XET_HIGH_PERFORMANCE": "1", "TOKENIZERS_PARALLELISM": "false"})
+)
+
+
+def _studio_pipeline(kind: str):
+    import math
+
+    import torch
+    from diffusers import FlowMatchEulerDiscreteScheduler, QwenImageEditPlusPipeline, QwenImagePipeline
+
+    # Scheduler used for the Lightning distillation (shift=3, exponential shift).
+    scheduler = FlowMatchEulerDiscreteScheduler.from_config({
+        "base_image_seq_len": 256, "base_shift": math.log(3), "invert_sigmas": False,
+        "max_image_seq_len": 8192, "max_shift": math.log(3), "num_train_timesteps": 1000,
+        "shift": 1.0, "shift_terminal": None, "stochastic_sampling": False,
+        "time_shift_type": "exponential", "use_beta_sigmas": False, "use_dynamic_shifting": True,
+        "use_exponential_sigmas": False, "use_karras_sigmas": False,
+    })
+    cls, repo, (lora_repo, lora_file) = (
+        (QwenImagePipeline, STUDIO_GEN_REPO, STUDIO_GEN_LORA) if kind == "generate"
+        else (QwenImageEditPlusPipeline, STUDIO_EDIT_REPO, STUDIO_EDIT_LORA)
+    )
+    pipe = cls.from_pretrained(repo, scheduler=scheduler, torch_dtype=torch.bfloat16)
+    pipe.load_lora_weights(lora_repo, weight_name=lora_file)
+    pipe.fuse_lora()
+    return pipe.to("cuda")
+
+
+def _studio_open_image(ref):
+    import io
+
+    import requests
+    from PIL import Image
+
+    if isinstance(ref, (bytes, bytearray)):
+        data = bytes(ref)
+    elif str(ref).startswith("https://"):
+        response = requests.get(str(ref), timeout=60)
+        response.raise_for_status()
+        data = response.content
+    else:
+        data = Path(str(ref)).read_bytes()
+    return Image.open(io.BytesIO(data)).convert("RGB")
+
+
+def _studio_render(pipe, spec: dict, edit: bool) -> bytes:
+    import io
+
+    import torch
+
+    width, height = STUDIO_SIZES.get(str(spec.get("aspect") or "1:1"), STUDIO_SIZES["1:1"])
+    seed = int(spec.get("seed") or int(time.time() * 1000) % 2_147_483_647)
+    args = {
+        "prompt": str(spec.get("prompt") or "").strip(),
+        "negative_prompt": str(spec.get("negative_prompt") or " "),
+        "num_inference_steps": STUDIO_STEPS,
+        "true_cfg_scale": 1.0,
+        "generator": torch.Generator(device="cuda").manual_seed(seed),
+    }
+    if edit:
+        args["image"] = [_studio_open_image(ref) for ref in spec.get("images") or []][:3]
+        if not args["image"]:
+            raise ValueError("edit needs at least one input image")
+        args["guidance_scale"] = 1.0
+    else:
+        args.update(width=width, height=height)
+    t0 = time.time()
+    image = pipe(**args).images[0]
+    _phase_timing(f"studio_{'edit' if edit else 'generate'}_{image.width}x{image.height}", t0)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+@app.cls(image=studio_image, gpu="H100", cpu=4.0, memory=65536, volumes={str(MODEL_ROOT): model_volume},
+         secrets=[engine_secret], timeout=15 * 60, scaledown_window=300, max_containers=2)
+class NovaImageGen:
+    @modal.enter()
+    def load(self):
+        t0 = time.time()
+        self.pipe = _studio_pipeline("generate")
+        _phase_timing("studio_generate_load", t0)
+
+    @modal.method()
+    def render(self, spec: dict) -> bytes:
+        return _studio_render(self.pipe, spec, edit=False)
+
+
+@app.cls(image=studio_image, gpu="H100", cpu=4.0, memory=65536, volumes={str(MODEL_ROOT): model_volume},
+         secrets=[engine_secret], timeout=15 * 60, scaledown_window=300, max_containers=2)
+class NovaImageEdit:
+    @modal.enter()
+    def load(self):
+        t0 = time.time()
+        self.pipe = _studio_pipeline("edit")
+        _phase_timing("studio_edit_load", t0)
+
+    @modal.method()
+    def render(self, spec: dict) -> bytes:
+        return _studio_render(self.pipe, spec, edit=True)
+
+
+@app.function(image=studio_image, volumes={str(MODEL_ROOT): model_volume}, timeout=60 * 60, memory=32768)
+def preload_studio():
+    """Download studio weights on CPU so GPUs never wait on downloads."""
+    from huggingface_hub import hf_hub_download, snapshot_download
+
+    for repo in (STUDIO_GEN_REPO, STUDIO_EDIT_REPO):
+        snapshot_download(repo_id=repo)
+    for repo, filename in (STUDIO_GEN_LORA, STUDIO_EDIT_LORA):
+        hf_hub_download(repo_id=repo, filename=filename)
+    model_volume.commit()
+    return {"ok": True}
+
+
+UGC_SAMPLE_REQUEST = (
+    "UGC selfie video for TikTok, 9:16, 10 seconds. A young woman in her twenties in a bright bathroom holds "
+    "the GLOW serum bottle next to her face and talks to the camera, excited and natural: "
+    "\"Okay, I did not expect this. My skin has never looked this good. Three drops every night. Link in bio!\" "
+    "Headline at the top: MY NIGHT ROUTINE. Upbeat music."
+)
+
+
+@app.local_entrypoint()
+def sample_studio(video: bool = True):
+    """Render studio samples and a full UGC product video (manual QA)."""
+    os.makedirs("samples", exist_ok=True)
+    t0 = time.time()
+    gen = NovaImageGen()
+    creator = gen.render.remote({
+        "aspect": "3:4", "seed": 7,
+        "prompt": "Candid smartphone photo of a friendly young woman in her twenties with curly brown hair, "
+                  "natural makeup, oversized cream hoodie, standing in a bright modern bathroom, looking at the "
+                  "camera with a warm smile, realistic skin texture, UGC creator style.",
+    })
+    open("samples/creator.png", "wb").write(creator)
+    product = gen.render.remote({
+        "aspect": "1:1", "seed": 11,
+        "prompt": "Studio product photo of a small frosted glass serum bottle with a gold dropper cap, the label "
+                  "reads \"GLOW\" in elegant black serif letters and \"Vitamin C Serum 30ml\" below, on a clean "
+                  "white background, soft shadow, e-commerce packshot, ultra sharp.",
+    })
+    open("samples/product.png", "wb").write(product)
+    poster = gen.render.remote({
+        "aspect": "4:5", "seed": 3,
+        "prompt": "Cinematic advertising poster: a glass perfume bottle floating above a calm turquoise ocean at "
+                  "golden hour, splashes frozen in mid-air, the headline \"FEEL THE TIDE\" in bold white sans-serif "
+                  "at the top, luxury magazine quality, ultra detailed.",
+    })
+    open("samples/poster.png", "wb").write(poster)
+    print(f"[SAMPLE] studio generate x3 in {time.time() - t0:.0f}s", flush=True)
+
+    t1 = time.time()
+    keyframe = NovaImageEdit().render.remote({
+        "images": [creator, product], "seed": 5,
+        "prompt": "The woman from the first image holds the serum bottle from the second image up next to her "
+                  "cheek with one hand, the label facing the camera and unchanged, in the same bright bathroom, "
+                  "vertical smartphone selfie, natural light, candid UGC photo.",
+    })
+    open("samples/ugc-keyframe.png", "wb").write(keyframe)
+    print(f"[SAMPLE] studio edit (creator + product) in {time.time() - t1:.0f}s", flush=True)
+    if not video:
+        return
+
+    t2 = time.time()
+    planned = NovaPlanner().plan_only.remote({
+        "task": "image-to-video", "duration": 10, "aspect_ratio": "9:16", "seed": 42,
+        "director_original_prompt": UGC_SAMPLE_REQUEST,
+    })
+    data = sample_render_ltx_keyframe.remote(planned, keyframe)
+    open("samples/ugc-video.mp4", "wb").write(data)
+    print(f"[SAMPLE] UGC video (plan + LTX i2v + finish) in {time.time() - t2:.0f}s", flush=True)
 
 
 @app.function(image=base_image, gpu="L4", timeout=120, memory=8192)
@@ -1870,9 +2080,12 @@ def _ltx_generate(payload: dict) -> str:
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
         image = None
-        if str(payload.get("task")) == "image-to-video" and payload.get("image_url"):
-            reference = tmp / "reference.jpg"
-            _download(str(payload["image_url"]), reference, 20_000_000)
+        if str(payload.get("task")) == "image-to-video" and (payload.get("image_url") or payload.get("reference_bytes")):
+            reference = tmp / "reference.png"
+            if payload.get("reference_bytes"):
+                reference.write_bytes(bytes(payload["reference_bytes"]))
+            else:
+                _download(str(payload["image_url"]), reference, 20_000_000)
             image = _gradio_upload(reference, headers)
 
         raw = tmp / "ltx.mp4"
