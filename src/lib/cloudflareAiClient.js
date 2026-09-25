@@ -142,14 +142,33 @@ async function runVerifiedFreeImage({ prompt, seed } = {}) {
   const imageUrl = findImageUrl(completedData);
   if (!imageUrl) throw new Error("NOVA free image runtime returned no image URL");
 
+  // The runtime's file URL is temporary and later refuses outside requests
+  // (403), so fetch it now, while the job's session is fresh.
+  const fileTimeout = withTimeout(30000);
+  let fileResponse;
+  try {
+    fileResponse = await fetch(imageUrl, {
+      cache: "no-store",
+      signal: fileTimeout.controller.signal,
+      headers: { "User-Agent": "NOVA-free-image/2.1" },
+    });
+  } finally {
+    clearTimeout(fileTimeout.timer);
+  }
+  if (!fileResponse.ok) {
+    throw new Error(`NOVA free image file was not reachable (${fileResponse.status})`);
+  }
+  const fileBytes = Buffer.from(await fileResponse.arrayBuffer());
+  const fileMime = String(fileResponse.headers.get("content-type") || "").split(";")[0] || imageMime(fileBytes.toString("base64", 0, 12));
   return {
     images: [
       {
-        url: imageUrl,
-        content_type: imageUrl.includes(".png") ? "image/png" : imageUrl.includes(".jpg") || imageUrl.includes(".jpeg") ? "image/jpeg" : "image/webp",
+        url: `data:${fileMime};base64,${fileBytes.toString("base64")}`,
+        content_type: fileMime,
       },
     ],
   };
+
 }
 
 export function canUseCloudflareWorkersAI() {

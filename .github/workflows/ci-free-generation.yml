@@ -37,6 +37,8 @@ on:
       - "src/lib/falEndpointInputs.js"
       - "scripts/test-fal-catalog.mjs"
       - "scripts/test-free-image-engine.mjs"
+      - "scripts/test-free-image-persistence.mjs"
+      - "src/lib/freeImagePersistence.js"
       - "src/lib/r2.ts"
       - "src/lib/verifiedVideoRuntime.js"
       - "src/lib/videoPromptDirector.mjs"
@@ -111,6 +113,9 @@ jobs:
 
       - name: Validate free image engine
         run: node scripts/test-free-image-engine.mjs
+
+      - name: Validate free image persistence
+        run: node scripts/test-free-image-persistence.mjs
 
       - name: Validate TypeScript database module
         run: npx tsc --noEmit --pretty false
