@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { directVideoPrompt } from "../src/lib/videoPromptDirector.mjs";
 import {
   applyPlanToDirector,
+  engineOrderFor,
   extractJson,
+  ltxPrompt,
   maxShotsFor,
   normalizePlan,
   planVideoWithLlm,
@@ -186,5 +188,52 @@ try {
 } finally {
   console.warn = quiet;
 }
+
+// Script-style request: on-camera speech, headline on top, dip to black.
+const talkingPlan = normalizePlan({
+  language: "en",
+  subject: "A man in his forties with short dark hair in a dark shirt, face softly lit.",
+  style: "Kodak Portra 400 film look, low-key but clearly exposed.",
+  shots: [{
+    visual: "He faces the camera with calm, grave honesty.",
+    camera: "Subtle handheld breathing sway.",
+    seconds: 10,
+    narration: speech,
+    on_screen_text: "THE FIRST YEAR AFTER BETRAYAL",
+    text_position: "top",
+    transition_to_next: "cut",
+  }],
+  on_camera_speech: true,
+  ending: "fade_to_black",
+  voice: "male",
+  music_mood: "none",
+}, { duration: 10 });
+assert.equal(talkingPlan.onCameraSpeech, true);
+assert.equal(talkingPlan.ending, "fade_to_black");
+assert.equal(talkingPlan.beats[0].captionPosition, "top");
+assert.equal(talkingPlan.musicMood, "none");
+
+// Native speech prompt quotes the exact words; the dubbed variant stays silent.
+const spoken = ltxPrompt(talkingPlan, { nativeSpeech: true });
+assert.ok(spoken.includes(`"${speech}"`));
+assert.match(spoken, /calm male voice/);
+assert.match(spoken, /No music/);
+assert.match(spoken, /No on-screen text/);
+assert.doesNotMatch(spoken, /THE FIRST YEAR AFTER BETRAYAL/, "overlay text is post-production, never drawn by the model");
+assert.match(ltxPrompt(talkingPlan), /Nobody speaks/);
+assert.equal(normalizePlan({ shots: [{ visual: "x" }], on_camera_speech: true }, { duration: 5 }).onCameraSpeech, false,
+  "no narration -> no on-camera speech");
+
+// Engine order per request and per deployment switch.
+const talking = applyPlanToDirector(scripted, talkingPlan);
+assert.deepEqual(engineOrderFor(talking, {}), ["ltx-speech", "wan-speech", "wan"]);
+const talkingPt = applyPlanToDirector(scripted, { ...talkingPlan, language: "pt-BR" });
+assert.deepEqual(engineOrderFor(talkingPt, {}), ["wan-speech", "ltx", "wan"], "pt speech: Kokoro + S2V first");
+assert.deepEqual(engineOrderFor(talkingPt, { NOVA_LTX_SPEECH_LANGUAGES: "en,pt" }), ["ltx-speech", "wan-speech", "wan"]);
+assert.deepEqual(engineOrderFor(directed, {}), ["ltx", "wan"], "voice-over videos: LTX picture, Wan fallback");
+assert.deepEqual(engineOrderFor(directed, { NOVA_VIDEO_ENGINE_ORDER: "wan" }), ["wan"]);
+assert.deepEqual(engineOrderFor(talking, { NOVA_VIDEO_ENGINE_ORDER: "wan" }), ["wan-speech", "wan"]);
+assert.deepEqual(engineOrderFor(base, {}), [], "regex-director jobs keep the legacy Wan route");
+assert.equal(talking.ltxSpeechPrompt, spoken);
 
 console.log("NOVA LLM video plan director: OK");

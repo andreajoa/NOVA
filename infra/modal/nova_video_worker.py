@@ -89,6 +89,12 @@ base_image = (
             "TOKENIZERS_PARALLELISM": "false",
         }
     )
+    # Headline font for top/center on-screen text (Bebas Neue, SIL Open Font License).
+    .run_commands(
+        "mkdir -p /opt/fonts && python -c \"import urllib.request; urllib.request.urlretrieve("
+        "'https://github.com/google/fonts/raw/main/ofl/bebasneue/BebasNeue-Regular.ttf', "
+        "'/opt/fonts/BebasNeue-Regular.ttf')\""
+    )
 )
 
 speech_image = base_image.uv_pip_install(*SPEECH_PACKAGES)
@@ -228,6 +234,11 @@ XFADE_TRANSITIONS = {
     "fade", "dissolve", "slideleft", "slideright", "wipeleft", "circleopen", "smoothleft",
 }
 XFADE_SECONDS = 0.45
+
+
+def _caption_position(value) -> str:
+    name = str(value or "").strip().lower()
+    return name if name in {"top", "center", "bottom"} else "bottom"
 
 
 def _transition_name(value) -> str:
@@ -444,6 +455,7 @@ def _director_timeline(payload: dict) -> list[dict]:
                 "caption": str(item.get("caption") or "").strip(),
                 "audio": str(item.get("audio") or "").strip(),
                 "transition": _transition_name(item.get("transition")),
+                "caption_position": _caption_position(item.get("captionPosition") or item.get("caption_position")),
             }
         )
     return timeline
@@ -700,9 +712,19 @@ def _music_track(payload: dict, tmp: Path, total_seconds: float) -> Path | None:
         return None
 
 
-def _build_director_audio(payload: dict, tmp: Path, total_seconds: float) -> Path | None:
+def _build_director_audio(
+    payload: dict,
+    tmp: Path,
+    total_seconds: float,
+    base_audio: Path | None = None,
+    include_narration: bool = True,
+) -> Path | None:
+    """Mix narration, music and an optional base track (the engine's own audio).
+
+    Returns None when there is nothing to add to what the video already has.
+    """
     timeline = _director_timeline(payload)
-    narration_items = [item for item in timeline if item.get("narration")]
+    narration_items = [item for item in timeline if item.get("narration")] if include_narration else []
     music = _music_track(payload, tmp, total_seconds)
     if not narration_items and music is None:
         return None
@@ -737,19 +759,34 @@ def _build_director_audio(payload: dict, tmp: Path, total_seconds: float) -> Pat
         )
         voice_label = "[voice]"
 
+    # The engine's own audio (e.g. on-camera speech or ambience) is treated as
+    # the foreground when there is no dubbed narration.
+    if base_audio is not None:
+        base_index = len(inputs) // 2
+        inputs.extend(["-i", str(base_audio)])
+        filters.append(
+            f"[{base_index}:a]aresample=48000,aformat=channel_layouts=stereo,apad,atrim=duration={total:.3f}[base]"
+        )
+        if voice_label:
+            filters.append("[base]volume=0.55[basebed]")
+            filters.append(f"{voice_label}[basebed]amix=inputs=2:normalize=0:duration=first[fore]")
+        else:
+            filters.append("[base]anull[fore]")
+        voice_label = "[fore]"
+
     if music is not None:
         music_index = len(inputs) // 2
         inputs.extend(["-i", str(music)])
         filters.append(f"[{music_index}:a]volume=0.55,apad,atrim=duration={total:.3f}[music]")
         if voice_label:
-            # Duck the music under the voice so narration stays intelligible.
-            filters.append("[voice]asplit=2[voicemix][voicekey]")
+            # Duck the music under the foreground so speech stays intelligible.
+            filters.append(f"{voice_label}asplit=2[voicemix][voicekey]")
             filters.append("[music][voicekey]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=350[ducked]")
             filters.append("[ducked][voicemix]amix=inputs=2:normalize=0:duration=first[premaster]")
         else:
             filters.append("[music]anull[premaster]")
     else:
-        filters.append("[voice]anull[premaster]")
+        filters.append(f"{voice_label}anull[premaster]")
 
     filters.append(f"[premaster]loudnorm=I=-15:TP=-1.5:LRA=11,atrim=duration={total:.3f}[aout]")
     mixed = tmp / "director-audio.wav"
@@ -766,6 +803,9 @@ def _build_director_audio(payload: dict, tmp: Path, total_seconds: float) -> Pat
     return mixed
 
 
+HEADLINE_FONT = Path("/opt/fonts/BebasNeue-Regular.ttf")
+
+
 def _wrapped_caption(text: str, width: int) -> str:
     import textwrap
 
@@ -780,41 +820,57 @@ def _overlay_director_captions(source: Path, payload: dict, output: Path, aspect
 
     filters = []
     for index, item in enumerate(timeline):
-        caption_file = output.with_name(f"caption-{index:02d}.txt")
-        width = 28 if aspect == "9:16" else 44
-        caption_file.write_text(_wrapped_caption(str(item["caption"]), width), encoding="utf-8")
         start = float(item["start"])
         end = float(item["end"])
         fade = min(0.3, max(0.05, (end - start) / 4))
-        fontsize = 46 if aspect == "9:16" else 40
+        position = item.get("caption_position", "bottom")
+        headline = position in {"top", "center"} and HEADLINE_FONT.exists()
+        fontfile = str(HEADLINE_FONT) if headline else "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        fontsize = (72 if aspect == "9:16" else 64) if headline else (46 if aspect == "9:16" else 40)
         margin = 150 if aspect == "9:16" else 80
+        # Bebas is condensed, so headlines fit more characters per line.
+        width = (22 if aspect == "9:16" else 40) if headline else (28 if aspect == "9:16" else 44)
+        lines = _wrapped_caption(str(item["caption"]), width).split("\n")
+        line_height = int(fontsize * (1.08 if headline else 1.35))
+        block = line_height * len(lines)
         # Alpha ramps in and out so text never pops on or off between shots.
         alpha = (
             f"if(lt(t,{start:.3f}),0,if(lt(t,{start + fade:.3f}),(t-{start:.3f})/{fade:.3f},"
             f"if(lt(t,{end - fade:.3f}),1,if(lt(t,{end:.3f}),({end:.3f}-t)/{fade:.3f},0))))"
         )
-        filters.append(
-            "drawtext="
-            "fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:"
-            f"textfile='{caption_file.as_posix()}':"
-            "fontcolor=white:"
-            f"fontsize={fontsize}:"
-            "line_spacing=8:"
-            "borderw=3:bordercolor=black@0.85:"
-            "shadowx=2:shadowy=3:shadowcolor=black@0.6:"
-            "box=1:boxcolor=black@0.28:boxborderw=18:"
-            "x=(w-text_w)/2:"
-            f"y=h-text_h-{margin}:"
-            f"alpha='{alpha}':"
-            f"enable='between(t,{start:.3f},{end:.3f})'"
-        )
+        # One drawtext per line so every line is centered (ffmpeg 5.1 has no
+        # text_align for multi-line text).
+        for row, line in enumerate(lines):
+            caption_file = output.with_name(f"caption-{index:02d}-{row:02d}.txt")
+            caption_file.write_text(line, encoding="utf-8")
+            if position == "top":
+                y_expr = f"{int(margin * 0.9) + row * line_height}"
+            elif position == "center":
+                y_expr = f"(h-{block})/2+{row * line_height}"
+            else:
+                y_expr = f"h-{margin}-{block - row * line_height}"
+            filters.append(
+                "drawtext="
+                f"fontfile={fontfile}:"
+                f"textfile='{caption_file.as_posix()}':"
+                "fontcolor=white:"
+                f"fontsize={fontsize}:"
+                "borderw=3:bordercolor=black@0.85:"
+                "shadowx=2:shadowy=3:shadowcolor=black@0.6:"
+                f"box={0 if headline else 1}:boxcolor=black@0.28:boxborderw=14:"
+                "x=(w-text_w)/2:"
+                f"y={y_expr}:"
+                f"alpha='{alpha}':"
+                f"enable='between(t,{start:.3f},{end:.3f})'"
+            )
 
     subprocess.run(
         [
             "ffmpeg", "-y", "-i", str(source),
             "-vf", ",".join(filters),
+            "-map", "0:v:0", "-map", "0:a?",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
-            "-pix_fmt", "yuv420p", "-an", str(output),
+            "-pix_fmt", "yuv420p", "-c:a", "copy", str(output),
         ],
         check=True,
         stdout=subprocess.DEVNULL,
@@ -836,6 +892,64 @@ def _mux_director_audio(video: Path, audio: Path, output: Path, seconds: float) 
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+
+
+def _has_audio(path: Path) -> bool:
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
+        capture_output=True,
+        text=True,
+    )
+    return bool(probe.stdout.strip())
+
+
+def _apply_ending(source: Path, payload: dict, output: Path) -> bool:
+    if str(payload.get("director_ending") or "") != "fade_to_black":
+        return False
+    seconds = _video_seconds(source)
+    fade = min(0.6, max(0.25, seconds * 0.05))
+    start = max(0.0, seconds - fade)
+    command = [
+        "ffmpeg", "-y", "-i", str(source),
+        "-vf", f"fade=t=out:st={start:.3f}:d={fade:.3f}",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+    ]
+    if _has_audio(source):
+        command += ["-af", f"afade=t=out:st={start:.3f}:d={fade:.3f}", "-c:a", "aac", "-b:a", "192k"]
+    subprocess.run(command + ["-movflags", "+faststart", str(output)], check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return True
+
+
+def _finish_video(result: Path, payload: dict, tmp: Path, aspect: str, total_seconds: float,
+                  include_narration: bool = True) -> Path:
+    """Deterministic post-production shared by every engine.
+
+    On-screen text, narration dub, music and the ending are applied here so the
+    diffusion models only have to solve picture (and, for joint engines, speech).
+    """
+    if not _director_timeline(payload):
+        return result
+    captioned = tmp / "finish-captioned.mp4"
+    if _overlay_director_captions(result, payload, captioned, aspect):
+        result = captioned
+
+    base_audio = None
+    if _has_audio(result):
+        base_audio = tmp / "finish-base.wav"
+        subprocess.run(["ffmpeg", "-y", "-i", str(result), "-vn", "-ac", "2", "-ar", "48000", str(base_audio)],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    audio = _build_director_audio(payload, tmp, total_seconds, base_audio=base_audio,
+                                  include_narration=include_narration)
+    if audio is not None:
+        mixed = tmp / "finish-with-audio.mp4"
+        _mux_director_audio(result, audio, mixed, total_seconds)
+        result = mixed
+
+    ended = tmp / "finish-ending.mp4"
+    if _apply_ending(result, payload, ended):
+        result = ended
+    return result
 
 
 def _upload(payload: dict, output_path: Path) -> str:
@@ -1010,24 +1124,16 @@ def _normal_generate(payload: dict) -> str:
             # keeps typography exact and lets Wan spend its capacity on motion,
             # anatomy, camera and continuity.
             if source_video is None and _director_timeline(payload):
-                captioned = tmp / "captioned.mp4"
-                if _overlay_director_captions(result, payload, captioned, aspect):
-                    result = captioned
-
                 timeline = _director_timeline(payload)
                 total_seconds = max(
                     float(duration),
                     max((float(item["end"]) for item in timeline), default=float(duration)),
                 )
-                audio = _build_director_audio(payload, tmp, total_seconds)
-                if audio is not None:
-                    mixed = tmp / "final-with-audio.mp4"
-                    _mux_director_audio(result, audio, mixed, total_seconds)
-                    result = mixed
+                result = _finish_video(result, payload, tmp, aspect, total_seconds)
 
             return _upload(payload, result)
     except Exception:
-        _notify(payload, "failed", "GENERATION_FAILED")
+        # The Modal class wrapper notifies NOVA (or hands off to the next engine).
         raise
 
 def _speech_generate(payload: dict) -> str:
@@ -1088,7 +1194,6 @@ def _speech_generate(payload: dict) -> str:
                 result = square
             return _upload(payload, result)
     except Exception:
-        _notify(payload, "failed", "SPEECH_GENERATION_FAILED")
         raise
 
 
@@ -1180,6 +1285,244 @@ def preload_models(include_speech: bool = False):
     return {"normal": TI2V_DIR.exists(), "speech": S2V_DIR.exists()}
 
 
+# ---------------------------------------------------------------------------
+# Engine chain. LLM-planned jobs carry payload["engine_order"], e.g.
+# ["ltx", "wan"] or ["wan-speech", "ltx-speech"]. Each engine that fails hands
+# the same job to the next one; NOVA is only told "failed" at the end.
+# ---------------------------------------------------------------------------
+ENGINES = ("ltx", "ltx-speech", "wan", "wan-speech")
+LTX_SPACE = os.environ.get("NOVA_LTX_SPACE_URL", "https://lightricks-ltx-2-3.hf.space").rstrip("/")
+LTX_WAIT_SECONDS = 8 * 60
+
+
+def _engine_order(payload: dict) -> list[str]:
+    raw = payload.get("engine_order")
+    if not isinstance(raw, list):
+        return []
+    order = [str(name) for name in raw if str(name) in ENGINES]
+    if not _speech_enabled():
+        order = [name for name in order if name != "wan-speech"]
+    return order
+
+
+def _spawn_engine(name: str, payload: dict):
+    job = {**payload, "engine": name}
+    if name.startswith("ltx"):
+        return NovaLtxVideo().generate.spawn(job)
+    if name == "wan-speech":
+        return NovaWanSpeechVideo().generate.spawn(job)
+    return NovaWanVideo().generate.spawn(job)
+
+
+def _hand_off(payload: dict, error: Exception) -> bool:
+    order = _engine_order(payload)
+    current = str(payload.get("engine") or "")
+    if current not in order:
+        return False
+    remaining = order[order.index(current) + 1:]
+    if not remaining:
+        return False
+    print(f"[NOVA_VIDEO ENGINE] {current} failed ({str(error)[:240]}); handing off to {remaining[0]}", flush=True)
+    _spawn_engine(remaining[0], payload)
+    return True
+
+
+def _hf_headers(payload: dict) -> dict:
+    # The customer's own Hugging Face token (their free ZeroGPU quota) wins over
+    # NOVA's; never logged.
+    token = str(payload.get("hf_token") or os.environ.get("HF_TOKEN") or "").strip()
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+def _ltx_dimensions(aspect: str) -> tuple[int, int]:
+    if aspect == "9:16":
+        return 576, 1024
+    if aspect == "1:1":
+        return 768, 768
+    return 1024, 576
+
+
+def _gradio_upload(path: Path, headers: dict) -> dict:
+    import requests
+
+    with path.open("rb") as handle:
+        response = requests.post(f"{LTX_SPACE}/gradio_api/upload", files={"files": handle}, headers=headers, timeout=120)
+    response.raise_for_status()
+    remote = response.json()[0]
+    return {"path": remote, "meta": {"_type": "gradio.FileData"}}
+
+
+def _ltx_render(prompt: str, image: dict | None, seconds: int, seed: int, width: int, height: int,
+                headers: dict, output: Path) -> None:
+    import json
+    import requests
+
+    t0 = time.time()
+    submit = requests.post(
+        f"{LTX_SPACE}/gradio_api/call/generate_video",
+        json={"data": [image, prompt, seconds, False, seed, False, height, width]},
+        headers=headers,
+        timeout=60,
+    )
+    submit.raise_for_status()
+    event_id = submit.json()["event_id"]
+
+    video_url = None
+    event = ""
+    with requests.get(f"{LTX_SPACE}/gradio_api/call/generate_video/{event_id}", headers=headers,
+                      stream=True, timeout=(30, LTX_WAIT_SECONDS)) as stream:
+        for raw_line in stream.iter_lines(decode_unicode=True):
+            if time.time() - t0 > LTX_WAIT_SECONDS:
+                raise TimeoutError("LTX queue wait exceeded")
+            line = (raw_line or "").strip()
+            if line.startswith("event:"):
+                event = line[6:].strip()
+            elif line.startswith("data:") and event == "complete":
+                data = json.loads(line[5:].strip())
+                first = data[0] if data else None
+                video_url = (first or {}).get("url") if isinstance(first, dict) else None
+                break
+            elif line.startswith("data:") and event == "error":
+                # ZeroGPU quota exhaustion arrives here with an empty payload.
+                raise RuntimeError(f"LTX engine error: {line[5:].strip()[:200] or 'no detail (quota?)'}")
+    if not video_url:
+        raise RuntimeError("LTX engine returned no video")
+    _phase_timing("ltx_render", t0)
+
+    response = requests.get(video_url, headers=headers, timeout=180)
+    response.raise_for_status()
+    output.write_bytes(response.content)
+
+
+def _ltx_generate(payload: dict) -> str:
+    engine = str(payload.get("engine") or "ltx")
+    native_speech = engine == "ltx-speech"
+    prompt_key = "ltx_speech_prompt" if native_speech else "ltx_prompt"
+    prompt = str(payload.get(prompt_key) or payload.get("prompt") or "").strip()
+    if not prompt:
+        raise ValueError("LTX prompt is required")
+    aspect = str(payload.get("aspect_ratio") or "16:9")
+    duration = max(2, min(10, int(payload.get("duration") or 5)))
+    seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
+    width, height = _ltx_dimensions(aspect)
+    headers = _hf_headers(payload)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        image = None
+        if str(payload.get("task")) == "image-to-video" and payload.get("image_url"):
+            reference = tmp / "reference.jpg"
+            _download(str(payload["image_url"]), reference, 20_000_000)
+            image = _gradio_upload(reference, headers)
+
+        raw = tmp / "ltx.mp4"
+        _ltx_render(prompt, image, duration, seed, width, height, headers, raw)
+        if _video_seconds(raw) < duration - 1.0:
+            raise RuntimeError("LTX engine returned a truncated video")
+
+        # On-camera speech already comes from the engine; otherwise NOVA dubs
+        # the narration so every language gets a known-good voice.
+        result = _finish_video(raw, payload, tmp, aspect, float(duration), include_narration=not native_speech)
+        return _upload(payload, result)
+
+
+def _director_speech_generate(payload: dict) -> str:
+    """Lip-synced on-camera speech with Apache-2.0 models only.
+
+    Kokoro speaks the director's narration in the customer's language, and
+    Wan2.2-S2V animates a reference portrait to that exact audio. Without a
+    customer image the portrait is rendered with Wan TI2V first.
+    """
+    import math
+
+    _ensure_model(S2V_REPO, S2V_DIR)
+    timeline = _director_timeline(payload)
+    speech = " ".join(item["narration"] for item in timeline if item.get("narration")).strip()
+    if not speech:
+        raise ValueError("Director speech requires narration")
+    aspect = str(payload.get("aspect_ratio") or "16:9")
+    duration = max(3, min(10, int(payload.get("duration") or 5)))
+    steps = max(4, min(40, int(os.environ.get("NOVA_WAN_SPEECH_STEPS", "20"))))
+    seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        reference = tmp / "reference.png"
+        if payload.get("image_url"):
+            _download(str(payload["image_url"]), reference, 20_000_000)
+        else:
+            _prepare_normal_wan_runtime()
+            _ensure_model(TI2V_REPO, TI2V_DIR)
+            first = timeline[0]
+            portrait = (
+                f"{first.get('visual', '')} Medium close-up portrait, the person faces the camera with a "
+                "neutral closed mouth, face evenly and clearly lit, sharp focus, photorealistic. "
+                "No text, no captions."
+            )
+            still = tmp / "portrait.mp4"
+            _run_normal_segment(prompt=portrait, aspect=aspect, frames=17, steps=12, seed=seed,
+                                output=still, reference=None)
+            _extract_last_frame(still, reference)
+
+        lang, voice, speed = _tts_config(payload, speech)
+        voice_raw = tmp / "speech-raw.wav"
+        _synthesize_kokoro(speech, voice_raw, lang, voice, speed)
+        spoken = _audio_seconds(voice_raw)
+        tempo = min(MAX_NARRATION_SPEEDUP, max(1.0, spoken / max(1.0, duration - 0.3)))
+        voice_wav = tmp / "speech.wav"
+        filters = f"atempo={tempo:.4f}," if tempo > 1.001 else ""
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(voice_raw), "-af", f"{filters}atrim=duration={duration:.3f}",
+             "-ar", "16000", "-ac", "1", str(voice_wav)],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+
+        output = tmp / "speech.mp4"
+        command = [
+            "python", str(WAN_CODE / "generate.py"),
+            "--task", "s2v-14B",
+            "--size", "704*1024" if aspect == "9:16" else "1024*704",
+            "--ckpt_dir", str(S2V_DIR),
+            "--offload_model", "True",
+            "--convert_model_dtype",
+            "--t5_cpu",
+            "--prompt", f"{timeline[0].get('visual', '')} The person speaks to the camera naturally.",
+            "--image", str(reference),
+            "--audio", str(voice_wav),
+            "--start_from_ref",
+            "--num_clip", str(max(1, math.ceil(_audio_seconds(voice_wav) * 16 / 80))),
+            "--sample_steps", str(steps),
+            "--base_seed", str(seed),
+            "--save_file", str(output),
+        ]
+        t0 = time.time()
+        try:
+            subprocess.run(command, cwd=str(WAN_CODE), check=True, timeout=15 * 60)
+        finally:
+            _phase_timing(f"director_speech_render_steps{steps}", t0)
+
+        result = output
+        if aspect == "1:1":
+            square = tmp / "speech-square.mp4"
+            _crop_square(result, square)
+            result = square
+        total = min(float(duration), _video_seconds(result))
+        result = _finish_video(result, payload, tmp, aspect, total, include_narration=False)
+        return _upload(payload, result)
+
+
+def _run_engine(payload: dict, render, failure_code: str) -> dict:
+    try:
+        public_url = render(payload)
+        _notify(payload, "completed")
+        return {"success": True, "video_url": public_url, "engine": payload.get("engine")}
+    except Exception as error:
+        if _hand_off(payload, error):
+            return {"success": False, "handed_off": True}
+        _notify(payload, "failed", failure_code)
+        raise
+
+
 @app.cls(
     image=base_image,
     gpu="L40S",
@@ -1194,13 +1537,7 @@ def preload_models(include_speech: bool = False):
 class NovaWanVideo:
     @modal.method()
     def generate(self, payload: dict) -> dict:
-        try:
-            public_url = _normal_generate(payload)
-            _notify(payload, "completed")
-            return {"success": True, "video_url": public_url}
-        except Exception:
-            _notify(payload, "failed", "GENERATION_FAILED")
-            raise
+        return _run_engine(payload, _normal_generate, "GENERATION_FAILED")
 
 
 @app.cls(
@@ -1217,13 +1554,26 @@ class NovaWanVideo:
 class NovaWanSpeechVideo:
     @modal.method()
     def generate(self, payload: dict) -> dict:
-        try:
-            public_url = _speech_generate(payload)
-            _notify(payload, "completed")
-            return {"success": True, "video_url": public_url}
-        except Exception:
-            _notify(payload, "failed", "SPEECH_GENERATION_FAILED")
-            raise
+        render = _director_speech_generate if payload.get("engine") == "wan-speech" else _speech_generate
+        return _run_engine(payload, render, "SPEECH_GENERATION_FAILED")
+
+
+# LTX runs on Hugging Face ZeroGPU; this container only waits, downloads and
+# post-produces, so it is CPU-only and costs almost nothing while it waits.
+@app.cls(
+    image=base_image,
+    cpu=2.0,
+    memory=8192,
+    volumes={str(MODEL_ROOT): model_volume},
+    secrets=[engine_secret],
+    timeout=14 * 60,
+    scaledown_window=30,
+    max_containers=4,
+)
+class NovaLtxVideo:
+    @modal.method()
+    def generate(self, payload: dict) -> dict:
+        return _run_engine(payload, _ltx_generate, "GENERATION_FAILED")
 
 
 @app.function(image=base_image, secrets=[engine_secret], timeout=60)
@@ -1258,6 +1608,16 @@ def api():
                 raise HTTPException(status_code=503, detail="Speech engine disabled")
             call = await NovaWanSpeechVideo().generate.spawn.aio(payload)
             engine = "wan-s2v"
+        elif task in {"text-to-video", "image-to-video"} and _engine_order(payload):
+            first = _engine_order(payload)[0]
+            job = {**payload, "engine": first}
+            if first.startswith("ltx"):
+                call = await NovaLtxVideo().generate.spawn.aio(job)
+            elif first == "wan-speech":
+                call = await NovaWanSpeechVideo().generate.spawn.aio(job)
+            else:
+                call = await NovaWanVideo().generate.spawn.aio(job)
+            engine = first
         elif task in {"text-to-video", "image-to-video", "continue-video"}:
             call = await NovaWanVideo().generate.spawn.aio(payload)
             engine = "wan-ti2v"

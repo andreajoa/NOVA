@@ -203,6 +203,9 @@ async function submitWorker(worker, input = {}, context = {}, existingJob = null
       body: JSON.stringify({
         input: {
           ...input,
+          // The customer's Hugging Face token is forwarded for their free
+          // ZeroGPU quota but never stored with the job record.
+          ...(context.hfToken && { hf_token: String(context.hfToken) }),
           nova_output: outputTarget,
           nova_callback: { url: callbackUrl, token: job.callbackToken },
         },
