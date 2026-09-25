@@ -1747,17 +1747,19 @@ STUDIO_SIZES = {"9:16": (928, 1664), "16:9": (1664, 928), "1:1": (1328, 1328), "
 studio_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("libgl1", "libglib2.0-0")
+    # Pinned to a set uv resolved together: diffusers 0.40 needs hub>=1.23,
+    # which in turn needs transformers 5.x.
     .uv_pip_install(
-        "torch>=2.7,<3",
+        "torch==2.14.0",
         "diffusers==0.40.0",
-        "transformers>=4.56,<5",
-        "accelerate>=1.6,<2",
-        "peft>=0.17,<1",
+        "transformers==5.17.0",
+        "accelerate==1.15.0",
+        "peft==0.21.0",
+        "huggingface-hub==1.33.0",
         "safetensors",
         "sentencepiece",
         "pillow",
         "requests>=2.32,<3",
-        "huggingface-hub>=0.36,<1",
     )
     .env({"HF_HOME": str(MODEL_ROOT), "HF_XET_HIGH_PERFORMANCE": "1", "TOKENIZERS_PARALLELISM": "false"})
 )
