@@ -57,6 +57,7 @@ function workersForInput(input = {}) {
   const workers = workersForTask(task);
   const director = input?.director || {};
   const requiresDirectorWorker = Boolean(
+    director.ugc ||
     director.workerPlanned ||
     director.llmPlanned ||
     (

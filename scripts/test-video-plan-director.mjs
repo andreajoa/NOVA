@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { directVideoPrompt } from "../src/lib/videoPromptDirector.mjs";
 import {
+  UGC_RULES,
   allowsPublicFallback,
   applyPlanToDirector,
   engineOrderFor,
@@ -261,6 +262,11 @@ assert.equal(allowsPublicFallback(talking.providerHints), true);
 assert.equal(allowsPublicFallback({ complex: true }), false, "regex scripts never degrade silently");
 assert.equal(allowsPublicFallback({ complex: false }), true);
 
+// UGC: always planned with the UGC rules and never degraded to the public route.
+assert.equal(shouldPlanWithLlm({ beats: [{}, {}] }, "ugc-product"), true);
+assert.equal(allowsPublicFallback({ complex: true, llmPlanned: true, ugc: true }), false);
+assert.match(UGC_RULES, /never invent claims/);
+
 // Parity fixture for the Python port in the Modal worker.
 if (process.env.NOVA_PLAN_PARITY_OUT) {
   const { writeFileSync } = await import("node:fs");
@@ -272,6 +278,7 @@ if (process.env.NOVA_PLAN_PARITY_OUT) {
     raw: fixture, duration: 10, plan: js,
     ltx: ltxPrompt(js), ltxSpeech: ltxPrompt(js, { nativeSpeech: true }),
     order: engineOrderFor(applyPlanToDirector(base, js), {}),
+    ugcRules: UGC_RULES,
   }, null, 1));
 }
 

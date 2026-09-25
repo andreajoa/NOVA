@@ -1140,8 +1140,11 @@ def _remove_letterbox(source: Path, output: Path) -> bool:
     import re
 
     width, height = _video_size(source)
+    # Skip the first second: image-to-video starts on the clean input frame and
+    # the engine only adds borders afterwards, which a whole-clip union misses.
+    start = "1.0" if _video_seconds(source) > 2.5 else "0"
     probe = subprocess.run(
-        ["ffmpeg", "-i", str(source), "-vf", "cropdetect=limit=24:round=2:reset=0", "-f", "null", "-"],
+        ["ffmpeg", "-ss", start, "-i", str(source), "-vf", "cropdetect=limit=24:round=2:reset=0", "-f", "null", "-"],
         capture_output=True, text=True,
     )
     crops = re.findall(r"crop=(\d+):(\d+):(\d+):(\d+)", probe.stderr)
@@ -1152,6 +1155,9 @@ def _remove_letterbox(source: Path, output: Path) -> bool:
         return False
     if cw < width * 0.5 or ch < height * 0.5:
         return False  # mostly dark footage, not bars
+    # Borders often come with rounded corners: trim a little further inside.
+    inset_w, inset_h = int(cw * 0.02) // 2 * 2, int(ch * 0.02) // 2 * 2
+    cx, cy, cw, ch = cx + inset_w, cy + inset_h, cw - 2 * inset_w, ch - 2 * inset_h
     target = width / height
     if cw / ch > target:
         nw, nh = int(ch * target) // 2 * 2, ch
@@ -1456,7 +1462,10 @@ def _normal_generate(payload: dict) -> str:
 
             if task == "image-to-video":
                 reference = tmp / "reference.jpg"
-                _download(str(payload.get("image_url") or ""), reference, 20_000_000)
+                if payload.get("reference_bytes"):
+                    reference.write_bytes(bytes(payload["reference_bytes"]))
+                else:
+                    _download(str(payload.get("image_url") or ""), reference, 20_000_000)
             elif task == "continue-video":
                 source_video = tmp / "source.mp4"
                 reference = tmp / "last-frame.png"
@@ -1926,7 +1935,7 @@ def sample_studio(video: bool = True):
         "images": [creator, product], "seed": 5, "aspect": "9:16",
         "prompt": "The woman from the first image holds the serum bottle from the second image up next to her "
                   "cheek with one hand, the label facing the camera and unchanged, in the same bright bathroom, "
-                  "vertical smartphone selfie, natural light, candid UGC photo.",
+                  "selfie-style close shot filling the whole picture, natural light, candid UGC photo.",
     })
     open("samples/ugc-keyframe.png", "wb").write(keyframe)
     print(f"[SAMPLE] studio edit (creator + product) in {time.time() - t1:.0f}s", flush=True)
@@ -1941,6 +1950,120 @@ def sample_studio(video: bool = True):
     data = sample_render_ltx_keyframe.remote(planned, keyframe)
     open("samples/ugc-video.mp4", "wb").write(data)
     print(f"[SAMPLE] UGC video (plan + LTX i2v + finish) in {time.time() - t2:.0f}s", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# UGC product videos: plan a creator-style ad, compose the creator holding the
+# customer's real product (Qwen-Image-Edit), then run the normal engine chain
+# on that keyframe and finish it with NOVA's post-production.
+# ---------------------------------------------------------------------------
+UGC_RULES = """
+
+This is a UGC product ad for TikTok / Reels / Shorts:
+- One continuous selfie-style shot (two at most) of a real-looking creator holding and showing the product from the customer's photo. Never mention phones, screens or device frames in visual or camera.
+- The creator speaks to the camera (on_camera_speech true): the first sentence is a scroll-stopping hook of at most 7 words, then one concrete benefit, then a short call to action.
+- The first shot's on_screen_text is the hook in at most 5 words with text_position top; the last shot's on_screen_text may be the call to action.
+- Keep the product's name exactly as the customer wrote it and never invent claims, prices or results the customer did not state.
+- music_mood is upbeat or lofi unless the customer asked otherwise; ending is none.
+- subject describes the creator (age, look, clothing) and the setting; never describe the product's label text."""
+
+
+def _ugc_keyframe(payload: dict) -> bytes:
+    """Creator holding the real product, rendered in the delivery aspect."""
+    timeline = _director_timeline(payload)
+    subject = timeline[0]["visual"] if timeline else "A friendly creator in a bright room."
+    aspect = str(payload.get("aspect_ratio") or "9:16")
+    product = payload.get("product_image_bytes") or str(payload.get("product_image_url") or "")
+    if not (isinstance(product, (bytes, bytearray)) or str(product).startswith("https://")):
+        raise ValueError("UGC needs the product photo")
+    avatar = payload.get("avatar_image_bytes") or str(payload.get("avatar_image_url") or "")
+    seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
+    t0 = time.time()
+    if isinstance(avatar, (bytes, bytearray)) or str(avatar).startswith("https://"):
+        creator = avatar
+    else:
+        creator = NovaImageGen().render.remote({
+            "aspect": aspect, "seed": seed,
+            "prompt": f"Candid selfie-style photo filling the whole picture. {subject} Looking at the camera, natural light, realistic "
+                      "skin texture, authentic UGC creator style, empty hands, no text.",
+        })
+    keyframe = NovaImageEdit().render.remote({
+        "images": [creator, product], "aspect": aspect, "seed": seed + 1,
+        "prompt": "The person from the first image holds the product from the second image up near their face "
+                  "with one hand, the product's label facing the camera and exactly unchanged. Same person, same "
+                  "face, same outfit. Selfie-style close shot filling the whole picture, natural light, candid UGC "
+                  "photo, no added text, no borders.",
+    })
+    _phase_timing("ugc_keyframe", t0)
+    return keyframe
+
+
+def _ugc_run(payload: dict, planner) -> None:
+    if payload.get("needs_plan"):
+        try:
+            payload = planner(payload)
+        except Exception as error:
+            print(f"[NOVA_VIDEO UGC] planning failed: {str(error)[:200]}", flush=True)
+            payload = {**payload, "needs_plan": False}
+    keyframe = _ugc_keyframe(payload)
+    job = {**payload, "task": "image-to-video", "reference_bytes": keyframe}
+    if not _engine_order(job):
+        job["engine_order"] = ["ltx", "wan"]
+    _dispatch_first_engine(job)
+
+
+@app.cls(image=base_image, cpu=1.0, memory=4096, volumes={str(MODEL_ROOT): model_volume},
+         secrets=[engine_secret], timeout=20 * 60, scaledown_window=30, max_containers=4)
+class NovaUgcDirector:
+    @modal.method()
+    def run(self, payload: dict) -> dict:
+        try:
+            _ugc_run(payload, lambda job: NovaPlanner().plan_only.remote(job))
+            return {"dispatched": True}
+        except Exception:
+            _notify(payload, "failed", "UGC_GENERATION_FAILED")
+            raise
+
+
+UGC_SAMPLE_REQUEST_PT = (
+    "UGC para Reels, 9:16, 10 segundos. Uma jovem de uns 25 anos, cabelo cacheado, moletom claro, no banheiro "
+    "claro, mostra o sérum GLOW para a câmera e fala animada e natural: \"Gente, eu não esperava isso. Minha pele "
+    "nunca ficou tão boa. Três gotas toda noite. Link na bio!\" Título no topo: MINHA ROTINA NOTURNA. Música animada."
+)
+
+
+@app.local_entrypoint()
+def sample_ugc_pt():
+    """Portuguese UGC through the real UGC rules: LTX native speech vs Kokoro dub."""
+    os.makedirs("samples", exist_ok=True)
+    product = open("samples/product.png", "rb").read() if os.path.exists("samples/product.png") else NovaImageGen().render.remote({
+        "aspect": "1:1", "seed": 11,
+        "prompt": "Studio product photo of a small frosted glass serum bottle with a gold dropper cap, the label "
+                  "reads \"GLOW\" in elegant black serif letters and \"Vitamin C Serum 30ml\" below, on a clean "
+                  "white background, soft shadow, e-commerce packshot, ultra sharp.",
+    })
+    planned = NovaPlanner().plan_only.remote({
+        "task": "ugc-product", "duration": 10, "aspect_ratio": "9:16", "seed": 21, "director_mode": "ugc",
+        "director_original_prompt": UGC_SAMPLE_REQUEST_PT,
+    })
+    with open("samples/ugc-pt-plan.json", "w", encoding="utf-8") as handle:
+        json.dump({k: v for k, v in planned.items() if not isinstance(v, (bytes, bytearray))}, handle, indent=2, ensure_ascii=False)
+    keyframe = sample_ugc_keyframe.remote({**planned, "product_image_bytes": product})
+    open("samples/ugc-pt-keyframe.png", "wb").write(keyframe)
+    for engine in ("ltx-speech", "ltx"):
+        t0 = time.time()
+        try:
+            data = sample_render_ltx_keyframe.remote({**planned, "engine_order": [engine]}, keyframe)
+            open(f"samples/ugc-pt-{engine}.mp4", "wb").write(data)
+            print(f"[SAMPLE] UGC pt {engine}: {len(data)} bytes in {time.time() - t0:.0f}s", flush=True)
+        except Exception as error:
+            print(f"[SAMPLE] UGC pt {engine} failed: {str(error)[:300]}", flush=True)
+
+
+@app.function(image=base_image, cpu=1.0, memory=4096, volumes={str(MODEL_ROOT): model_volume},
+              secrets=[engine_secret], timeout=15 * 60)
+def sample_ugc_keyframe(payload: dict) -> bytes:
+    return _ugc_keyframe(payload)
 
 
 @app.function(image=base_image, gpu="L4", timeout=120, memory=8192)
@@ -2454,6 +2577,8 @@ def _plan_with_model(generate_text, payload: dict) -> dict | None:
     duration = max(2, min(10, int(payload.get("duration") or 5)))
     aspect = str(payload.get("aspect_ratio") or "16:9")
     system = PLAN_SYSTEM.replace("MAX_SHOTS", str(_plan_max_shots(duration))).replace("TOTAL_SECONDS", str(duration))
+    if str(payload.get("director_mode") or "") == "ugc":
+        system += UGC_RULES
     user = (f"Total duration: {duration} seconds. Aspect ratio: {payload.get('aspect_ratio') or '16:9'}.\n"
             f"Customer request:\n{str(payload.get('director_original_prompt') or payload.get('prompt') or '')[:4000]}")
     plan = _normalize_plan(_plan_extract_json(generate_text(system, user)), duration)
@@ -2602,7 +2727,7 @@ def api():
 
     @web.get("/health")
     async def health():
-        tasks = ["text-to-video", "image-to-video", "continue-video"]
+        tasks = ["text-to-video", "image-to-video", "continue-video", "ugc-product"]
         if _speech_enabled():
             tasks.append("speech-video")
         return {"ok": True, "provider": "modal", "tasks": tasks}
@@ -2625,6 +2750,9 @@ def api():
                 raise HTTPException(status_code=503, detail="Speech engine disabled")
             call = await NovaWanSpeechVideo().generate.spawn.aio(payload)
             engine = "wan-s2v"
+        elif task == "ugc-product":
+            call = await NovaUgcDirector().run.spawn.aio(payload)
+            engine = "ugc"
         elif task in {"text-to-video", "image-to-video"} and payload.get("needs_plan"):
             call = await NovaPlanner().plan_and_dispatch.spawn.aio(payload)
             engine = "planner"

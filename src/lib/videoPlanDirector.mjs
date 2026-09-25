@@ -102,6 +102,17 @@ Rules:
 - ending is "fade_to_black" when the customer asks for a fade/dip to black at the end.
 - Keep the subject identical across shots so the video looks like one continuous production.`;
 
+// Kept identical to UGC_RULES in infra/modal/nova_video_worker.py.
+export const UGC_RULES = `
+
+This is a UGC product ad for TikTok / Reels / Shorts:
+- One continuous selfie-style shot (two at most) of a real-looking creator holding and showing the product from the customer's photo. Never mention phones, screens or device frames in visual or camera.
+- The creator speaks to the camera (on_camera_speech true): the first sentence is a scroll-stopping hook of at most 7 words, then one concrete benefit, then a short call to action.
+- The first shot's on_screen_text is the hook in at most 5 words with text_position top; the last shot's on_screen_text may be the call to action.
+- Keep the product's name exactly as the customer wrote it and never invent claims, prices or results the customer did not state.
+- music_mood is upbeat or lofi unless the customer asked otherwise; ending is none.
+- subject describes the creator (age, look, clothing) and the setting; never describe the product's label text.`;
+
 function clean(value) {
   return String(value ?? "")
     .replace(/\r\n?/g, "\n")
@@ -214,6 +225,7 @@ export function normalizePlan(raw, { duration }) {
 // The regex director flags long prompts as complex even when it found no
 // timed beats; only real multi-beat scripts should skip the LLM planner.
 export function shouldPlanWithLlm(director, mode) {
+  if (mode === "ugc-product") return true;  // UGC always follows the UGC rules
   const plannable = mode === "text-to-video" || mode === "image-to-video";
   return plannable && (director?.beats?.length || 0) < 2;
 }
@@ -256,6 +268,7 @@ export function markForWorkerPlanning(director) {
 // Regex-scripted complex jobs must not silently degrade to a single public
 // pass; planned free-text jobs may, since that still beats an error.
 export function allowsPublicFallback(hints = {}) {
+  if (hints?.ugc) return false;  // the public route cannot compose the product
   return !hints?.complex || Boolean(hints.llmPlanned || hints.workerPlanned);
 }
 
@@ -362,10 +375,11 @@ export function extractJson(text) {
   return JSON.parse(raw.slice(first, last + 1));
 }
 
-function systemPrompt(duration) {
-  return SYSTEM_PROMPT
+function systemPrompt(duration, ugc = false) {
+  const base = SYSTEM_PROMPT
     .replace("MAX_SHOTS", String(maxShotsFor(duration)))
     .replace("TOTAL_SECONDS", String(duration));
+  return ugc ? base + UGC_RULES : base;
 }
 
 function userPrompt({ prompt, duration, aspectRatio }) {
@@ -414,7 +428,7 @@ async function planWithCloudflare(request, env, fetchImpl) {
     { Authorization: `Bearer ${creds.apiToken}` },
     {
       messages: [
-        { role: "system", content: systemPrompt(request.duration) },
+        { role: "system", content: systemPrompt(request.duration, request.ugc) },
         { role: "user", content: userPrompt(request) },
       ],
       max_tokens: 1200,
@@ -439,7 +453,7 @@ async function planWithOpenAi(request, env, fetchImpl) {
           response_format: { type: "json_object" },
           max_completion_tokens: 1200,
           messages: [
-            { role: "system", content: systemPrompt(request.duration) },
+            { role: "system", content: systemPrompt(request.duration, request.ugc) },
             { role: "user", content: userPrompt(request) },
           ],
         },
@@ -460,6 +474,7 @@ export async function planVideoWithLlm(options = {}) {
     prompt: clean(options.prompt).slice(0, 4000),
     duration: Number(options.duration) || 5,
     aspectRatio: options.aspectRatio || "16:9",
+    ugc: Boolean(options.ugc),
   };
   if (!request.prompt || String(env.NOVA_LLM_DIRECTOR || "1") === "0") return null;
 

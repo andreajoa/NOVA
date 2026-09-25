@@ -10,6 +10,10 @@ on:
         description: "Also render the UGC video from the composed keyframe"
         default: "true"
         required: false
+      entrypoint:
+        description: "sample_studio (EN UGC) or sample_ugc_pt (PT UGC: native speech vs dub)"
+        default: "sample_studio"
+        required: false
 
 permissions:
   contents: read
@@ -34,8 +38,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ inputs.video }}" = "true" ]; then flag="--video"; else flag="--no-video"; fi
-          modal run infra/modal/nova_video_worker.py::sample_studio $flag
+          if [ "${{ inputs.entrypoint }}" = "sample_ugc_pt" ]; then
+            modal run infra/modal/nova_video_worker.py::sample_ugc_pt
+          else
+            if [ "${{ inputs.video }}" = "true" ]; then flag="--video"; else flag="--no-video"; fi
+            modal run infra/modal/nova_video_worker.py::sample_studio $flag
+          fi
       - name: Store samples
         if: always()
         uses: actions/upload-artifact@v4
