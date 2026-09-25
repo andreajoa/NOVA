@@ -216,7 +216,9 @@ assert.equal(talkingPlan.beats[0].captionPosition, "top");
 assert.equal(talkingPlan.musicMood, "none");
 assert.equal(talkingPlan.subtitles, true, "spoken videos get subtitles by default");
 assert.equal(talkingPlan.captionStyle, "headline_bold");
-assert.match(ltxPrompt(talkingPlan), /^Clean frame with no subtitles/);
+assert.match(ltxPrompt(talkingPlan), /^Horizontal 16:9 video that fills the entire picture edge to edge, no black bars\./);
+assert.match(ltxPrompt({ ...talkingPlan, aspect: "9:16" }), /^Vertical 9:16 video/);
+assert.match(ltxPrompt(talkingPlan), /No subtitles, no captions, no on-screen text and no logos anywhere\.$/);
 
 // Accent words must exist in the on-screen text.
 const accented = normalizePlan({ shots: [{ visual: "x", on_screen_text: "The first year after BETRAYAL",
@@ -229,8 +231,9 @@ const spoken = ltxPrompt(talkingPlan, { nativeSpeech: true });
 assert.ok(spoken.includes(`"${speech}"`));
 assert.match(spoken, /calm male voice/);
 assert.match(spoken, /No music/);
-assert.match(spoken, /No on-screen text/);
+assert.match(spoken, /no on-screen text/);
 assert.doesNotMatch(spoken, /THE FIRST YEAR AFTER BETRAYAL/, "overlay text is post-production, never drawn by the model");
+assert.doesNotMatch(ltxPrompt(llmPlan.shots ? normalizePlan(llmPlan, { duration: 5 }) : talkingPlan), /\.\./, "no doubled periods");
 assert.match(ltxPrompt(talkingPlan), /Nobody speaks/);
 assert.equal(normalizePlan({ shots: [{ visual: "x" }], on_camera_speech: true }, { duration: 5 }).onCameraSpeech, false,
   "no narration -> no on-camera speech");

@@ -1152,15 +1152,26 @@ def _remove_letterbox(source: Path, output: Path) -> bool:
         return False
     if cw < width * 0.5 or ch < height * 0.5:
         return False  # mostly dark footage, not bars
-    # Fill the frame: crop the bars, then crop to the delivered aspect and scale.
     target = width / height
     if cw / ch > target:
         nw, nh = int(ch * target) // 2 * 2, ch
     else:
         nw, nh = cw, int(cw / target) // 2 * 2
     nx, ny = cx + (cw - nw) // 2, cy + (ch - nh) // 2
+    if (nw * nh) / (cw * ch) >= 0.8:
+        # Small bars: crop to the delivered aspect and scale back.
+        chain = f"crop={nw}:{nh}:{nx}:{ny},scale={width}:{height}:flags=lanczos,setsar=1"
+    else:
+        # Big bars: cropping would cut the subject, so keep the whole picture
+        # over a blurred, zoomed copy of itself (the social-video layout).
+        chain = (
+            f"crop={cw}:{ch}:{cx}:{cy},split=2[bg][fg];"
+            f"[bg]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},boxblur=24:2[blur];"
+            f"[fg]scale={width}:{height}:force_original_aspect_ratio=decrease:flags=lanczos[main];"
+            f"[blur][main]overlay=(W-w)/2:(H-h)/2,setsar=1"
+        )
     subprocess.run(
-        ["ffmpeg", "-y", "-i", str(source), "-vf", f"crop={nw}:{nh}:{nx}:{ny},scale={width}:{height}:flags=lanczos,setsar=1",
+        ["ffmpeg", "-y", "-i", str(source), "-vf", chain,
          "-map", "0:v:0", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "17",
          "-pix_fmt", "yuv420p", "-c:a", "copy", str(output)],
         check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -1169,7 +1180,7 @@ def _remove_letterbox(source: Path, output: Path) -> bool:
     return True
 
 
-def _remove_model_text(source: Path, output: Path, detect_every: int = 2) -> bool:
+def _remove_model_text(source: Path, output: Path, detect_every: int = 1) -> bool:
     """Inpaint text the video model drew (fake subtitles, watermarks)."""
     import cv2
     import numpy as np
@@ -2157,7 +2168,7 @@ def _normalize_plan(raw, duration: float) -> dict | None:
 
 
 def _plan_ltx_prompt(plan: dict, native_speech: bool = False) -> str:
-    parts = ["Clean frame with no subtitles, no captions and no text anywhere."]
+    parts = [f"{_plan_orientation(plan)} video that fills the entire picture edge to edge, no black bars."]
     beats = plan["beats"]
     for index, beat in enumerate(beats):
         lead = "" if len(beats) == 1 else ("The video opens on: " if index == 0 else "Then: ")
@@ -2172,9 +2183,15 @@ def _plan_ltx_prompt(plan: dict, native_speech: bool = False) -> str:
         parts.append(f'The person looks into the camera and speaks with natural lip movement, saying in a {who}: "{speech}"')
     else:
         parts.append("Nobody speaks.")
-    parts.append(f"Audio: {plan['ambience']}. No music." if plan["ambience"] else "Audio: natural ambient sound only. No music.")
-    parts.append("No on-screen text, subtitles, captions or logos.")
+    ambience = plan["ambience"].rstrip(". ")
+    parts.append(f"Audio: {ambience}. No music." if ambience else "Audio: natural ambient sound only. No music.")
+    parts.append("No subtitles, no captions, no on-screen text and no logos anywhere.")
     return " ".join(" ".join(parts).split())
+
+
+def _plan_orientation(plan: dict) -> str:
+    aspect = str(plan.get("aspect") or "")
+    return {"9:16": "Vertical 9:16", "1:1": "Square 1:1"}.get(aspect, "Horizontal 16:9")
 
 
 def _plan_engine_order(plan: dict) -> list[str]:
@@ -2212,10 +2229,14 @@ def _apply_plan(payload: dict, plan: dict) -> dict:
 
 def _plan_with_model(generate_text, payload: dict) -> dict | None:
     duration = max(2, min(10, int(payload.get("duration") or 5)))
+    aspect = str(payload.get("aspect_ratio") or "16:9")
     system = PLAN_SYSTEM.replace("MAX_SHOTS", str(_plan_max_shots(duration))).replace("TOTAL_SECONDS", str(duration))
     user = (f"Total duration: {duration} seconds. Aspect ratio: {payload.get('aspect_ratio') or '16:9'}.\n"
             f"Customer request:\n{str(payload.get('director_original_prompt') or payload.get('prompt') or '')[:4000]}")
-    return _normalize_plan(_plan_extract_json(generate_text(system, user)), duration)
+    plan = _normalize_plan(_plan_extract_json(generate_text(system, user)), duration)
+    if plan:
+        plan["aspect"] = aspect
+    return plan
 
 
 def _dispatch_first_engine(payload: dict):

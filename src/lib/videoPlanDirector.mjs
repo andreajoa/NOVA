@@ -285,7 +285,8 @@ function voiceDescription(plan) {
 // post-production, and off-screen narration is dubbed with NOVA's own TTS, so
 // the model is only asked to speak when a person talks on camera.
 export function ltxPrompt(plan, { nativeSpeech = false } = {}) {
-  const parts = ["Clean frame with no subtitles, no captions and no text anywhere."];
+  const orientation = { "9:16": "Vertical 9:16", "1:1": "Square 1:1" }[plan.aspect] || "Horizontal 16:9";
+  const parts = [`${orientation} video that fills the entire picture edge to edge, no black bars.`];
   plan.beats.forEach((beat, index) => {
     const lead = plan.beats.length === 1 ? "" : index === 0 ? "The video opens on: " : "Then: ";
     parts.push(`${lead}${beat.visual}${beat.camera ? ` ${beat.camera}` : ""}`.trim());
@@ -299,8 +300,8 @@ export function ltxPrompt(plan, { nativeSpeech = false } = {}) {
   } else {
     parts.push("Nobody speaks.");
   }
-  parts.push(plan.ambience ? `Audio: ${plan.ambience}. No music.` : "Audio: natural ambient sound only. No music.");
-  parts.push("No on-screen text, subtitles, captions or logos.");
+  parts.push(plan.ambience ? `Audio: ${plan.ambience.replace(/[.\s]+$/, "")}. No music.` : "Audio: natural ambient sound only. No music.");
+  parts.push("No subtitles, no captions, no on-screen text and no logos anywhere.");
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
@@ -469,6 +470,7 @@ export async function planVideoWithLlm(options = {}) {
       : await planWithCloudflare(request, env, fetchImpl);
     if (!result) return null;
     const plan = normalizePlan(result.raw, { duration: request.duration });
+    if (plan) plan.aspect = request.aspectRatio;
     if (!plan) {
       console.warn("[NOVA_VIDEO] LLM director returned an unusable plan", { provider, model: result.model });
       return null;
