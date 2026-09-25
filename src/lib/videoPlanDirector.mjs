@@ -247,10 +247,11 @@ export function engineOrderFor(director, env = process.env) {
   const language = String(director.language || "").toLowerCase();
 
   // Wan S2V measured ~25 A100-minutes per 10s clip, so it is not in the chain.
-  let order = ["ltx", "wan"];
+  // NOVA's own LTX first (no shared quota), the public LTX Space second.
+  let order = ["ltx-local", "ltx", "wan"];
   if (director.onCameraSpeech) {
     const ltxSpeaks = speechLanguages.some((code) => language.startsWith(code));
-    order = ltxSpeaks ? ["ltx-speech", "wan"] : ["ltx", "wan"];
+    order = ltxSpeaks ? ["ltx-local-speech", "ltx-speech", "wan"] : ["ltx-local", "ltx", "wan"];
   }
   return order.filter((name) => families.includes(name.split("-")[0]));
 }

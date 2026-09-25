@@ -90,6 +90,13 @@ jobs:
           set -euo pipefail
           modal run infra/modal/nova_video_worker.py::preload_models --include-speech
 
+      - name: Preload LTX-2.3 weights on CPU (idempotent)
+        if: steps.config.outputs.configured == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          modal run infra/modal/nova_video_worker.py::preload_ltx_local
+
       - name: Deploy NOVA Modal video engine
         if: steps.config.outputs.configured == 'true'
         shell: bash

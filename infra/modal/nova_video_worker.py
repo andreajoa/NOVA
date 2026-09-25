@@ -1720,7 +1720,8 @@ def sample_render_ltx(payload: dict) -> bytes:
 @app.function(image=base_image, cpu=4.0, memory=8192,
               volumes={str(MODEL_ROOT): model_volume}, secrets=[engine_secret], timeout=14 * 60)
 def sample_render_ltx_keyframe(payload: dict, keyframe: bytes) -> bytes:
-    engine = next((name for name in payload.get("engine_order") or [] if name.startswith("ltx")), "ltx")
+    engine = next((name for name in payload.get("engine_order") or []
+                   if name.startswith("ltx") and not name.startswith("ltx-local")), "ltx")
     job = {**payload, "engine": engine, "task": "image-to-video", "reference_bytes": keyframe}
     return _sample_bytes(_ltx_generate, job)
 
@@ -2008,7 +2009,7 @@ def _ugc_run(payload: dict, planner) -> None:
     keyframe = _ugc_keyframe(payload)
     job = {**payload, "task": "image-to-video", "reference_bytes": keyframe}
     if not _engine_order(job):
-        job["engine_order"] = ["ltx", "wan"]
+        job["engine_order"] = ["ltx-local", "ltx", "wan"]
     _dispatch_first_engine(job)
 
 
@@ -2118,6 +2119,160 @@ def sample_free_image_models():
               " ".join(f"{n} {result[n + '_s']}s" for n in FREE_IMAGE_PROMPTS), flush=True)
 
 
+# ---------------------------------------------------------------------------
+# LTX-2.3 on NOVA's own GPU ("ltx-local"). Same joint audio-video model as the
+# public Space, without its shared ZeroGPU quota. Weights are not gated:
+# Lightricks/LTX-2.3 plus the unsloth/gemma-3-12b-it mirror of the Gemma 3
+# text encoder, so no Hugging Face token is needed.
+# ---------------------------------------------------------------------------
+LTX_SHA = "a95ab856bf29407b6b066ede0abe1846050db56c"
+LTX_WEIGHTS_REPO = "Lightricks/LTX-2.3"
+LTX_CHECKPOINT = "ltx-2.3-22b-distilled-1.1.safetensors"
+LTX_UPSCALER = "ltx-2.3-spatial-upscaler-x2-1.1.safetensors"
+LTX_GEMMA_REPO = "unsloth/gemma-3-12b-it"
+LTX_DIR = MODEL_ROOT / "LTX-2.3"
+LTX_GEMMA_DIR = MODEL_ROOT / "gemma-3-12b-it"
+LTX_PYTHON = "/opt/ltxvenv/bin/python"
+
+# Separate venv: LTX pins torch 2.13 (cu132) and transformers 5.8-5.14, which
+# clash with the Wan stack in base_image. cuDNN override per LTX-2's pyproject.
+ltx_image = base_image.run_commands(
+    "python -m pip install -q uv",
+    "uv venv -q -p 3.11 /opt/ltxvenv",
+    "printf 'nvidia-cudnn-cu13==9.24.0.43\\n' > /opt/ltx-override.txt",
+    "uv pip install -q --python /opt/ltxvenv/bin/python --index-strategy unsafe-best-match "
+    "--extra-index-url https://download.pytorch.org/whl/cu132 "
+    "--extra-index-url https://download.pytorch.org/whl/test/cu132/ "
+    "--override /opt/ltx-override.txt "
+    "'torch==2.13.0' 'torchvision==0.28.*' torchaudio 'transformers>=5.8.0,<5.15' "
+    f"'ltx-core @ git+https://github.com/Lightricks/LTX-2@{LTX_SHA}#subdirectory=packages/ltx-core' "
+    f"'ltx-pipelines @ git+https://github.com/Lightricks/LTX-2@{LTX_SHA}#subdirectory=packages/ltx-pipelines'",
+)
+
+
+def _ltx_local_dimensions(aspect: str) -> tuple[int, int]:
+    # Two-stage pipeline: sides must be multiples of 64.
+    if aspect == "9:16":
+        return 704, 1280
+    if aspect == "1:1":
+        return 1024, 1024
+    return 1280, 704
+
+
+def _ltx_local_generate(payload: dict) -> str:
+    engine = str(payload.get("engine") or "ltx-local")
+    native_speech = engine == "ltx-local-speech"
+    prompt = str(payload.get("ltx_speech_prompt" if native_speech else "ltx_prompt") or payload.get("prompt") or "").strip()
+    if not prompt:
+        raise ValueError("LTX prompt is required")
+    aspect = str(payload.get("aspect_ratio") or "16:9")
+    duration = max(2, min(10, int(payload.get("duration") or 5)))
+    seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
+    width, height = _ltx_local_dimensions(aspect)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        raw = tmp / "ltx-local.mp4"
+        command = [
+            LTX_PYTHON, "-m", "ltx_pipelines.distilled",
+            "--distilled-checkpoint-path", str(LTX_DIR / LTX_CHECKPOINT),
+            "--gemma-root", str(LTX_GEMMA_DIR),
+            "--spatial-upsampler-path", str(LTX_DIR / LTX_UPSCALER),
+            "--quantization", "fp8-cast",
+            "--prompt", prompt,
+            "--num-frames", str(duration * 24 + 1),
+            "--frame-rate", "24",
+            "--width", str(width),
+            "--height", str(height),
+            "--seed", str(seed),
+            "--output-path", str(raw),
+        ]
+        if str(payload.get("task")) == "image-to-video" and (payload.get("reference_bytes") or payload.get("image_url")):
+            reference = tmp / "reference.png"
+            if payload.get("reference_bytes"):
+                reference.write_bytes(bytes(payload["reference_bytes"]))
+            else:
+                _download(str(payload["image_url"]), reference, 20_000_000)
+            command += ["--image", str(reference), "0", "1.0"]
+        t0 = time.time()
+        try:
+            subprocess.run(command, check=True, timeout=14 * 60)
+        finally:
+            _phase_timing(f"ltx_local_render_{width}x{height}_{duration}s", t0)
+        if not raw.exists() or _video_seconds(raw) < duration - 1.0:
+            raise RuntimeError("LTX local engine returned no complete video")
+        result = _finish_video(raw, payload, tmp, aspect, float(duration), include_narration=not native_speech)
+        return _upload(payload, result)
+
+
+@app.function(image=base_image, volumes={str(MODEL_ROOT): model_volume}, timeout=60 * 60, memory=32768)
+def preload_ltx_local():
+    """Download LTX-2.3 and its Gemma text encoder on CPU."""
+    from huggingface_hub import hf_hub_download, snapshot_download
+
+    for filename in (LTX_CHECKPOINT, LTX_UPSCALER):
+        if not (LTX_DIR / filename).exists():
+            hf_hub_download(repo_id=LTX_WEIGHTS_REPO, filename=filename, local_dir=str(LTX_DIR))
+    if not (LTX_GEMMA_DIR / "config.json").exists():
+        snapshot_download(repo_id=LTX_GEMMA_REPO, local_dir=str(LTX_GEMMA_DIR))
+    model_volume.commit()
+    return {"ltx": (LTX_DIR / LTX_CHECKPOINT).exists(), "gemma": (LTX_GEMMA_DIR / "config.json").exists()}
+
+
+@app.cls(image=ltx_image, gpu="H100", cpu=4.0, memory=65536, volumes={str(MODEL_ROOT): model_volume},
+         secrets=[engine_secret], timeout=20 * 60, scaledown_window=120, max_containers=2)
+class NovaLtxLocalVideo:
+    @modal.method()
+    def generate(self, payload: dict) -> dict:
+        return _run_engine(payload, _ltx_local_generate, "GENERATION_FAILED")
+
+
+@app.function(image=ltx_image, gpu="H100", cpu=4.0, memory=65536, volumes={str(MODEL_ROOT): model_volume},
+              secrets=[engine_secret], timeout=20 * 60)
+def sample_render_ltx_local(payload: dict, keyframe: bytes | None = None) -> bytes:
+    job = {**payload}
+    if keyframe:
+        job.update(task="image-to-video", reference_bytes=keyframe)
+    order = [name for name in job.get("engine_order") or [] if name.startswith("ltx")]
+    job["engine"] = "ltx-local-speech" if order and order[0].endswith("speech") else "ltx-local"
+    return _sample_bytes(_ltx_local_generate, job)
+
+
+@app.local_entrypoint()
+def sample_ltx_local():
+    """The two real requests that failed in production, on NOVA's own LTX."""
+    os.makedirs("samples", exist_ok=True)
+    planned = NovaPlanner().plan_only.remote({
+        "task": "text-to-video", "duration": 10, "aspect_ratio": "9:16", "seed": 42,
+        "director_original_prompt": SAMPLE_SCRIPT,
+    })
+    t0 = time.time()
+    try:
+        data = sample_render_ltx_local.remote(planned)
+        open("samples/ltx-local-speech-en.mp4", "wb").write(data)
+        print(f"[SAMPLE] ltx-local EN speech: {len(data)} bytes in {time.time() - t0:.0f}s", flush=True)
+    except Exception as error:
+        print(f"[SAMPLE] ltx-local EN failed: {str(error)[:400]}", flush=True)
+    planned_pt = NovaPlanner().plan_only.remote({
+        "task": "ugc-product", "duration": 10, "aspect_ratio": "9:16", "seed": 21, "director_mode": "ugc",
+        "director_original_prompt": UGC_SAMPLE_REQUEST_PT,
+    })
+    product = NovaImageGen().render.remote({
+        "aspect": "1:1", "seed": 11,
+        "prompt": "Studio product photo of a small frosted glass serum bottle with a gold dropper cap, the label "
+                  "reads \"GLOW\" in elegant black serif letters and \"Vitamin C Serum 30ml\" below, on a clean "
+                  "white background, soft shadow, e-commerce packshot, ultra sharp.",
+    })
+    keyframe = sample_ugc_keyframe.remote({**planned_pt, "product_image_bytes": product})
+    t1 = time.time()
+    try:
+        data = sample_render_ltx_local.remote(planned_pt, keyframe)
+        open("samples/ltx-local-ugc-pt.mp4", "wb").write(data)
+        print(f"[SAMPLE] ltx-local PT UGC: {len(data)} bytes in {time.time() - t1:.0f}s", flush=True)
+    except Exception as error:
+        print(f"[SAMPLE] ltx-local PT UGC failed: {str(error)[:400]}", flush=True)
+
+
 @app.function(image=base_image, gpu="L4", timeout=120, memory=8192)
 def smoke_import():
     """Fail early if the normal Wan runtime has missing imports."""
@@ -2145,7 +2300,7 @@ def preload_models(include_speech: bool = False):
 # ["ltx", "wan"] or ["wan-speech", "ltx-speech"]. Each engine that fails hands
 # the same job to the next one; NOVA is only told "failed" at the end.
 # ---------------------------------------------------------------------------
-ENGINES = ("ltx", "ltx-speech", "wan", "wan-speech")
+ENGINES = ("ltx-local", "ltx-local-speech", "ltx", "ltx-speech", "wan", "wan-speech")
 LTX_SPACE = os.environ.get("NOVA_LTX_SPACE_URL", "https://lightricks-ltx-2-3.hf.space").rstrip("/")
 LTX_WAIT_SECONDS = 8 * 60
 
@@ -2160,8 +2315,20 @@ def _engine_order(payload: dict) -> list[str]:
     return order
 
 
+def _engine_class(name: str):
+    if name.startswith("ltx-local"):
+        return NovaLtxLocalVideo
+    if name.startswith("ltx"):
+        return NovaLtxVideo
+    if name == "wan-speech":
+        return NovaWanSpeechVideo
+    return NovaWanVideo
+
+
 def _spawn_engine(name: str, payload: dict):
     job = {**payload, "engine": name}
+    if name.startswith("ltx-local"):
+        return NovaLtxLocalVideo().generate.spawn(job)
     if name.startswith("ltx"):
         return NovaLtxVideo().generate.spawn(job)
     if name == "wan-speech":
@@ -2597,10 +2764,11 @@ def _plan_engine_order(plan: dict) -> list[str]:
     # Verified by transcription: LTX speaks English and Brazilian Portuguese.
     speech_languages = [item.strip().lower() for item in os.environ.get("NOVA_LTX_SPEECH_LANGUAGES", "en,pt").split(",") if item.strip()]
     # Wan S2V measured ~25 A100-minutes per 10s clip, so it is not in the chain.
-    order = ["ltx", "wan"]
+    # NOVA's own LTX first (no shared quota), the public LTX Space second.
+    order = ["ltx-local", "ltx", "wan"]
     if plan["onCameraSpeech"]:
         ltx_speaks = any(plan["language"].lower().startswith(code) for code in speech_languages)
-        order = ["ltx-speech", "wan"] if ltx_speaks else ["ltx", "wan"]
+        order = ["ltx-local-speech", "ltx-speech", "wan"] if ltx_speaks else ["ltx-local", "ltx", "wan"]
     return [name for name in order if name.split("-")[0] in families]
 
 
@@ -2812,12 +2980,7 @@ def api():
         elif task in {"text-to-video", "image-to-video"} and _engine_order(payload):
             first = _engine_order(payload)[0]
             job = {**payload, "engine": first}
-            if first.startswith("ltx"):
-                call = await NovaLtxVideo().generate.spawn.aio(job)
-            elif first == "wan-speech":
-                call = await NovaWanSpeechVideo().generate.spawn.aio(job)
-            else:
-                call = await NovaWanVideo().generate.spawn.aio(job)
+            call = await _engine_class(first)().generate.spawn.aio(job)
             engine = first
         elif task in {"text-to-video", "image-to-video", "continue-video"}:
             call = await NovaWanVideo().generate.spawn.aio(payload)

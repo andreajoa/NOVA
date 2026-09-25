@@ -161,6 +161,7 @@ jobs:
           grep -q '_render_text_png' infra/modal/nova_video_worker.py
           grep -q '_remove_model_text' infra/modal/nova_video_worker.py
           grep -q 'class NovaUgcDirector' infra/modal/nova_video_worker.py
+          grep -q 'class NovaLtxLocalVideo' infra/modal/nova_video_worker.py
           grep -q 'ugc-product' src/app/api/free-video-generate/route.js
           grep -q 'UGC de Produto' src/components/NovaFreeVideoStudio.jsx
           grep -q 'markForWorkerPlanning' src/app/api/free-video-generate/route.js

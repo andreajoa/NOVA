@@ -11,7 +11,7 @@ on:
         default: "true"
         required: false
       entrypoint:
-        description: "sample_studio (EN UGC), sample_ugc_pt (PT UGC) or sample_free_image_models (free image model benchmark)"
+        description: "sample_studio (EN UGC), sample_ugc_pt (PT UGC), sample_ltx_local (own-GPU LTX) or sample_free_image_models"
         default: "sample_studio"
         required: false
 
@@ -41,6 +41,8 @@ jobs:
           set -euo pipefail
           if [ "${{ inputs.entrypoint }}" = "sample_ugc_pt" ]; then
             modal run infra/modal/nova_video_worker.py::sample_ugc_pt
+          elif [ "${{ inputs.entrypoint }}" = "sample_ltx_local" ]; then
+            modal run infra/modal/nova_video_worker.py::sample_ltx_local
           elif [ "${{ inputs.entrypoint }}" = "sample_free_image_models" ]; then
             modal run infra/modal/nova_video_worker.py::sample_free_image_models
           else
