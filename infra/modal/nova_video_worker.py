@@ -2542,7 +2542,8 @@ def _plan_orientation(plan: dict) -> str:
 
 def _plan_engine_order(plan: dict) -> list[str]:
     families = [item.strip().lower() for item in os.environ.get("NOVA_VIDEO_ENGINE_ORDER", "ltx,wan").split(",") if item.strip()]
-    speech_languages = [item.strip().lower() for item in os.environ.get("NOVA_LTX_SPEECH_LANGUAGES", "en").split(",") if item.strip()]
+    # Verified by transcription: LTX speaks English and Brazilian Portuguese.
+    speech_languages = [item.strip().lower() for item in os.environ.get("NOVA_LTX_SPEECH_LANGUAGES", "en,pt").split(",") if item.strip()]
     # Wan S2V measured ~25 A100-minutes per 10s clip, so it is not in the chain.
     order = ["ltx", "wan"]
     if plan["onCameraSpeech"]:

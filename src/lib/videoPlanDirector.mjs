@@ -240,7 +240,9 @@ export function engineOrderFor(director, env = process.env) {
   if (!director?.providerHints?.llmPlanned) return [];
   const families = String(env.NOVA_VIDEO_ENGINE_ORDER || "ltx,wan")
     .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
-  const speechLanguages = String(env.NOVA_LTX_SPEECH_LANGUAGES || "en")
+  // Verified by transcription: LTX speaks English and Brazilian Portuguese word
+  // for word (2026-09-25 UGC samples).
+  const speechLanguages = String(env.NOVA_LTX_SPEECH_LANGUAGES || "en,pt")
     .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
   const language = String(director.language || "").toLowerCase();
 
