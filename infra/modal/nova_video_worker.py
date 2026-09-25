@@ -1113,6 +1113,138 @@ def _mux_director_audio(video: Path, audio: Path, output: Path, seconds: float) 
     )
 
 
+# ---------------------------------------------------------------------------
+# Picture cleanup for engine output: video models sometimes letterbox the
+# frame or burn in their own (garbled) subtitles and logos. NOVA crops the
+# bars and inpaints any text a model drew before adding its own text.
+# ---------------------------------------------------------------------------
+TEXT_DETECTOR_URL = ("https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/"
+                     "text_detection_ppocr/text_detection_en_ppocrv3_2023may.onnx")  # PP-OCRv3, Apache-2.0
+TEXT_DETECTOR_PATH = MODEL_ROOT / "ppocrv3-det" / "text_detection_en_ppocrv3_2023may.onnx"
+
+
+def _ensure_text_detector() -> Path:
+    import requests
+
+    if TEXT_DETECTOR_PATH.exists() and TEXT_DETECTOR_PATH.stat().st_size > 1_000_000:
+        return TEXT_DETECTOR_PATH
+    TEXT_DETECTOR_PATH.parent.mkdir(parents=True, exist_ok=True)
+    response = requests.get(TEXT_DETECTOR_URL, timeout=120)
+    response.raise_for_status()
+    TEXT_DETECTOR_PATH.write_bytes(response.content)
+    return TEXT_DETECTOR_PATH
+
+
+def _remove_letterbox(source: Path, output: Path) -> bool:
+    """Crop black bars a model added and scale back to the delivered size."""
+    import re
+
+    width, height = _video_size(source)
+    probe = subprocess.run(
+        ["ffmpeg", "-i", str(source), "-vf", "cropdetect=limit=24:round=2:reset=0", "-f", "null", "-"],
+        capture_output=True, text=True,
+    )
+    crops = re.findall(r"crop=(\d+):(\d+):(\d+):(\d+)", probe.stderr)
+    if not crops:
+        return False
+    cw, ch, cx, cy = (int(v) for v in crops[-1])
+    if cw >= width * 0.96 and ch >= height * 0.96:
+        return False
+    if cw < width * 0.5 or ch < height * 0.5:
+        return False  # mostly dark footage, not bars
+    # Fill the frame: crop the bars, then crop to the delivered aspect and scale.
+    target = width / height
+    if cw / ch > target:
+        nw, nh = int(ch * target) // 2 * 2, ch
+    else:
+        nw, nh = cw, int(cw / target) // 2 * 2
+    nx, ny = cx + (cw - nw) // 2, cy + (ch - nh) // 2
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", str(source), "-vf", f"crop={nw}:{nh}:{nx}:{ny},scale={width}:{height}:flags=lanczos,setsar=1",
+         "-map", "0:v:0", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "17",
+         "-pix_fmt", "yuv420p", "-c:a", "copy", str(output)],
+        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    print(f"[NOVA_VIDEO CLEANUP] letterbox removed: {cw}x{ch}+{cx}+{cy} -> {width}x{height}", flush=True)
+    return True
+
+
+def _remove_model_text(source: Path, output: Path, detect_every: int = 2) -> bool:
+    """Inpaint text the video model drew (fake subtitles, watermarks)."""
+    import cv2
+    import numpy as np
+
+    detector = cv2.dnn.TextDetectionModel_DB(str(_ensure_text_detector()))
+    detector.setBinaryThreshold(0.3)
+    detector.setPolygonThreshold(0.55)
+    detector.setMaxCandidates(60)
+    detector.setUnclipRatio(2.0)
+    width, height = _video_size(source)
+    in_w, in_h = max(32, width // 32 * 32), max(32, height // 32 * 32)
+    detector.setInputParams(1.0 / 255.0, (in_w, in_h), (122.67891434, 116.66876762, 104.00698793), True)
+
+    capture = cv2.VideoCapture(str(source))
+    fps = capture.get(cv2.CAP_PROP_FPS) or 24.0
+    writer = subprocess.Popen(
+        ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{width}x{height}",
+         "-r", f"{fps:.6f}", "-i", "-", "-i", str(source), "-map", "0:v:0", "-map", "1:a?",
+         "-c:v", "libx264", "-preset", "veryfast", "-crf", "17", "-pix_fmt", "yuv420p", "-c:a", "copy",
+         "-shortest", str(output)],
+        stdin=subprocess.PIPE,
+    )
+    kernel = np.ones((9, 9), np.uint8)
+    mask = np.zeros((height, width), np.uint8)
+    hold = 0
+    frames = touched = 0
+    try:
+        while True:
+            ok, frame = capture.read()
+            if not ok:
+                break
+            if frames % detect_every == 0:
+                boxes, _ = detector.detect(frame)
+                fresh = np.zeros((height, width), np.uint8)
+                for box in boxes:
+                    poly = np.asarray(box, dtype=np.int32)
+                    x, y, w, h = cv2.boundingRect(poly)
+                    # Skip implausible "text": huge regions are scenery, not lettering.
+                    if w > width * 0.95 or h > height * 0.12 or w * h < 80:
+                        continue
+                    cv2.fillPoly(fresh, [poly], 255)
+                if fresh.any():
+                    mask, hold = cv2.dilate(fresh, kernel, iterations=2), detect_every * 3
+                elif hold <= 0:
+                    mask[:] = 0
+            hold -= 1
+            if mask.any():
+                frame = cv2.inpaint(frame, mask, 6, cv2.INPAINT_TELEA)
+                touched += 1
+            writer.stdin.write(frame.tobytes())
+            frames += 1
+    finally:
+        capture.release()
+        writer.stdin.close()
+        writer.wait()
+    if writer.returncode != 0:
+        raise RuntimeError("text cleanup encode failed")
+    print(f"[NOVA_VIDEO CLEANUP] model text inpainted on {touched}/{frames} frames", flush=True)
+    return touched > 0
+
+
+def _clean_picture(result: Path, tmp: Path) -> Path:
+    """Letterbox and model-drawn text removal; never fails the job."""
+    try:
+        unbarred = tmp / "clean-unbarred.mp4"
+        if _remove_letterbox(result, unbarred):
+            result = unbarred
+        detexted = tmp / "clean-detexted.mp4"
+        if _remove_model_text(result, detexted):
+            result = detexted
+    except Exception as error:
+        print(f"[NOVA_VIDEO CLEANUP] skipped: {str(error)[:200]}", flush=True)
+    return result
+
+
 def _has_audio(path: Path) -> bool:
     probe = subprocess.run(
         ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
@@ -1149,6 +1281,7 @@ def _finish_video(result: Path, payload: dict, tmp: Path, aspect: str, total_sec
     """
     if not _director_timeline(payload):
         return result
+    result = _clean_picture(result, tmp)
 
     base_audio = None
     if _has_audio(result):
@@ -1594,6 +1727,7 @@ def preload_models(include_speech: bool = False):
     _ensure_model(TI2V_REPO, TI2V_DIR)
     _ensure_model(PLAN_MODEL_REPO, PLAN_MODEL_DIR)
     _ensure_model(WHISPER_REPO, WHISPER_DIR)
+    _ensure_text_detector()
     if include_speech:
         _ensure_model(S2V_REPO, S2V_DIR)
     return {"normal": TI2V_DIR.exists(), "speech": S2V_DIR.exists(), "planner": PLAN_MODEL_DIR.exists()}
@@ -2129,7 +2263,7 @@ class NovaWanSpeechVideo:
 # post-produces, so it is CPU-only and costs almost nothing while it waits.
 @app.cls(
     image=base_image,
-    cpu=2.0,
+    cpu=4.0,
     memory=8192,
     volumes={str(MODEL_ROOT): model_volume},
     secrets=[engine_secret],
