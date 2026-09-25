@@ -8,6 +8,7 @@ MP4 files directly to NOVA R2, and call NOVA's authenticated callback.
 """
 
 import hmac
+import json
 import os
 import subprocess
 import tempfile
@@ -1266,6 +1267,39 @@ def smoke_complex_director():
         }
 
 
+@app.local_entrypoint()
+def smoke_planner():
+    """Plan a real customer script on the deployed planner GPU and check it."""
+    speech = "The first year after betrayal has a map. Nobody hands it to you. So here it is. Month by month."
+    script = (
+        "BLOCK 1 (0s-10s) - ON-CAMERA + HEADLINE OVERLAY\n"
+        f'SPEECH: "{speech}" node scripts/kie.mjs still "<PREAMBLE> <CHARLOCK> Medium close-up, he faces the camera '
+        'with calm grave honesty, soft dark interior background. Kodak Portra 400 film stock." out/b1-head.png --ar 9:16\n'
+        'node scripts/kie.mjs shot "Subtle handheld breathing sway; the man speaks directly into the camera." '
+        "out/b1-head.png out/b1.mp4 --dur 10\n"
+        "WRITING (CapCut overlay, 0-3s, top center): THE FIRST YEAR AFTER BETRAYAL. (Bebas Neue, white)\n"
+        "Out: dip to black 0.3s."
+    )
+    planned = NovaPlanner().plan_only.remote(
+        {"task": "text-to-video", "duration": 10, "aspect_ratio": "9:16", "director_original_prompt": script}
+    )
+    timeline = planned["director_timeline"]
+    spoken = " ".join(beat["narration"] for beat in timeline).lower()
+    captions = [beat["caption"].upper() for beat in timeline if beat["caption"]]
+    print(json.dumps({
+        "engines": planned["engine_order"],
+        "shots": len(timeline),
+        "narration": spoken,
+        "captions": captions,
+        "positions": [beat["captionPosition"] for beat in timeline if beat["caption"]],
+        "ending": planned["director_ending"],
+        "ltx_speech_prompt": planned["ltx_speech_prompt"][:400],
+    }, indent=2))
+    assert "betrayal has a map" in spoken, "speech must be kept verbatim"
+    assert any("FIRST YEAR AFTER BETRAYAL" in caption for caption in captions), "headline must be on-screen text"
+    assert "scripts/kie.mjs" not in planned["prompt"], "shell commands must be ignored"
+
+
 @app.function(image=base_image, gpu="L4", timeout=120, memory=8192)
 def smoke_import():
     """Fail early if the normal Wan runtime has missing imports."""
@@ -1280,9 +1314,10 @@ def smoke_import():
 def preload_models(include_speech: bool = False):
     """Download checkpoints on CPU so no GPU minutes are burned by downloads."""
     _ensure_model(TI2V_REPO, TI2V_DIR)
+    _ensure_model(PLAN_MODEL_REPO, PLAN_MODEL_DIR)
     if include_speech:
         _ensure_model(S2V_REPO, S2V_DIR)
-    return {"normal": TI2V_DIR.exists(), "speech": S2V_DIR.exists()}
+    return {"normal": TI2V_DIR.exists(), "speech": S2V_DIR.exists(), "planner": PLAN_MODEL_DIR.exists()}
 
 
 # ---------------------------------------------------------------------------
@@ -1523,6 +1558,238 @@ def _run_engine(payload: dict, render, failure_code: str) -> dict:
         raise
 
 
+# ---------------------------------------------------------------------------
+# Worker-side director. When the NOVA app could not plan a request (no LLM
+# provider configured or reachable) it sends needs_plan=True with the raw
+# prompt; Qwen3-8B (Apache-2.0, not gated) plans it here on a small GPU. The
+# rules mirror src/lib/videoPlanDirector.mjs.
+# ---------------------------------------------------------------------------
+PLAN_MODEL_REPO = "Qwen/Qwen3-8B"
+PLAN_MODEL_DIR = MODEL_ROOT / "Qwen3-8B"
+PLAN_WORDS_PER_SECOND = 2.5
+PLAN_EDGE_SECONDS = 0.4
+PLAN_MIN_SHOT_SECONDS = 1.6
+PLAN_MUSIC_MOODS = ["none", "calm", "upbeat", "cinematic", "emotional", "corporate",
+                    "lofi", "epic", "romantic", "tense", "playful"]
+PLAN_TRANSITIONS = ["cut", "fade", "dissolve", "slideleft", "slideright", "wipeleft", "circleopen", "smoothleft"]
+PLAN_TEXT_POSITIONS = ["bottom", "top", "center"]
+PLAN_ENDINGS = ["none", "fade_to_black"]
+PLAN_VOICES = ["none", "female", "male"]
+
+PLAN_SYSTEM = """You are NOVA's video director. Convert a customer's request (any language, usually Brazilian Portuguese) into a production plan for a short AI-generated video.
+
+Return ONLY a JSON object with this exact shape:
+{
+  "language": "BCP-47 code of the language of the spoken words (or of the request if nothing is spoken), e.g. pt-BR",
+  "subject": "English. One sentence describing the main subject and setting exactly as it must look in every shot (appearance, clothing, place, lighting).",
+  "style": "English. Visual style: film look, color palette, lens, mood.",
+  "shots": [
+    {
+      "visual": "English. ONE continuous physical action for this shot, concrete and filmable.",
+      "camera": "English. One camera move or framing.",
+      "seconds": 2.5,
+      "narration": "Spoken words for this shot, or empty string.",
+      "on_screen_text": "Exact text to show on screen during this shot, or empty string.",
+      "text_position": "one of: bottom, top, center",
+      "transition_to_next": "one of: cut, fade, dissolve, slideleft, slideright, wipeleft, circleopen, smoothleft"
+    }
+  ],
+  "on_camera_speech": "true if a person in the video speaks the narration to the camera; false for an off-screen voice-over",
+  "ending": "one of: none, fade_to_black",
+  "voice": "one of: none, female, male",
+  "music_mood": "one of: none, calm, upbeat, cinematic, emotional, corporate, lofi, epic, romantic, tense, playful",
+  "ambience": "English. Short description of ambient sound, or empty string."
+}
+
+Rules:
+- The request may contain production notes, shell commands, file names, flags and tool names (e.g. "node scripts/...", "--ar 9:16", "out/b1.mp4", "CapCut", "<PREAMBLE>"). Ignore them; extract only the creative intent.
+- If the customer wrote the exact words to be spoken, use them verbatim as narration (same language, same wording), split across shots in order.
+- Faces and the main subject must always be clearly lit and visible, even in dark or dramatic moods (low-key lighting, never underexposed).
+- Use at most MAX_SHOTS shots. Use 1 shot when the request describes a single moment. Seconds of all shots must add up to TOTAL_SECONDS.
+- Never ask the video model to draw text, logos, subtitles or captions: any text the customer wants on screen goes ONLY in on_screen_text, copied exactly as the customer wrote it.
+- Never describe music, voices or sounds inside "visual" or "camera".
+- Narration only if the customer asked for narration, speech, a voice, a message spoken, or a slogan to be said. Keep the whole narration within about 2.5 words per second of video.
+- "voice" is "none" when there is no narration; otherwise match the voice the customer asked for (default female).
+- music_mood is "none" only if the customer explicitly asked for no music.
+- Prefer "fade" or "dissolve" transitions unless the customer asked for something energetic.
+- text_position follows the customer's placement ("top center" -> top); default bottom.
+- ending is "fade_to_black" when the customer asks for a fade/dip to black at the end.
+- Keep the subject identical across shots so the video looks like one continuous production."""
+
+
+def _plan_line(value, limit: int = 0) -> str:
+    text = " ".join(str(value if value is not None else "").split())
+    return text[:limit].strip() if limit else text
+
+
+def _plan_pick(value, allowed: list[str], fallback: str) -> str:
+    text = _plan_line(value).lower()
+    return text if text in allowed else fallback
+
+
+def _plan_limit_words(text: str, max_words: int) -> str:
+    words = _plan_line(text).split(" ")
+    words = [word for word in words if word]
+    if max_words <= 0:
+        return ""
+    if len(words) <= max_words:
+        return " ".join(words)
+    return " ".join(words[:max_words]).rstrip(",;:-–")
+
+
+def _plan_extract_json(text: str) -> dict:
+    import json
+
+    raw = str(text or "")
+    if "</think>" in raw:
+        raw = raw.split("</think>", 1)[1]
+    first, last = raw.find("{"), raw.rfind("}")
+    if first < 0 or last <= first:
+        raise ValueError("planner returned no JSON object")
+    return json.loads(raw[first:last + 1])
+
+
+def _plan_max_shots(duration: float) -> int:
+    return 2 if float(duration) <= 5 else 3
+
+
+def _normalize_plan(raw, duration: float) -> dict | None:
+    total = max(2.0, float(duration or 5))
+    if not isinstance(raw, dict) or not isinstance(raw.get("shots"), list):
+        return None
+    max_shots = max(1, min(_plan_max_shots(total), int(total // PLAN_MIN_SHOT_SECONDS)))
+    shots = [shot for shot in raw["shots"] if isinstance(shot, dict) and _plan_line(shot.get("visual"))][:max_shots]
+    if not shots:
+        return None
+
+    subject = _plan_line(raw.get("subject"), 400)
+    style = _plan_line(raw.get("style"), 300)
+
+    requested = []
+    for shot in shots:
+        try:
+            requested.append(max(0.1, float(shot.get("seconds") or total / len(shots))))
+        except (TypeError, ValueError):
+            requested.append(total / len(shots))
+    scale = sum(requested)
+    seconds = [value / scale * total for value in requested]
+    if any(value < PLAN_MIN_SHOT_SECONDS for value in seconds):
+        seconds = [total / len(shots)] * len(shots)
+
+    beats, cursor = [], 0.0
+    for index, shot in enumerate(shots):
+        start = round(cursor, 2)
+        end = round(total, 2) if index == len(shots) - 1 else round(cursor + seconds[index], 2)
+        cursor = end
+        visual = _plan_line(shot.get("visual"), 400)
+        beats.append({
+            "start": start,
+            "end": end,
+            "visual": f"{subject} {visual}" if subject else visual,
+            "camera": _plan_line(shot.get("camera"), 200),
+            "narration": _plan_line(shot.get("narration"), 600),
+            "caption": _plan_line(shot.get("on_screen_text"), 48),
+            "captionPosition": _plan_pick(shot.get("text_position"), PLAN_TEXT_POSITIONS, "bottom"),
+            "audio": "",
+            "transition": "cut" if index == len(shots) - 1 else _plan_pick(shot.get("transition_to_next"), PLAN_TRANSITIONS, "fade"),
+        })
+
+    remaining = int(max(0.0, total - 2 * PLAN_EDGE_SECONDS) * PLAN_WORDS_PER_SECOND)
+    for beat in beats:
+        words = len(beat["narration"].split()) if beat["narration"] else 0
+        beat["narration"] = _plan_limit_words(beat["narration"], remaining)
+        remaining -= min(words, remaining)
+
+    has_narration = any(beat["narration"] for beat in beats)
+    voice = _plan_pick(raw.get("voice"), PLAN_VOICES, "female" if has_narration else "none")
+    if not has_narration:
+        voice = "none"
+    elif voice == "none":
+        voice = "female"
+    ambience = _plan_line(raw.get("ambience"), 160)
+    if ambience:
+        beats[0]["audio"] = ambience
+    on_camera = raw.get("on_camera_speech")
+    on_camera = has_narration and (on_camera is True or _plan_line(on_camera).lower() == "true")
+    return {
+        "onCameraSpeech": on_camera,
+        "ending": _plan_pick(raw.get("ending"), PLAN_ENDINGS, "none"),
+        "ambience": ambience,
+        "language": _plan_line(raw.get("language"), 16) or "pt-BR",
+        "subject": subject,
+        "style": style,
+        "beats": beats,
+        "voice": voice,
+        "musicMood": _plan_pick(raw.get("music_mood"), PLAN_MUSIC_MOODS, "cinematic"),
+    }
+
+
+def _plan_ltx_prompt(plan: dict, native_speech: bool = False) -> str:
+    parts = []
+    beats = plan["beats"]
+    for index, beat in enumerate(beats):
+        lead = "" if len(beats) == 1 else ("The video opens on: " if index == 0 else "Then: ")
+        parts.append(f"{lead}{beat['visual']}{(' ' + beat['camera']) if beat['camera'] else ''}".strip())
+    if plan["style"]:
+        parts.append(plan["style"])
+    speech = " ".join(beat["narration"] for beat in beats if beat["narration"])
+    if native_speech and plan["onCameraSpeech"] and speech:
+        who = "calm male voice" if plan["voice"] == "male" else "warm female voice"
+        if not plan["language"].lower().startswith("en"):
+            who = f"{who}, speaking {plan['language']}"
+        parts.append(f'The person looks into the camera and speaks with natural lip movement, saying in a {who}: "{speech}"')
+    else:
+        parts.append("Nobody speaks.")
+    parts.append(f"Audio: {plan['ambience']}. No music." if plan["ambience"] else "Audio: natural ambient sound only. No music.")
+    parts.append("No on-screen text, subtitles, captions or logos.")
+    return " ".join(" ".join(parts).split())
+
+
+def _plan_engine_order(plan: dict) -> list[str]:
+    families = [item.strip().lower() for item in os.environ.get("NOVA_VIDEO_ENGINE_ORDER", "ltx,wan").split(",") if item.strip()]
+    speech_languages = [item.strip().lower() for item in os.environ.get("NOVA_LTX_SPEECH_LANGUAGES", "en").split(",") if item.strip()]
+    order = ["ltx", "wan"]
+    if plan["onCameraSpeech"]:
+        ltx_speaks = any(plan["language"].lower().startswith(code) for code in speech_languages)
+        order = ["ltx-speech", "wan-speech", "wan"] if ltx_speaks else ["wan-speech", "ltx", "wan"]
+    return [name for name in order if name.split("-")[0] in families]
+
+
+def _apply_plan(payload: dict, plan: dict) -> dict:
+    single = " ".join(
+        f"{beat['visual']} {beat['camera']}".strip() for beat in plan["beats"]
+    ) + (f" Style: {plan['style']}" if plan["style"] else "") + " No text, letters, subtitles or logos in the image."
+    return {
+        **payload,
+        "needs_plan": False,
+        "prompt": single,
+        "director_timeline": plan["beats"],
+        "director_visual_style": plan["style"],
+        "director_ending": plan["ending"],
+        "director_voiceover": "" if plan["voice"] == "none" else f"{plan['voice']} voice, {plan['language']}",
+        "director_music": plan["musicMood"],
+        "director_language": plan["language"],
+        "ltx_prompt": _plan_ltx_prompt(plan),
+        "ltx_speech_prompt": _plan_ltx_prompt(plan, native_speech=True),
+        "engine_order": _plan_engine_order(plan),
+    }
+
+
+def _plan_with_model(generate_text, payload: dict) -> dict | None:
+    duration = max(2, min(10, int(payload.get("duration") or 5)))
+    system = PLAN_SYSTEM.replace("MAX_SHOTS", str(_plan_max_shots(duration))).replace("TOTAL_SECONDS", str(duration))
+    user = (f"Total duration: {duration} seconds. Aspect ratio: {payload.get('aspect_ratio') or '16:9'}.\n"
+            f"Customer request:\n{str(payload.get('director_original_prompt') or payload.get('prompt') or '')[:4000]}")
+    return _normalize_plan(_plan_extract_json(generate_text(system, user)), duration)
+
+
+def _dispatch_first_engine(payload: dict):
+    order = _engine_order(payload)
+    if order:
+        return _spawn_engine(order[0], payload)
+    return NovaWanVideo().generate.spawn(payload)
+
+
 @app.cls(
     image=base_image,
     gpu="L40S",
@@ -1576,6 +1843,77 @@ class NovaLtxVideo:
         return _run_engine(payload, _ltx_generate, "GENERATION_FAILED")
 
 
+# Plans requests the NOVA app could not plan itself, then starts the engine
+# chain. A planning failure never fails the job: it falls back to the legacy
+# single-prompt Wan route.
+@app.cls(
+    image=base_image,
+    gpu="L4",
+    cpu=2.0,
+    memory=32768,
+    volumes={str(MODEL_ROOT): model_volume},
+    secrets=[engine_secret],
+    timeout=10 * 60,
+    scaledown_window=120,
+    max_containers=2,
+)
+class NovaPlanner:
+    @modal.enter()
+    def load(self):
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        t0 = time.time()
+        _ensure_model(PLAN_MODEL_REPO, PLAN_MODEL_DIR)
+        self.tokenizer = AutoTokenizer.from_pretrained(str(PLAN_MODEL_DIR))
+        self.model = AutoModelForCausalLM.from_pretrained(
+            str(PLAN_MODEL_DIR), torch_dtype=torch.bfloat16, device_map="cuda"
+        )
+        _phase_timing("planner_load", t0)
+
+    def _generate(self, system: str, user: str) -> str:
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        text = self.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+        )
+        inputs = self.tokenizer([text], return_tensors="pt").to("cuda")
+        output = self.model.generate(**inputs, max_new_tokens=1100, do_sample=True, temperature=0.3, top_p=0.9)
+        return self.tokenizer.decode(output[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
+
+    @modal.method()
+    def plan_only(self, payload: dict) -> dict:
+        """Plan without starting engines (deploy smoke test)."""
+        plan = _plan_with_model(self._generate, payload)
+        if not plan:
+            raise RuntimeError("planner returned no usable plan")
+        return _apply_plan(payload, plan)
+
+    @modal.method()
+    def plan_and_dispatch(self, payload: dict) -> dict:
+        t0 = time.time()
+        plan = None
+        try:
+            plan = _plan_with_model(self._generate, payload)
+        except Exception as error:
+            print(f"[NOVA_VIDEO PLAN] planner failed: {str(error)[:240]}", flush=True)
+        _phase_timing("planner_plan", t0)
+        if plan:
+            payload = _apply_plan(payload, plan)
+            print(
+                f"[NOVA_VIDEO PLAN] shots={len(plan['beats'])} speech={plan['onCameraSpeech']} "
+                f"language={plan['language']} music={plan['musicMood']} engines={payload['engine_order']}",
+                flush=True,
+            )
+        else:
+            payload = {**payload, "needs_plan": False}
+        try:
+            _dispatch_first_engine(payload)
+        except Exception:
+            _notify(payload, "failed", "GENERATION_FAILED")
+            raise
+        return {"planned": bool(plan)}
+
+
 @app.function(image=base_image, secrets=[engine_secret], timeout=60)
 @modal.asgi_app()
 def api():
@@ -1608,6 +1946,9 @@ def api():
                 raise HTTPException(status_code=503, detail="Speech engine disabled")
             call = await NovaWanSpeechVideo().generate.spawn.aio(payload)
             engine = "wan-s2v"
+        elif task in {"text-to-video", "image-to-video"} and payload.get("needs_plan"):
+            call = await NovaPlanner().plan_and_dispatch.spawn.aio(payload)
+            engine = "planner"
         elif task in {"text-to-video", "image-to-video"} and _engine_order(payload):
             first = _engine_order(payload)[0]
             job = {**payload, "engine": first}

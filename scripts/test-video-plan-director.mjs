@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { directVideoPrompt } from "../src/lib/videoPromptDirector.mjs";
 import {
+  allowsPublicFallback,
   applyPlanToDirector,
   engineOrderFor,
   extractJson,
   ltxPrompt,
+  markForWorkerPlanning,
   maxShotsFor,
   normalizePlan,
   planVideoWithLlm,
@@ -235,5 +237,29 @@ assert.deepEqual(engineOrderFor(directed, { NOVA_VIDEO_ENGINE_ORDER: "wan" }), [
 assert.deepEqual(engineOrderFor(talking, { NOVA_VIDEO_ENGINE_ORDER: "wan" }), ["wan-speech", "wan"]);
 assert.deepEqual(engineOrderFor(base, {}), [], "regex-director jobs keep the legacy Wan route");
 assert.equal(talking.ltxSpeechPrompt, spoken);
+
+// No LLM reachable from the app: the job is marked for worker-side planning.
+const unplanned = markForWorkerPlanning(scripted);
+assert.equal(unplanned.needsWorkerPlan, true);
+assert.equal(unplanned.providerHints.complex, true);
+assert.equal(unplanned.providerHints.workerPlanned, true);
+assert.deepEqual(engineOrderFor(unplanned, {}), [], "the worker picks engines after planning");
+assert.equal(allowsPublicFallback(unplanned.providerHints), true);
+assert.equal(allowsPublicFallback(talking.providerHints), true);
+assert.equal(allowsPublicFallback({ complex: true }), false, "regex scripts never degrade silently");
+assert.equal(allowsPublicFallback({ complex: false }), true);
+
+// Parity fixture for the Python port in the Modal worker.
+if (process.env.NOVA_PLAN_PARITY_OUT) {
+  const { writeFileSync } = await import("node:fs");
+  const fixture = { ...llmPlan, on_camera_speech: true, ending: "fade_to_black",
+    shots: llmPlan.shots.map((shot, i) => ({ ...shot, text_position: i ? "top" : "bottom" })) };
+  const js = normalizePlan(fixture, { duration: 10 });
+  writeFileSync(process.env.NOVA_PLAN_PARITY_OUT, JSON.stringify({
+    raw: fixture, duration: 10, plan: js,
+    ltx: ltxPrompt(js), ltxSpeech: ltxPrompt(js, { nativeSpeech: true }),
+    order: engineOrderFor(applyPlanToDirector(base, js), {}),
+  }, null, 1));
+}
 
 console.log("NOVA LLM video plan director: OK");

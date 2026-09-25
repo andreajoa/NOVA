@@ -30,7 +30,14 @@ import {
 } from "@/lib/privateGpuVideoPool";
 import { runVerifiedVideoRuntime } from "@/lib/verifiedVideoRuntime";
 import { directVideoPrompt } from "@/lib/videoPromptDirector.mjs";
-import { applyPlanToDirector, engineOrderFor, planVideoWithLlm, shouldPlanWithLlm } from "@/lib/videoPlanDirector.mjs";
+import {
+  allowsPublicFallback,
+  applyPlanToDirector,
+  engineOrderFor,
+  markForWorkerPlanning,
+  planVideoWithLlm,
+  shouldPlanWithLlm,
+} from "@/lib/videoPlanDirector.mjs";
 import { uploadToR2 } from "@/lib/r2";
 
 export const runtime = "nodejs";
@@ -382,7 +389,7 @@ export async function POST(req) {
       duration,
       aspectRatio,
     });
-    if (plan) director = applyPlanToDirector(director, plan);
+    director = plan ? applyPlanToDirector(director, plan) : markForWorkerPlanning(director);
   }
 
   const input = {
@@ -415,6 +422,7 @@ export async function POST(req) {
     director_music: director.musicMood || "",
     director_language: director.language || "",
     director_ending: director.ending || "",
+    ...(director.needsWorkerPlan && { needs_plan: true }),
     ...(director.providerHints.llmPlanned && {
       engine_order: engineOrderFor(director),
       ltx_prompt: director.ltxPrompt,
@@ -460,7 +468,7 @@ export async function POST(req) {
           // LLM-planned videos come from ordinary free-text prompts, so a
           // single-pass public render of the planned English prompt is still
           // a better outcome for the customer than an error.
-          if (director.providerHints.complex && !director.providerHints.llmPlanned) {
+          if (!allowsPublicFallback(director.providerHints)) {
             throw poolError;
           }
 
@@ -473,7 +481,7 @@ export async function POST(req) {
           });
         }
       } else {
-        if (director.providerHints.complex && !director.providerHints.llmPlanned) {
+        if (!allowsPublicFallback(director.providerHints)) {
           const error = new Error("NOVA complex video director is temporarily unavailable");
           error.code = "NOVA_COMPLEX_VIDEO_DIRECTOR_UNAVAILABLE";
           throw error;

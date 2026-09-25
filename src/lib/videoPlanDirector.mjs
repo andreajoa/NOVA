@@ -217,6 +217,24 @@ export function engineOrderFor(director, env = process.env) {
   return order.filter((name) => families.includes(name.split("-")[0]));
 }
 
+// When the app cannot plan (no LLM provider reachable), the Modal worker plans
+// the raw prompt itself on its own GPU (Qwen3-8B). complex routes the job to
+// the Modal worker, the only one that plans and post-produces.
+export function markForWorkerPlanning(director) {
+  return {
+    ...director,
+    needsWorkerPlan: true,
+    publicSummary: { ...director.publicSummary, optimized: true, planner: "worker" },
+    providerHints: { ...director.providerHints, complex: true, workerPlanned: true },
+  };
+}
+
+// Regex-scripted complex jobs must not silently degrade to a single public
+// pass; planned free-text jobs may, since that still beats an error.
+export function allowsPublicFallback(hints = {}) {
+  return !hints?.complex || Boolean(hints.llmPlanned || hints.workerPlanned);
+}
+
 function singlePassPrompt(plan) {
   const lines = [];
   if (plan.beats.length === 1) {
@@ -291,6 +309,7 @@ export function applyPlanToDirector(director, plan) {
       hasCaptions,
       audioRequired: hasNarration || hasMusic,
       optimized: true,
+      planner: "app",
     },
     providerHints: {
       ...director.providerHints,
@@ -357,7 +376,10 @@ function cloudflareCredentials(env) {
 
 async function planWithCloudflare(request, env, fetchImpl) {
   const creds = cloudflareCredentials(env);
-  if (!creds) return null;
+  if (!creds) {
+    console.warn("[NOVA_VIDEO] LLM director: no Cloudflare credentials; the worker will plan");
+    return null;
+  }
   const model = oneLine(env.NOVA_DIRECTOR_MODEL) || CLOUDFLARE_MODEL;
   const payload = await postJson(
     fetchImpl,

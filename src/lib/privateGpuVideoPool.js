@@ -57,11 +57,15 @@ function workersForInput(input = {}) {
   const workers = workersForTask(task);
   const director = input?.director || {};
   const requiresDirectorWorker = Boolean(
-    director.complex &&
+    director.workerPlanned ||
+    director.llmPlanned ||
     (
-      director.audioRequired ||
-      director.hasCaptions ||
-      Number(director.beatCount || 0) > 1
+      director.complex &&
+      (
+        director.audioRequired ||
+        director.hasCaptions ||
+        Number(director.beatCount || 0) > 1
+      )
     )
   );
 
