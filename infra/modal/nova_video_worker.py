@@ -1207,12 +1207,13 @@ def _remove_model_text(source: Path, output: Path, detect_every: int = 2) -> boo
                 for box in boxes:
                     poly = np.asarray(box, dtype=np.int32)
                     x, y, w, h = cv2.boundingRect(poly)
-                    # Skip implausible "text": huge regions are scenery, not lettering.
-                    if w > width * 0.95 or h > height * 0.12 or w * h < 80:
+                    # Tall regions are scenery, not lettering. Width is not a signal:
+                    # burned-in subtitles often run edge to edge.
+                    if h > height * 0.12 or w * h < 80:
                         continue
                     cv2.fillPoly(fresh, [poly], 255)
                 if fresh.any():
-                    mask, hold = cv2.dilate(fresh, kernel, iterations=2), detect_every * 3
+                    mask, hold = cv2.dilate(fresh, kernel, iterations=2), detect_every * 4
                 elif hold <= 0:
                     mask[:] = 0
             hold -= 1
