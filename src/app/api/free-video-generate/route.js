@@ -49,6 +49,7 @@ const ALLOWED_MODES = new Set([
   "image-to-video",
   "continue-video",
   "speech-video",
+  "ugc-product",
 ]);
 const MAX_PERSISTED_VIDEO_BYTES = 120 * 1024 * 1024;
 const PERSIST_TIMEOUT_MS = 8_000;
@@ -309,6 +310,21 @@ export async function POST(req) {
     }
   }
 
+  let productImageUrl = "";
+  let avatarImageUrl = "";
+  if (mode === "ugc-product") {
+    productImageUrl = ownedMediaUrl(body.product_image_url);
+    if (!productImageUrl) {
+      return NextResponse.json({ success: false, error: "Adicione a foto do produto." }, { status: 400 });
+    }
+    if (body.avatar_image_url) {
+      avatarImageUrl = ownedMediaUrl(body.avatar_image_url);
+      if (!avatarImageUrl) {
+        return NextResponse.json({ success: false, error: "Invalid NOVA avatar image." }, { status: 400 });
+      }
+    }
+  }
+
   if (mode === "continue-video") {
     sourceVideoUrl = ownedMediaUrl(body.source_video_url);
     if (!sourceVideoUrl) {
@@ -321,7 +337,8 @@ export async function POST(req) {
   const usesSharedCapacity = !admin && !policy.paid && !hfToken;
   let capacity = null;
   if (usesSharedCapacity) {
-    capacity = await reserveVideoCapacity(duration);
+    // UGC also runs the image studio, so it weighs twice a plain video.
+    capacity = await reserveVideoCapacity(mode === "ugc-product" ? duration * 2 : duration);
     if (!capacity.ok) {
       return NextResponse.json(
         {
@@ -388,8 +405,12 @@ export async function POST(req) {
       prompt: director.originalPrompt,
       duration,
       aspectRatio,
+      ugc: mode === "ugc-product",
     });
     director = plan ? applyPlanToDirector(director, plan) : markForWorkerPlanning(director);
+    if (mode === "ugc-product") {
+      director = { ...director, providerHints: { ...director.providerHints, complex: true, ugc: true } };
+    }
   }
 
   const input = {
@@ -422,6 +443,11 @@ export async function POST(req) {
     director_music: director.musicMood || "",
     director_language: director.language || "",
     director_ending: director.ending || "",
+    ...(mode === "ugc-product" && {
+      director_mode: "ugc",
+      product_image_url: productImageUrl,
+      ...(avatarImageUrl && { avatar_image_url: avatarImageUrl }),
+    }),
     ...(typeof director.subtitles === "boolean" && { director_subtitles: director.subtitles }),
     ...(director.captionStyle && { director_caption_style: director.captionStyle }),
     ...(director.needsWorkerPlan && { needs_plan: true }),
@@ -445,6 +471,18 @@ export async function POST(req) {
         userId,
         quotaDebited: Boolean(quota?.ok),
         origin: req.nextUrl.origin,
+      });
+    } else if (mode === "ugc-product") {
+      if (!hasPrivateGpuVideoPool()) {
+        const error = new Error("NOVA UGC engine is not configured");
+        error.code = "NOVA_UGC_ENGINE_UNAVAILABLE";
+        throw error;
+      }
+      result = await runPrivateGpuVideoPool(privateInput, {
+        userId,
+        quotaDebited: Boolean(quota?.ok),
+        origin: req.nextUrl.origin,
+        hfToken,
       });
     } else if (mode === "text-to-video" || mode === "image-to-video") {
       if (hasPrivateGpuVideoPool()) {

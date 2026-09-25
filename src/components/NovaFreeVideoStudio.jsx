@@ -71,13 +71,19 @@ function Choice({ active, children, onClick, disabled = false }) {
 }
 
 export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }) {
-  const [mode, setMode] = useState(initialModeKey === "image-to-video" ? "image-to-video" : "text-to-video");
+  const [mode, setMode] = useState(
+    ["image-to-video", "ugc-product"].includes(initialModeKey) ? initialModeKey : "text-to-video"
+  );
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [duration, setDuration] = useState(5);
   const [referenceFile, setReferenceFile] = useState(null);
   const [referencePreview, setReferencePreview] = useState("");
+  const [productFile, setProductFile] = useState(null);
+  const [productPreview, setProductPreview] = useState("");
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState("");
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -175,6 +181,22 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
     };
   }, [referencePreview]);
 
+  function selectImage(setFile, setPreview) {
+    return (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      setFile(file);
+      setPreview(URL.createObjectURL(file));
+      setError("");
+    };
+  }
+
+  function chooseMode(next) {
+    setMode(next);
+    // UGC is made for vertical social feeds.
+    if (next === "ugc-product") setAspectRatio("9:16");
+  }
+
   function selectReference(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -246,6 +268,10 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
       setError("Adicione uma imagem para usar Image to Video.");
       return;
     }
+    if (!continueFrom && mode === "ugc-product" && !productFile) {
+      setError("Adicione a foto do produto para criar o UGC.");
+      return;
+    }
 
     pollToken.current += 1;
     setLoading(true);
@@ -258,6 +284,16 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
       if (!continueFrom && mode === "image-to-video") {
         setStatus("Enviando imagem de referência...");
         imageUrl = await uploadReference(referenceFile);
+      }
+      let productImageUrl = "";
+      let avatarImageUrl = "";
+      if (!continueFrom && mode === "ugc-product") {
+        setStatus("Enviando foto do produto...");
+        productImageUrl = await uploadReference(productFile);
+        if (avatarFile) {
+          setStatus("Enviando foto do criador...");
+          avatarImageUrl = await uploadReference(avatarFile);
+        }
       }
 
       const hfToken = activeHfToken();
@@ -275,6 +311,8 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
           seconds,
           ...(hfToken && { hf_token: hfToken }),
           ...(imageUrl && { image_url: imageUrl }),
+          ...(productImageUrl && { product_image_url: productImageUrl }),
+          ...(avatarImageUrl && { avatar_image_url: avatarImageUrl }),
           ...(continueFrom && { source_video_url: continueFrom }),
         }),
       });
@@ -357,17 +395,43 @@ export default function NovaFreeVideoStudio({ initialModeKey = "text-to-video" }
 
         <section className="mt-5 grid gap-5 xl:grid-cols-[1fr_380px]">
           <div className="rounded-[2rem] border border-white/10 bg-[#070707] p-5 md:p-6">
-            <div className="grid grid-cols-2 gap-2">
-              <Choice active={mode === "text-to-video"} onClick={() => setMode("text-to-video")} disabled={loading}>Text to Video</Choice>
-              <Choice active={mode === "image-to-video"} onClick={() => setMode("image-to-video")} disabled={loading}>Image to Video</Choice>
+            <div className="grid grid-cols-3 gap-2">
+              <Choice active={mode === "text-to-video"} onClick={() => chooseMode("text-to-video")} disabled={loading}>Text to Video</Choice>
+              <Choice active={mode === "image-to-video"} onClick={() => chooseMode("image-to-video")} disabled={loading}>Image to Video</Choice>
+              <Choice active={mode === "ugc-product"} onClick={() => chooseMode("ugc-product")} disabled={loading}>UGC de Produto</Choice>
             </div>
+
+            {mode === "ugc-product" && (
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-black/35 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Foto do produto · obrigatória</p>
+                  <label className="mt-3 inline-flex cursor-pointer rounded-xl border border-[#D7FF00]/25 bg-[#D7FF00]/10 px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#D7FF00]">
+                    {productPreview ? "Trocar produto" : "Adicionar produto"}
+                    <input type="file" accept="image/*" className="hidden" onChange={selectImage(setProductFile, setProductPreview)} disabled={loading} />
+                  </label>
+                  {productPreview && <img src={productPreview} alt="Produto" className="mt-3 max-h-[220px] w-full rounded-xl object-contain" />}
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/35 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Foto do criador · opcional</p>
+                  <label className="mt-3 inline-flex cursor-pointer rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-white/70">
+                    {avatarPreview ? "Trocar criador" : "Adicionar criador"}
+                    <input type="file" accept="image/*" className="hidden" onChange={selectImage(setAvatarFile, setAvatarPreview)} disabled={loading} />
+                  </label>
+                  {avatarPreview
+                    ? <img src={avatarPreview} alt="Criador" className="mt-3 max-h-[220px] w-full rounded-xl object-contain" />
+                    : <p className="mt-3 text-[11px] leading-5 text-white/40">Sem foto, o NOVA cria um criador a partir da sua descrição.</p>}
+                </div>
+              </div>
+            )}
 
             <label className="mt-6 block text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Prompt</label>
             <textarea
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
               disabled={loading}
-              placeholder="Descreva a cena, o movimento, a câmera e o que deve acontecer..."
+              placeholder={mode === "ugc-product"
+                ? "Ex: Criadora de 25 anos no banheiro mostra o sérum GLOW e diz: \"Não esperava isso... minha pele nunca esteve tão boa. Três gotas toda noite. Link na bio!\""
+                : "Descreva a cena, o movimento, a câmera e o que deve acontecer..."}
               className="mt-2 min-h-[180px] w-full resize-none rounded-3xl border border-white/10 bg-black/35 px-5 py-5 text-sm leading-7 text-white outline-none placeholder:text-white/20 focus:border-[#D7FF00]/45"
             />
 
