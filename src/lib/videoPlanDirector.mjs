@@ -142,7 +142,9 @@ function round2(value) {
 }
 
 export function maxShotsFor(duration) {
-  return Number(duration) <= 5 ? 2 : 3;
+  const seconds = Number(duration);
+  if (seconds <= 5) return 2;
+  return seconds <= 10 ? 3 : 4;
 }
 
 // Clamp an LLM plan into something the worker can render inside the applied
