@@ -1300,6 +1300,58 @@ def smoke_planner():
     assert "scripts/kie.mjs" not in planned["prompt"], "shell commands must be ignored"
 
 
+SAMPLE_SCRIPT = (
+    "BLOCK 1 (0s-10s) - ON-CAMERA + HEADLINE OVERLAY\n"
+    'SPEECH: "The first year after betrayal has a map. Nobody hands it to you. So here it is. Month by month." '
+    'node scripts/kie.mjs still "<PREAMBLE> <CHARLOCK> Medium close-up, he faces the camera with calm grave honesty, '
+    'soft dark interior background. Kodak Portra 400 film stock." out/b1-head.png --ar 9:16\n'
+    'node scripts/kie.mjs shot "Subtle handheld breathing sway; the man speaks directly into the camera." '
+    "out/b1-head.png out/b1.mp4 --dur 10\n"
+    "WRITING (CapCut overlay, 0-3s, top center): THE FIRST YEAR AFTER BETRAYAL. (Bebas Neue, white)\n"
+    "Out: dip to black 0.3s."
+)
+
+
+def _sample_bytes(render, payload: dict) -> bytes:
+    # Return the finished MP4 instead of uploading it to NOVA's R2.
+    global _upload
+    _upload = lambda _payload, path: Path(path).read_bytes()  # noqa: E731
+    return render(payload)
+
+
+@app.function(image=speech_image, gpu="A100-80GB", cpu=4.0, memory=65536,
+              volumes={str(MODEL_ROOT): model_volume}, secrets=[engine_secret], timeout=20 * 60)
+def sample_render_speech(payload: dict) -> bytes:
+    return _sample_bytes(_director_speech_generate, {**payload, "engine": "wan-speech"})
+
+
+@app.function(image=base_image, cpu=2.0, memory=8192,
+              volumes={str(MODEL_ROOT): model_volume}, secrets=[engine_secret], timeout=14 * 60)
+def sample_render_ltx(payload: dict) -> bytes:
+    return _sample_bytes(_ltx_generate, {**payload, "engine": "ltx-speech"})
+
+
+@app.local_entrypoint()
+def sample_engines(engines: str = "ltx-speech,wan-speech"):
+    """Plan the sample script and render it with each engine (manual QA)."""
+    os.makedirs("samples", exist_ok=True)
+    planned = NovaPlanner().plan_only.remote(
+        {"task": "text-to-video", "duration": 10, "aspect_ratio": "9:16", "director_original_prompt": SAMPLE_SCRIPT, "seed": 42}
+    )
+    with open("samples/plan.json", "w", encoding="utf-8") as handle:
+        json.dump(planned, handle, indent=2, ensure_ascii=False)
+    for engine in [name.strip() for name in engines.split(",") if name.strip()]:
+        t0 = time.time()
+        try:
+            render = sample_render_ltx if engine.startswith("ltx") else sample_render_speech
+            data = render.remote(planned)
+            with open(f"samples/{engine}.mp4", "wb") as handle:
+                handle.write(data)
+            print(f"[SAMPLE] {engine}: {len(data)} bytes in {time.time() - t0:.0f}s", flush=True)
+        except Exception as error:
+            print(f"[SAMPLE] {engine} failed after {time.time() - t0:.0f}s: {str(error)[:300]}", flush=True)
+
+
 @app.function(image=base_image, gpu="L4", timeout=120, memory=8192)
 def smoke_import():
     """Fail early if the normal Wan runtime has missing imports."""
