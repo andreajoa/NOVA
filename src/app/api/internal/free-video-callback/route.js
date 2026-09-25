@@ -6,6 +6,7 @@ import {
 import { refundFreeGeneration } from "@/lib/freeGenerationQuota";
 import { retryPrivateGpuVideoJob } from "@/lib/privateGpuVideoPool";
 import { retryFreeVideoJobOnPublicFallback } from "@/lib/publicVideoJobRetry";
+import { allowsPublicFallback } from "@/lib/videoPlanDirector.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -95,7 +96,7 @@ async function handleFailedCallback(jobId, token, req, errorCode) {
       });
     }
 
-    const complexDirector = Boolean(job.input?.director?.complex && !job.input?.director?.llmPlanned);
+    const complexDirector = !allowsPublicFallback(job.input?.director);
     if (
       !complexDirector &&
       ["text-to-video", "image-to-video"].includes(String(job.input.task || ""))
