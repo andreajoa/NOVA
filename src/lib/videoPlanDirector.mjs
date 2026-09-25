@@ -26,7 +26,7 @@ const REQUEST_TIMEOUT_MS = 12000;
 
 // Pace used to size narration: relaxed pt-BR/en voice-over speed. The worker
 // never speeds narration up by more than ~1.2x, so the budget has to hold.
-const WORDS_PER_SECOND = 2.3;
+const WORDS_PER_SECOND = 2.5;
 const NARRATION_EDGE_SECONDS = 0.4;
 const MIN_SHOT_SECONDS = 1.6;
 const MAX_ON_SCREEN_TEXT = 48;
@@ -63,10 +63,13 @@ Return ONLY a JSON object with this exact shape:
 }
 
 Rules:
+- The request may contain production notes, shell commands, file names, flags and tool names (e.g. "node scripts/...", "--ar 9:16", "out/b1.mp4", "CapCut", "<PREAMBLE>"). Ignore them; extract only the creative intent.
+- If the customer wrote the exact words to be spoken, use them verbatim as narration (same language, same wording), split across shots in order.
+- Faces and the main subject must always be clearly lit and visible, even in dark or dramatic moods (low-key lighting, never underexposed).
 - Use at most MAX_SHOTS shots. Use 1 shot when the request describes a single moment. Seconds of all shots must add up to TOTAL_SECONDS.
 - Never ask the video model to draw text, logos, subtitles or captions: any text the customer wants on screen goes ONLY in on_screen_text, copied exactly as the customer wrote it.
 - Never describe music, voices or sounds inside "visual" or "camera".
-- Narration only if the customer asked for narration, a voice, a message spoken, or a slogan to be said. Keep it short: at most about ${WORDS_PER_SECOND} words per second of its shot. Write it in the customer's language.
+- Narration only if the customer asked for narration, speech, a voice, a message spoken, or a slogan to be said. Keep the whole narration within about ${WORDS_PER_SECOND} words per second of video. Write it in the language the customer used for the spoken words.
 - "voice" is "none" when there is no narration; otherwise match the voice the customer asked for (default female).
 - music_mood is "none" only if the customer explicitly asked for no music.
 - Prefer "fade" or "dissolve" transitions unless the customer asked for something energetic.
@@ -132,22 +135,27 @@ export function normalizePlan(raw, { duration }) {
     const start = round2(cursor);
     const end = index === shots.length - 1 ? round2(total) : round2(cursor + seconds[index]);
     cursor = end;
-    const window = end - start;
-    const edge = (index === 0 ? NARRATION_EDGE_SECONDS : 0) +
-      (index === shots.length - 1 ? NARRATION_EDGE_SECONDS : 0);
-    const budget = Math.floor(Math.max(0, window - edge) * WORDS_PER_SECOND);
     const visual = oneLine(shot.visual, 400);
     return {
       start,
       end,
       visual: subject ? `${subject} ${visual}` : visual,
       camera: oneLine(shot.camera, 200),
-      narration: limitWords(shot.narration, budget),
+      narration: oneLine(shot.narration, 600),
       caption: oneLine(shot.on_screen_text, MAX_ON_SCREEN_TEXT),
       audio: "",
       transition: index === shots.length - 1 ? "cut" : pick(shot.transition_to_next, TRANSITIONS, "fade"),
     };
   });
+
+  // One budget for the whole video: the worker lets a line run into the next
+  // shot, so verbatim speech split unevenly across shots is not cut mid-way.
+  let remaining = Math.floor(Math.max(0, total - 2 * NARRATION_EDGE_SECONDS) * WORDS_PER_SECOND);
+  for (const beat of beats) {
+    const words = beat.narration ? beat.narration.split(" ").length : 0;
+    beat.narration = limitWords(beat.narration, remaining);
+    remaining -= Math.min(words, remaining);
+  }
 
   const hasNarration = beats.some((beat) => beat.narration);
   let voice = pick(raw.voice, VOICES, hasNarration ? "female" : "none");
@@ -165,6 +173,13 @@ export function normalizePlan(raw, { duration }) {
     voice,
     musicMood: pick(raw.music_mood, MUSIC_MOODS, "cinematic"),
   };
+}
+
+// The regex director flags long prompts as complex even when it found no
+// timed beats; only real multi-beat scripts should skip the LLM planner.
+export function shouldPlanWithLlm(director, mode) {
+  const plannable = mode === "text-to-video" || mode === "image-to-video";
+  return plannable && (director?.beats?.length || 0) < 2;
 }
 
 function singlePassPrompt(plan) {
