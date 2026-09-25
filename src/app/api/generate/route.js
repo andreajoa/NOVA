@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { fal } from "@fal-ai/client";
+import { endpointDefaults, normalizeDurationForEndpoint } from "@/lib/falEndpointInputs";
 import { validateApiKeyFromRequest } from "@/lib/apiKeys";
 import { extractGeneratedMediaUrl } from "@/lib/generatedMediaUrl";
 import { resolveGenerationSelection } from "@/lib/generationCatalog";
@@ -163,7 +164,7 @@ function normalizeResolutionForEndpoint(endpoint, value) {
   if (ep.includes("wan/v2.2-a14b") || ep.includes("hunyuan-video")) {
     return ["480p", "580p", "720p"].includes(raw) ? raw : "480p";
   }
-  if (ep.includes("seedance-2.0")) {
+  if (ep.includes("seedance-2.0") || ep.includes("seedance-2.5")) {
     return ["480p", "720p", "1080p"].includes(raw) ? raw : "480p";
   }
   if (ep.includes("pixverse")) {
@@ -195,11 +196,12 @@ function buildFreeInput(selection, body, prompt) {
 
 function buildStandardInput(selection, body, prompt, seconds) {
   return {
+    ...endpointDefaults(selection.endpoint),
     prompt,
     ...(body.negative_prompt && { negative_prompt: body.negative_prompt }),
     ...(body.image_url && { image_url: body.image_url }),
     ...(body.image_urls && { image_urls: body.image_urls }),
-    ...(body.duration && { duration: seconds }),
+    ...(body.duration && { duration: normalizeDurationForEndpoint(selection.endpoint, seconds) }),
     ...(body.aspect_ratio && { aspect_ratio: body.aspect_ratio }),
     ...(body.resolution && {
       resolution: normalizeResolutionForEndpoint(selection.endpoint, body.resolution),

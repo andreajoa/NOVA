@@ -10,13 +10,23 @@ export const falModels = {
         "reference-to-video":  { label: "Reference to Video",  endpoint: "bytedance/seedance-2.0/reference-to-video",  needsImage: true  },
       }
     },
+    "seedance-25": {
+      label: "Seedance 2.5",
+      description: "ByteDance flagship with native synced audio, up to 15s in one pass",
+      image: "/models/seedance.png",
+      modes: {
+        "text-to-video":      { label: "Text to Video",      endpoint: "bytedance/seedance-2.5/text-to-video",      needsImage: false },
+        "image-to-video":     { label: "Image to Video",     endpoint: "bytedance/seedance-2.5/image-to-video",     needsImage: true  },
+        "reference-to-video": { label: "Reference to Video", endpoint: "bytedance/seedance-2.5/reference-to-video", needsImage: true  },
+      }
+    },
     kling: {
       label: "Kling 3.0",
       description: "Kuaishou pro-grade video model",
       image: "/models/kling.png",
       modes: {
-        "text-to-video":  { label: "Text to Video",  endpoint: "fal-ai/kling-video/v2.1/master/text-to-video",  needsImage: false },
-        "image-to-video": { label: "Image to Video", endpoint: "fal-ai/kling-video/v2.1/standard/image-to-video", needsImage: true  },
+        "text-to-video":  { label: "Text to Video",  endpoint: "fal-ai/kling-video/v3/turbo/pro/text-to-video",  needsImage: false },
+        "image-to-video": { label: "Image to Video", endpoint: "fal-ai/kling-video/v3/turbo/pro/image-to-video", needsImage: true  },
       }
     },
     pixverse: {
@@ -24,7 +34,8 @@ export const falModels = {
       description: "Cinematic video generation",
       image: "/models/pixverse.png",
       modes: {
-        "image-to-video": { label: "Image to Video", endpoint: "fal-ai/pixverse/v4/image-to-video", needsImage: true },
+        "text-to-video":  { label: "Text to Video",  endpoint: "fal-ai/pixverse/v6/text-to-video",  needsImage: false },
+        "image-to-video": { label: "Image to Video", endpoint: "fal-ai/pixverse/v6/image-to-video", needsImage: true },
       }
     },
     veo: {
@@ -72,8 +83,8 @@ export const falModels = {
       }
     },
     lucy: {
-      label: "Lucy (Decart)",
-      description: "Real-time world simulation",
+      label: "MiniMax Hailuo",
+      description: "Image-to-video by MiniMax",
       image: "/models/lucy.png",
       modes: {
         "image-to-video": { label: "Image to Video", endpoint: "fal-ai/minimax-video/image-to-video", needsImage: true },

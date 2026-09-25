@@ -33,6 +33,9 @@ on:
       - "src/lib/publicVideoJobRetry.js"
       - "src/lib/privateOpenModels.js"
       - "src/lib/publicGenerationCatalog.js"
+      - "src/lib/falModels.js"
+      - "src/lib/falEndpointInputs.js"
+      - "scripts/test-fal-catalog.mjs"
       - "src/lib/r2.ts"
       - "src/lib/verifiedVideoRuntime.js"
       - "src/lib/videoPromptDirector.mjs"
@@ -101,6 +104,9 @@ jobs:
 
       - name: Validate LLM video plan director
         run: node scripts/test-video-plan-director.mjs
+
+      - name: Validate paid model catalog
+        run: node scripts/test-fal-catalog.mjs
 
       - name: Validate TypeScript database module
         run: npx tsc --noEmit --pretty false

@@ -138,6 +138,16 @@ export const publicGenerationModels = {
         "reference-to-video": { label: "Reference to Video", needsImage: true },
       },
     },
+    "seedance-25": {
+      label: "Seedance 2.5",
+      description: "Flagship video with native synced audio",
+      image: "/models/seedance.png",
+      modes: {
+        "text-to-video": { label: "Text to Video", needsImage: false },
+        "image-to-video": { label: "Image to Video", needsImage: true },
+        "reference-to-video": { label: "Reference to Video", needsImage: true },
+      },
+    },
     kling: {
       label: "Kling 3.0",
       description: "Pro-grade video generation",
@@ -152,6 +162,7 @@ export const publicGenerationModels = {
       description: "Cinematic video generation",
       image: "/models/pixverse.png",
       modes: {
+        "text-to-video": { label: "Text to Video", needsImage: false },
         "image-to-video": { label: "Image to Video", needsImage: true },
       },
     },
@@ -193,7 +204,7 @@ export const publicGenerationModels = {
       },
     },
     lucy: {
-      label: "Lucy",
+      label: "MiniMax Hailuo",
       description: "Real-time world simulation",
       image: "/models/lucy.png",
       modes: {
