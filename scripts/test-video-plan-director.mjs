@@ -241,12 +241,12 @@ assert.equal(normalizePlan({ shots: [{ visual: "x" }], on_camera_speech: true },
 
 // Engine order per request and per deployment switch.
 const talking = applyPlanToDirector(scripted, talkingPlan);
-assert.deepEqual(engineOrderFor(talking, {}), ["ltx-speech", "wan"]);
+assert.deepEqual(engineOrderFor(talking, {}), ["ltx-local-speech", "ltx-speech", "wan"]);
 const talkingPt = applyPlanToDirector(scripted, { ...talkingPlan, language: "pt-BR" });
-assert.deepEqual(engineOrderFor(talkingPt, {}), ["ltx-speech", "wan"], "pt speech: LTX speaks Portuguese natively");
-assert.deepEqual(engineOrderFor({ ...talkingPt, language: "es" }, {}), ["ltx", "wan"], "unverified languages: LTX picture + Kokoro dub");
-assert.deepEqual(engineOrderFor(talkingPt, { NOVA_LTX_SPEECH_LANGUAGES: "en,pt" }), ["ltx-speech", "wan"]);
-assert.deepEqual(engineOrderFor(directed, {}), ["ltx", "wan"], "voice-over videos: LTX picture, Wan fallback");
+assert.deepEqual(engineOrderFor(talkingPt, {}), ["ltx-local-speech", "ltx-speech", "wan"], "pt speech: LTX speaks Portuguese natively");
+assert.deepEqual(engineOrderFor({ ...talkingPt, language: "es" }, {}), ["ltx-local", "ltx", "wan"], "unverified languages: LTX picture + Kokoro dub");
+assert.deepEqual(engineOrderFor(talkingPt, { NOVA_LTX_SPEECH_LANGUAGES: "en,pt" }), ["ltx-local-speech", "ltx-speech", "wan"]);
+assert.deepEqual(engineOrderFor(directed, {}), ["ltx-local", "ltx", "wan"], "voice-over videos: own LTX, public LTX, Wan");
 assert.deepEqual(engineOrderFor(directed, { NOVA_VIDEO_ENGINE_ORDER: "wan" }), ["wan"]);
 assert.deepEqual(engineOrderFor(talking, { NOVA_VIDEO_ENGINE_ORDER: "wan" }), ["wan"]);
 assert.deepEqual(engineOrderFor(base, {}), [], "regex-director jobs keep the legacy Wan route");
