@@ -6,6 +6,7 @@ import {
   maxShotsFor,
   normalizePlan,
   planVideoWithLlm,
+  shouldPlanWithLlm,
 } from "../src/lib/videoPlanDirector.mjs";
 
 const customerPrompt =
@@ -65,10 +66,33 @@ assert.equal(plan.beats[1].transition, "cut");
 assert.equal(plan.beats[1].caption, "Café da Vila");
 assert.equal(plan.musicMood, "lofi");
 assert.equal(plan.voice, "female");
-for (const beat of plan.beats) {
-  const words = beat.narration ? beat.narration.split(" ").length : 0;
-  assert.ok(words <= Math.floor((beat.end - beat.start) * 2.3), `narration too long for its shot: ${beat.narration}`);
-}
+const totalWords = plan.beats.reduce((sum, beat) => sum + (beat.narration ? beat.narration.split(" ").length : 0), 0);
+assert.ok(totalWords <= Math.floor((5 - 0.8) * 2.5), `narration too long for the video: ${totalWords} words`);
+
+// Verbatim speech that fits the video survives even when split unevenly.
+const speech = "The first year after betrayal has a map. Nobody hands it to you. So here it is. Month by month.";
+const verbatim = normalizePlan({
+  shots: [
+    { visual: "He faces the camera.", seconds: 3, narration: speech.split(". ").slice(0, 3).join(". ") + "." },
+    { visual: "He keeps talking.", seconds: 7, narration: "Month by month." },
+  ],
+}, { duration: 10 });
+assert.equal(verbatim.beats.map((beat) => beat.narration).join(" "), speech);
+
+// Gating: long scripts with no timed beats (the real prompt that produced a
+// silent single shot) must go through the LLM planner.
+const scriptPrompt = `BLOCK 1 (0s–10s) — ON-CAMERA + HEADLINE OVERLAY
+🎙️ SPEECH: "${speech}" node scripts/kie.mjs still "<PREAMBLE> <CHARLOCK> Medium close-up, he faces the camera with calm grave honesty, soft dark interior background. Kodak Portra 400 film stock." out/b1-head.png --ar 9:16 --ref master_portrait.png
+node scripts/kie.mjs shot "Subtle handheld breathing sway; the man speaks directly into the camera with calm grave honesty, accurate subtle lip movement, steady eye contact; light shifts softly." out/b1-head.png out/b1.mp4 --dur 10
+12
+📝 WRITING (CapCut overlay, 0–3s, top center): THE FIRST YEAR AFTER BETRAYAL. (Bebas Neue, white, amber underline stroke)
+Out: dip to black 0.3s.`;
+const scripted = directVideoPrompt({ prompt: scriptPrompt, selectedDuration: 10, selectedAspectRatio: "9:16" });
+assert.equal(scripted.providerHints.complex, true, "regex flags it complex by length");
+assert.equal(scripted.beats.length, 0);
+assert.equal(shouldPlanWithLlm(scripted, "text-to-video"), true);
+assert.equal(shouldPlanWithLlm(scripted, "continue-video"), false);
+assert.equal(shouldPlanWithLlm({ beats: [{}, {}] }, "text-to-video"), false, "real timed beats keep the regex director");
 
 // Untrusted output is rejected or repaired, never passed through.
 assert.equal(normalizePlan(null, { duration: 5 }), null);

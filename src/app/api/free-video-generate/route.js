@@ -30,7 +30,7 @@ import {
 } from "@/lib/privateGpuVideoPool";
 import { runVerifiedVideoRuntime } from "@/lib/verifiedVideoRuntime";
 import { directVideoPrompt } from "@/lib/videoPromptDirector.mjs";
-import { applyPlanToDirector, planVideoWithLlm } from "@/lib/videoPlanDirector.mjs";
+import { applyPlanToDirector, planVideoWithLlm, shouldPlanWithLlm } from "@/lib/videoPlanDirector.mjs";
 import { uploadToR2 } from "@/lib/r2";
 
 export const runtime = "nodejs";
@@ -376,10 +376,7 @@ export async function POST(req) {
   // shots, narration, on-screen text, music mood and transitions. Runs after
   // quota so refused requests never spend an LLM call; any failure keeps the
   // regex director's result.
-  if (
-    !director.providerHints.complex &&
-    (mode === "text-to-video" || mode === "image-to-video")
-  ) {
+  if (shouldPlanWithLlm(director, mode)) {
     const plan = await planVideoWithLlm({
       prompt: director.originalPrompt,
       duration,
