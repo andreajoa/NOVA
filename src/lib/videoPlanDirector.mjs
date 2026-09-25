@@ -415,7 +415,7 @@ async function postJson(fetchImpl, url, headers, body) {
 }
 
 function cloudflareCredentials(env) {
-  const accountId = oneLine(env.CLOUDFLARE_ACCOUNT_ID);
+  const accountId = oneLine(env.CLOUDFLARE_AI_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID);
   const apiToken = oneLine(env.CLOUDFLARE_AI_API_TOKEN || env.CLOUDFLARE_API_TOKEN);
   return accountId && apiToken ? { accountId, apiToken } : null;
 }
