@@ -2239,11 +2239,11 @@ def sample_render_ltx_local(payload: dict, keyframe: bytes | None = None) -> byt
 
 
 @app.local_entrypoint()
-def sample_ltx_local():
+def sample_ltx_local(duration: int = 10, skip_ugc: bool = False):
     """The two real requests that failed in production, on NOVA's own LTX."""
     os.makedirs("samples", exist_ok=True)
     planned = NovaPlanner().plan_only.remote({
-        "task": "text-to-video", "duration": 10, "aspect_ratio": "9:16", "seed": 42,
+        "task": "text-to-video", "duration": duration, "aspect_ratio": "9:16", "seed": 42,
         "director_original_prompt": SAMPLE_SCRIPT,
     })
     t0 = time.time()
@@ -2253,6 +2253,8 @@ def sample_ltx_local():
         print(f"[SAMPLE] ltx-local EN speech: {len(data)} bytes in {time.time() - t0:.0f}s", flush=True)
     except Exception as error:
         print(f"[SAMPLE] ltx-local EN failed: {str(error)[:400]}", flush=True)
+    if skip_ugc:
+        return
     planned_pt = NovaPlanner().plan_only.remote({
         "task": "ugc-product", "duration": 10, "aspect_ratio": "9:16", "seed": 21, "director_mode": "ugc",
         "director_original_prompt": UGC_SAMPLE_REQUEST_PT,
