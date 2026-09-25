@@ -12,8 +12,10 @@ if (!process.env.NOVA_IMAGE_FREE_ENGINE_MODEL) {
   process.env.NOVA_IMAGE_FREE_ENGINE_MODEL = DEFAULT_NOVA_IMAGE_MODEL;
 }
 
+// Workers AI may live on its own token/account pair (the general Cloudflare
+// token is scoped to D1/R2 and has no Workers AI permission).
 function credentials() {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const accountId = process.env.CLOUDFLARE_AI_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID;
   const apiToken = process.env.CLOUDFLARE_AI_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN;
   if (!accountId || !apiToken) return null;
   return { accountId, apiToken };
