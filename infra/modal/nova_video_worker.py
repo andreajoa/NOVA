@@ -1218,9 +1218,15 @@ def _remove_model_text(source: Path, output: Path, detect_every: int = 1) -> boo
                 for box in boxes:
                     poly = np.asarray(box, dtype=np.int32)
                     x, y, w, h = cv2.boundingRect(poly)
-                    # Tall regions are scenery, not lettering. Width is not a signal:
-                    # burned-in subtitles often run edge to edge.
+                    # Only remove text that behaves like burned-in subtitles or
+                    # watermarks: wide horizontal lines, or anything in the
+                    # top/bottom strips. Small blocky text in the middle is kept,
+                    # because that is usually a product label or real signage.
                     if h > height * 0.12 or w * h < 80:
+                        continue
+                    subtitle_like = w >= width * 0.22 and w >= h * 3.5
+                    in_edge_strip = y + h <= height * 0.12 or y >= height * 0.82
+                    if not (subtitle_like or in_edge_strip):
                         continue
                     cv2.fillPoly(fresh, [poly], 255)
                 if fresh.any():
@@ -1826,8 +1832,9 @@ def _studio_render(pipe, spec: dict, edit: bool) -> bytes:
         if not args["image"]:
             raise ValueError("edit needs at least one input image")
         args["guidance_scale"] = 1.0
-    else:
-        args.update(width=width, height=height)
+    # Edits must come out in the delivery aspect too: a square keyframe gets
+    # padded with black by the video engine.
+    args.update(width=width, height=height)
     t0 = time.time()
     image = pipe(**args).images[0]
     _phase_timing(f"studio_{'edit' if edit else 'generate'}_{image.width}x{image.height}", t0)
@@ -1916,7 +1923,7 @@ def sample_studio(video: bool = True):
 
     t1 = time.time()
     keyframe = NovaImageEdit().render.remote({
-        "images": [creator, product], "seed": 5,
+        "images": [creator, product], "seed": 5, "aspect": "9:16",
         "prompt": "The woman from the first image holds the serum bottle from the second image up next to her "
                   "cheek with one hand, the label facing the camera and unchanged, in the same bright bathroom, "
                   "vertical smartphone selfie, natural light, candid UGC photo.",
