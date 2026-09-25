@@ -140,6 +140,9 @@ jobs:
           grep -q 'directVideoPrompt' src/app/api/free-video-generate/route.js
           grep -q 'planVideoWithLlm' src/app/api/free-video-generate/route.js
           grep -q '_xfade_many' infra/modal/nova_video_worker.py
+          grep -q 'class NovaLtxVideo' infra/modal/nova_video_worker.py
+          grep -q '_director_speech_generate' infra/modal/nova_video_worker.py
+          grep -q 'engineOrderFor' src/app/api/free-video-generate/route.js
           grep -q 'sidechaincompress' infra/modal/nova_video_worker.py
           grep -q 'NOVA Prompt Director ativo' src/components/NovaFreeVideoStudio.jsx
           grep -q 'audioRequired' src/lib/verifiedVideoRuntime.js

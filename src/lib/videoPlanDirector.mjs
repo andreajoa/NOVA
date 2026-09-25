@@ -39,6 +39,8 @@ export const TRANSITIONS = [
   "cut", "fade", "dissolve", "slideleft", "slideright", "wipeleft", "circleopen", "smoothleft",
 ];
 const VOICES = ["none", "female", "male"];
+export const TEXT_POSITIONS = ["bottom", "top", "center"];
+const ENDINGS = ["none", "fade_to_black"];
 
 const SYSTEM_PROMPT = `You are NOVA's video director. Convert a customer's request (any language, usually Brazilian Portuguese) into a production plan for a short AI-generated video.
 
@@ -54,9 +56,12 @@ Return ONLY a JSON object with this exact shape:
       "seconds": 2.5,
       "narration": "Customer's language. Spoken voice-over for this shot, or empty string.",
       "on_screen_text": "Exact text to show on screen during this shot, or empty string.",
+      "text_position": "one of: ${TEXT_POSITIONS.join(", ")}",
       "transition_to_next": "one of: ${TRANSITIONS.join(", ")}"
     }
   ],
+  "on_camera_speech": "true if a person in the video speaks the narration to the camera (lip-synced); false for an off-screen voice-over",
+  "ending": "one of: ${ENDINGS.join(", ")}",
   "voice": "one of: ${VOICES.join(", ")}",
   "music_mood": "one of: ${MUSIC_MOODS.join(", ")}",
   "ambience": "English. Short description of ambient sound, or empty string."
@@ -73,6 +78,8 @@ Rules:
 - "voice" is "none" when there is no narration; otherwise match the voice the customer asked for (default female).
 - music_mood is "none" only if the customer explicitly asked for no music.
 - Prefer "fade" or "dissolve" transitions unless the customer asked for something energetic.
+- text_position follows the customer's placement ("top center" -> top); default bottom.
+- ending is "fade_to_black" when the customer asks for a fade/dip to black at the end.
 - Keep the subject identical across shots so the video looks like one continuous production.`;
 
 function clean(value) {
@@ -143,6 +150,7 @@ export function normalizePlan(raw, { duration }) {
       camera: oneLine(shot.camera, 200),
       narration: oneLine(shot.narration, 600),
       caption: oneLine(shot.on_screen_text, MAX_ON_SCREEN_TEXT),
+      captionPosition: pick(shot.text_position, TEXT_POSITIONS, "bottom"),
       audio: "",
       transition: index === shots.length - 1 ? "cut" : pick(shot.transition_to_next, TRANSITIONS, "fade"),
     };
@@ -165,7 +173,12 @@ export function normalizePlan(raw, { duration }) {
   const ambience = oneLine(raw.ambience, 160);
   if (ambience) beats[0].audio = ambience;
 
+  const onCameraSpeech = hasNarration && (raw.on_camera_speech === true || /^true$/i.test(oneLine(raw.on_camera_speech)));
+
   return {
+    onCameraSpeech,
+    ending: pick(raw.ending, ENDINGS, "none"),
+    ambience,
     language: oneLine(raw.language, 16) || "pt-BR",
     subject,
     style,
@@ -182,6 +195,28 @@ export function shouldPlanWithLlm(director, mode) {
   return plannable && (director?.beats?.length || 0) < 2;
 }
 
+// Engine sequence for an LLM-planned job, tried in order by the worker until
+// one succeeds. "ltx" is the joint audio-video engine on free ZeroGPU; "wan"
+// is the Apache-2.0 stack on NOVA's own GPUs. NOVA_VIDEO_ENGINE_ORDER limits
+// which families may run (e.g. "wan" alone if LTX licensing becomes an issue).
+// On-camera speech uses LTX's native voice only for languages verified to
+// sound right (NOVA_LTX_SPEECH_LANGUAGES); others go to Wan S2V + Kokoro first.
+export function engineOrderFor(director, env = process.env) {
+  if (!director?.providerHints?.llmPlanned) return [];
+  const families = String(env.NOVA_VIDEO_ENGINE_ORDER || "ltx,wan")
+    .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
+  const speechLanguages = String(env.NOVA_LTX_SPEECH_LANGUAGES || "en")
+    .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
+  const language = String(director.language || "").toLowerCase();
+
+  let order = ["ltx", "wan"];
+  if (director.onCameraSpeech) {
+    const ltxSpeaks = speechLanguages.some((code) => language.startsWith(code));
+    order = ltxSpeaks ? ["ltx-speech", "wan-speech", "wan"] : ["wan-speech", "ltx", "wan"];
+  }
+  return order.filter((name) => families.includes(name.split("-")[0]));
+}
+
 function singlePassPrompt(plan) {
   const lines = [];
   if (plan.beats.length === 1) {
@@ -195,6 +230,36 @@ function singlePassPrompt(plan) {
   if (plan.style) lines.push(`Style: ${plan.style}`);
   lines.push("No text, letters, subtitles or logos in the image.");
   return lines.join("\n");
+}
+
+function voiceDescription(plan) {
+  const who = plan.voice === "male" ? "calm male voice" : "warm female voice";
+  const english = /^en/i.test(plan.language);
+  return english ? who : `${who}, speaking ${plan.language}`;
+}
+
+// Prompt for a joint audio-video engine (LTX-2.x). Everything the model should
+// hear is written as audio direction; on-screen text and music are added in
+// post-production, and off-screen narration is dubbed with NOVA's own TTS, so
+// the model is only asked to speak when a person talks on camera.
+export function ltxPrompt(plan, { nativeSpeech = false } = {}) {
+  const parts = [];
+  plan.beats.forEach((beat, index) => {
+    const lead = plan.beats.length === 1 ? "" : index === 0 ? "The video opens on: " : "Then: ";
+    parts.push(`${lead}${beat.visual}${beat.camera ? ` ${beat.camera}` : ""}`.trim());
+  });
+  if (plan.style) parts.push(plan.style);
+  const speech = plan.beats.map((beat) => beat.narration).filter(Boolean).join(" ");
+  if (nativeSpeech && plan.onCameraSpeech && speech) {
+    parts.push(
+      `The person looks into the camera and speaks with natural lip movement, saying in a ${voiceDescription(plan)}: "${speech}"`,
+    );
+  } else {
+    parts.push("Nobody speaks.");
+  }
+  parts.push(plan.ambience ? `Audio: ${plan.ambience}. No music.` : "Audio: natural ambient sound only. No music.");
+  parts.push("No on-screen text, subtitles, captions or logos.");
+  return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
 // Merge a normalized plan into the regex director's result so the rest of the
@@ -215,6 +280,10 @@ export function applyPlanToDirector(director, plan) {
     beats: plan.beats,
     musicMood: plan.musicMood,
     language: plan.language,
+    onCameraSpeech: plan.onCameraSpeech,
+    ending: plan.ending,
+    ltxPrompt: ltxPrompt(plan),
+    ltxSpeechPrompt: ltxPrompt(plan, { nativeSpeech: true }),
     publicSummary: {
       ...director.publicSummary,
       beatCount: plan.beats.length,

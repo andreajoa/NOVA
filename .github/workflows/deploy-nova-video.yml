@@ -19,6 +19,7 @@ jobs:
     env:
       MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
       MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      NOVA_HF_TOKEN: ${{ secrets.NOVA_HF_TOKEN }}
       NOVA_VIDEO_WORKER_SECRET: ${{ secrets.NOVA_VIDEO_WORKER_SECRET }}
     steps:
       - name: Checkout
@@ -69,12 +70,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Optional: NOVA's own Hugging Face token for the free LTX engine when
+          # the customer has not connected their account.
+          extra=()
+          if [ -n "${NOVA_HF_TOKEN:-}" ]; then extra+=("HF_TOKEN=$NOVA_HF_TOKEN"); fi
           modal secret create nova-video-engine \
             NOVA_VIDEO_WORKER_SECRET="$NOVA_VIDEO_WORKER_SECRET" \
             NOVA_ENABLE_SPEECH="1" \
             NOVA_WAN_SAMPLE_STEPS="12" \
             NOVA_WAN_SPEECH_STEPS="20" \
             NOVA_MUSIC_LIBRARY_URL="https://www.novvideos.online/music/manifest.json" \
+            "${extra[@]}" \
             --force
 
       - name: Preload Wan checkpoints on CPU

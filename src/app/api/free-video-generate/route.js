@@ -30,7 +30,7 @@ import {
 } from "@/lib/privateGpuVideoPool";
 import { runVerifiedVideoRuntime } from "@/lib/verifiedVideoRuntime";
 import { directVideoPrompt } from "@/lib/videoPromptDirector.mjs";
-import { applyPlanToDirector, planVideoWithLlm, shouldPlanWithLlm } from "@/lib/videoPlanDirector.mjs";
+import { applyPlanToDirector, engineOrderFor, planVideoWithLlm, shouldPlanWithLlm } from "@/lib/videoPlanDirector.mjs";
 import { uploadToR2 } from "@/lib/r2";
 
 export const runtime = "nodejs";
@@ -414,6 +414,12 @@ export async function POST(req) {
     director_original_prompt: director.originalPrompt,
     director_music: director.musicMood || "",
     director_language: director.language || "",
+    director_ending: director.ending || "",
+    ...(director.providerHints.llmPlanned && {
+      engine_order: engineOrderFor(director),
+      ltx_prompt: director.ltxPrompt,
+      ltx_speech_prompt: director.ltxSpeechPrompt,
+    }),
   };
 
   try {
@@ -437,6 +443,7 @@ export async function POST(req) {
             userId,
             quotaDebited: Boolean(quota?.ok),
             origin: req.nextUrl.origin,
+            hfToken,
           });
         } catch (poolError) {
           console.warn("[NOVA_VIDEO] private GPU pool failed", {
