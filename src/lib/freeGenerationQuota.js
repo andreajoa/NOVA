@@ -1,5 +1,6 @@
 import { d1Rows, queryD1 } from "@/lib/db";
 import { getStripe } from "@/lib/stripe";
+import { normalizeMaxVideoSeconds, videoDurationsFor } from "@/lib/videoDurationPolicy";
 
 const DEFAULT_POLICY = {
   trial: {
@@ -10,7 +11,7 @@ const DEFAULT_POLICY = {
   paid: {
     imageDailyLimit: 10,
     videoMonthlyLimit: 20,
-    maxVideoSeconds: 10,
+    maxVideoSeconds: 15,
   },
 };
 
@@ -132,10 +133,7 @@ export function getFreeGenerationPolicy(plan = "trial") {
     ? positiveIntFromEnv("NOVA_PAID_FREE_VIDEO_MAX_SECONDS", base.maxVideoSeconds)
     : positiveIntFromEnv("NOVA_FREE_VIDEO_MAX_SECONDS", base.maxVideoSeconds);
 
-  const normalizedMaxVideoSeconds = Math.max(
-    5,
-    Math.min(10, maxVideoSeconds || base.maxVideoSeconds)
-  );
+  const normalizedMaxVideoSeconds = normalizeMaxVideoSeconds(paid, maxVideoSeconds, base.maxVideoSeconds);
 
   return {
     paid,
@@ -143,7 +141,7 @@ export function getFreeGenerationPolicy(plan = "trial") {
     imageDailyLimit,
     videoMonthlyLimit,
     maxVideoSeconds: normalizedMaxVideoSeconds,
-    videoDurations: normalizedMaxVideoSeconds >= 10 ? [5, 10] : [5],
+    videoDurations: videoDurationsFor(normalizedMaxVideoSeconds),
     period: paid ? null : `free:${utcMonthPeriod()}`,
     resetAt: paid ? null : nextUtcMonthReset(),
   };

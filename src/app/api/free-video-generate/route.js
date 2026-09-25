@@ -264,7 +264,7 @@ export async function POST(req) {
     await isNovaAdminFromAuth(userId, session.sessionClaims)
   );
   const policy = getFreeGenerationPolicy(admin ? "admin" : account.plan);
-  const allowedDurations = admin ? [5, 10] : policy.videoDurations;
+  const allowedDurations = admin ? [5, 10, 15] : policy.videoDurations;
   const selectedDuration = normalizeDuration(body.duration || body.seconds, allowedDurations);
 
   if (!selectedDuration) {

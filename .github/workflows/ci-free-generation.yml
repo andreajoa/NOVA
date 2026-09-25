@@ -39,6 +39,8 @@ on:
       - "scripts/test-free-image-engine.mjs"
       - "scripts/test-free-image-persistence.mjs"
       - "src/lib/freeImagePersistence.js"
+      - "src/lib/videoDurationPolicy.js"
+      - "scripts/test-video-duration-policy.mjs"
       - "src/lib/r2.ts"
       - "src/lib/verifiedVideoRuntime.js"
       - "src/lib/videoPromptDirector.mjs"
@@ -116,6 +118,9 @@ jobs:
 
       - name: Validate free image persistence
         run: node scripts/test-free-image-persistence.mjs
+
+      - name: Validate video duration policy
+        run: node scripts/test-video-duration-policy.mjs
 
       - name: Validate TypeScript database module
         run: npx tsc --noEmit --pretty false

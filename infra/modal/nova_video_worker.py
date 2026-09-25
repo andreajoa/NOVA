@@ -1448,7 +1448,7 @@ def _normal_generate(payload: dict) -> str:
     if task not in {"text-to-video", "image-to-video", "continue-video"}:
         raise ValueError("Unsupported normal video task")
 
-    duration = max(5, min(10, int(payload.get("duration") or 5)))
+    duration = max(5, min(15, int(payload.get("duration") or 5)))
     aspect = str(payload.get("aspect_ratio") or "16:9")
     steps = max(8, min(24, int(os.environ.get("NOVA_WAN_SAMPLE_STEPS", "14"))))
     seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
@@ -2166,7 +2166,7 @@ def _ltx_local_generate(payload: dict) -> str:
     if not prompt:
         raise ValueError("LTX prompt is required")
     aspect = str(payload.get("aspect_ratio") or "16:9")
-    duration = max(2, min(10, int(payload.get("duration") or 5)))
+    duration = max(2, min(15, int(payload.get("duration") or 5)))
     seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
     width, height = _ltx_local_dimensions(aspect)
 
@@ -2424,7 +2424,11 @@ def _ltx_generate(payload: dict) -> str:
     if not prompt:
         raise ValueError("LTX prompt is required")
     aspect = str(payload.get("aspect_ratio") or "16:9")
-    duration = max(2, min(10, int(payload.get("duration") or 5)))
+    requested = int(payload.get("duration") or 5)
+    if requested > 10:
+        # The public Space caps at 10s; hand off instead of delivering less.
+        raise ValueError(f"public LTX engine supports up to 10s, not {requested}s")
+    duration = max(2, min(10, requested))
     seed = int(payload.get("seed") or int(time.time() * 1000) % 2_147_483_647)
     width, height = _ltx_dimensions(aspect)
     headers = _hf_headers(payload)
@@ -2655,7 +2659,10 @@ def _plan_accents(raw, caption: str) -> list[str]:
 
 
 def _plan_max_shots(duration: float) -> int:
-    return 2 if float(duration) <= 5 else 3
+    seconds = float(duration)
+    if seconds <= 5:
+        return 2
+    return 3 if seconds <= 10 else 4
 
 
 def _normalize_plan(raw, duration: float) -> dict | None:
@@ -2795,7 +2802,7 @@ def _apply_plan(payload: dict, plan: dict) -> dict:
 
 
 def _plan_with_model(generate_text, payload: dict) -> dict | None:
-    duration = max(2, min(10, int(payload.get("duration") or 5)))
+    duration = max(2, min(15, int(payload.get("duration") or 5)))
     aspect = str(payload.get("aspect_ratio") or "16:9")
     system = PLAN_SYSTEM.replace("MAX_SHOTS", str(_plan_max_shots(duration))).replace("TOTAL_SECONDS", str(duration))
     if str(payload.get("director_mode") or "") == "ugc":
