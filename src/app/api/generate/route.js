@@ -15,6 +15,7 @@ import {
   refundCloudflareFreeImage,
 } from "@/lib/freeProviderBudget";
 import { runCloudflareImage } from "@/lib/cloudflareAiClient";
+import { persistImageOutput } from "@/lib/freeImagePersistence";
 import { freeImageDimensions } from "@/lib/openModelWorkflows";
 import {
   debitApiCredits,
@@ -443,6 +444,9 @@ export async function POST(req) {
 
   try {
     const execution = await executeGeneration(selection, generationInput);
+    if (execution.provider === "nova") {
+      execution.output = await persistImageOutput(execution.output, userId);
+    }
     const outputUrl = extractGeneratedMediaUrl(execution.output) || null;
     const mediaFields = publicMediaPayload(execution.output);
 
