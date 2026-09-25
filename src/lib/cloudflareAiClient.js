@@ -1,5 +1,10 @@
 const CLOUDFLARE_AI_BASE = "https://api.cloudflare.com/client/v4/accounts";
-const DEFAULT_NOVA_IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell";
+// FLUX.2 [klein] 4B (Apache-2.0): chosen for NOVA IMAGEM FREE after a
+// same-prompt benchmark against FLUX.1 schnell — clearly more realistic people
+// and scenes, equal text quality, ~104 neurons per 1024px image on the free
+// Workers AI allocation. FLUX.1 schnell stays as the first fallback.
+const DEFAULT_NOVA_IMAGE_MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
+const SCHNELL_MODEL = "@cf/black-forest-labs/flux-1-schnell";
 const HF_IMAGE_BASE = "https://stabilityai-stable-diffusion-3-5-large.hf.space";
 const HF_IMAGE_API = "infer";
 
@@ -181,7 +186,19 @@ export async function isFreeImageRuntimeHealthy() {
   return available;
 }
 
-async function runPrimaryCloudflareImage({ model, prompt, steps = 4, seed } = {}) {
+function imageMime(base64) {
+  if (base64.startsWith("iVBOR")) return "image/png";
+  if (base64.startsWith("UklGR")) return "image/webp";
+  return "image/jpeg";
+}
+
+function clampSide(value, fallback) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(256, Math.min(1920, Math.round(n / 16) * 16));
+}
+
+async function runPrimaryCloudflareImage({ model, prompt, steps = 4, seed, width, height } = {}) {
   const creds = credentials();
   if (!creds) throw new Error("Cloudflare Workers AI credentials are not configured");
   if (!model || !String(model).startsWith("@cf/")) {
@@ -189,22 +206,34 @@ async function runPrimaryCloudflareImage({ model, prompt, steps = 4, seed } = {}
   }
 
   const url = `${CLOUDFLARE_AI_BASE}/${creds.accountId}/ai/run/${model}`;
-  const input = {
-    prompt: String(prompt || "").slice(0, 2048),
-    steps: Math.max(1, Math.min(8, Number(steps) || 4)),
-  };
-  if (Number.isFinite(Number(seed))) input.seed = Number(seed);
+  const text2048 = String(prompt || "").slice(0, 2048);
+  // FLUX.2 models take multipart form data (steps are fixed by the model);
+  // FLUX.1 schnell takes JSON.
+  const multipart = String(model).includes("/flux-2");
+  let body;
+  const headers = { Authorization: `Bearer ${creds.apiToken}` };
+  if (multipart) {
+    body = new FormData();
+    body.append("prompt", text2048);
+    body.append("width", String(clampSide(width, 1024)));
+    body.append("height", String(clampSide(height, 1024)));
+  } else {
+    const input = {
+      prompt: text2048,
+      steps: Math.max(1, Math.min(8, Number(steps) || 4)),
+    };
+    if (Number.isFinite(Number(seed))) input.seed = Number(seed);
+    body = JSON.stringify(input);
+    headers["Content-Type"] = "application/json";
+  }
 
   const { controller, timer } = withTimeout(30000);
   let response;
   try {
     response = await fetch(url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${creds.apiToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(input),
+      headers,
+      body,
       cache: "no-store",
       signal: controller.signal,
     });
@@ -233,24 +262,29 @@ async function runPrimaryCloudflareImage({ model, prompt, steps = 4, seed } = {}
     throw new Error("Cloudflare Workers AI returned no image");
   }
 
+  const mime = imageMime(base64);
   return {
     images: [
       {
-        url: `data:image/jpeg;base64,${base64}`,
-        content_type: "image/jpeg",
+        url: `data:${mime};base64,${base64}`,
+        content_type: mime,
       },
     ],
   };
 }
 
-export async function runCloudflareImage({ model, prompt, steps = 4, seed } = {}) {
-  try {
-    return await runPrimaryCloudflareImage({ model, prompt, steps, seed });
-  } catch (primaryError) {
-    console.error("[NOVA_IMAGE] primary engine failed; switching to verified fallback", {
-      message: primaryError?.message || String(primaryError),
-      status: primaryError?.status || null,
-    });
-    return runVerifiedFreeImage({ prompt, seed });
+export async function runCloudflareImage({ model, prompt, steps = 4, seed, width, height } = {}) {
+  const chain = [model, SCHNELL_MODEL].filter((item, index, list) => item && list.indexOf(item) === index);
+  for (const candidate of chain) {
+    try {
+      return await runPrimaryCloudflareImage({ model: candidate, prompt, steps, seed, width, height });
+    } catch (engineError) {
+      console.error("[NOVA_IMAGE] engine failed; trying the next one", {
+        engine: candidate === SCHNELL_MODEL ? "fallback-1" : "primary",
+        message: engineError?.message || String(engineError),
+        status: engineError?.status || null,
+      });
+    }
   }
+  return runVerifiedFreeImage({ prompt, seed });
 }
