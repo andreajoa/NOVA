@@ -214,6 +214,15 @@ assert.equal(talkingPlan.onCameraSpeech, true);
 assert.equal(talkingPlan.ending, "fade_to_black");
 assert.equal(talkingPlan.beats[0].captionPosition, "top");
 assert.equal(talkingPlan.musicMood, "none");
+assert.equal(talkingPlan.subtitles, true, "spoken videos get subtitles by default");
+assert.equal(talkingPlan.captionStyle, "headline_bold");
+assert.match(ltxPrompt(talkingPlan), /^Clean frame with no subtitles/);
+
+// Accent words must exist in the on-screen text.
+const accented = normalizePlan({ shots: [{ visual: "x", on_screen_text: "The first year after BETRAYAL",
+  accent_words: ["Betrayal", "lie", "betrayal"] }], subtitles: false, narration: "" }, { duration: 5 });
+assert.deepEqual(accented.beats[0].accentWords, ["betrayal"]);
+assert.equal(accented.subtitles, false);
 
 // Native speech prompt quotes the exact words; the dubbed variant stays silent.
 const spoken = ltxPrompt(talkingPlan, { nativeSpeech: true });
@@ -228,13 +237,13 @@ assert.equal(normalizePlan({ shots: [{ visual: "x" }], on_camera_speech: true },
 
 // Engine order per request and per deployment switch.
 const talking = applyPlanToDirector(scripted, talkingPlan);
-assert.deepEqual(engineOrderFor(talking, {}), ["ltx-speech", "wan-speech", "wan"]);
+assert.deepEqual(engineOrderFor(talking, {}), ["ltx-speech", "wan"]);
 const talkingPt = applyPlanToDirector(scripted, { ...talkingPlan, language: "pt-BR" });
-assert.deepEqual(engineOrderFor(talkingPt, {}), ["wan-speech", "ltx", "wan"], "pt speech: Kokoro + S2V first");
-assert.deepEqual(engineOrderFor(talkingPt, { NOVA_LTX_SPEECH_LANGUAGES: "en,pt" }), ["ltx-speech", "wan-speech", "wan"]);
+assert.deepEqual(engineOrderFor(talkingPt, {}), ["ltx", "wan"], "pt speech: LTX picture + Kokoro dub");
+assert.deepEqual(engineOrderFor(talkingPt, { NOVA_LTX_SPEECH_LANGUAGES: "en,pt" }), ["ltx-speech", "wan"]);
 assert.deepEqual(engineOrderFor(directed, {}), ["ltx", "wan"], "voice-over videos: LTX picture, Wan fallback");
 assert.deepEqual(engineOrderFor(directed, { NOVA_VIDEO_ENGINE_ORDER: "wan" }), ["wan"]);
-assert.deepEqual(engineOrderFor(talking, { NOVA_VIDEO_ENGINE_ORDER: "wan" }), ["wan-speech", "wan"]);
+assert.deepEqual(engineOrderFor(talking, { NOVA_VIDEO_ENGINE_ORDER: "wan" }), ["wan"]);
 assert.deepEqual(engineOrderFor(base, {}), [], "regex-director jobs keep the legacy Wan route");
 assert.equal(talking.ltxSpeechPrompt, spoken);
 
@@ -253,7 +262,8 @@ assert.equal(allowsPublicFallback({ complex: false }), true);
 if (process.env.NOVA_PLAN_PARITY_OUT) {
   const { writeFileSync } = await import("node:fs");
   const fixture = { ...llmPlan, on_camera_speech: true, ending: "fade_to_black",
-    shots: llmPlan.shots.map((shot, i) => ({ ...shot, text_position: i ? "top" : "bottom" })) };
+    caption_style: "headline_clean",
+    shots: llmPlan.shots.map((shot, i) => ({ ...shot, text_position: i ? "top" : "bottom", accent_words: ["Vila", "nope"] })) };
   const js = normalizePlan(fixture, { duration: 10 });
   writeFileSync(process.env.NOVA_PLAN_PARITY_OUT, JSON.stringify({
     raw: fixture, duration: 10, plan: js,
