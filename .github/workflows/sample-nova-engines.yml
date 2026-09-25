@@ -1,0 +1,42 @@
+name: Sample NOVA Video Engines
+
+# Manual QA: plans a real customer script and renders it with each engine on
+# Modal, then publishes the MP4s as an artifact. Spends GPU time only when run.
+on:
+  workflow_dispatch:
+    inputs:
+      engines:
+        description: "Comma-separated engines to render (ltx-speech, wan-speech)"
+        default: "ltx-speech,wan-speech"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  sample:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Modal
+        run: python -m pip install --upgrade "modal>=1.4,<2"
+      - name: Apply measured Wan quality profile
+        run: python infra/modal/apply_quality_patch.py
+      - name: Render samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          modal run infra/modal/nova_video_worker.py::sample_engines --engines "${{ inputs.engines }}"
+      - name: Store samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-engine-samples
+          path: samples/
