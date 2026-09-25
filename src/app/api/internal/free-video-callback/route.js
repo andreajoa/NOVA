@@ -95,7 +95,7 @@ async function handleFailedCallback(jobId, token, req, errorCode) {
       });
     }
 
-    const complexDirector = Boolean(job.input?.director?.complex);
+    const complexDirector = Boolean(job.input?.director?.complex && !job.input?.director?.llmPlanned);
     if (
       !complexDirector &&
       ["text-to-video", "image-to-video"].includes(String(job.input.task || ""))
