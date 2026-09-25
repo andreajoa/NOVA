@@ -2109,7 +2109,8 @@ def benchmark_free_image_model(repo: str) -> dict:
 @app.local_entrypoint()
 def sample_free_image_models():
     os.makedirs("samples", exist_ok=True)
-    for label, repo in (("schnell", "black-forest-labs/FLUX.1-schnell"), ("klein4b", "black-forest-labs/FLUX.2-klein-4B")):
+    # FLUX.1-schnell is now gated on the Hub; its reference comes from the public Space.
+    for label, repo in (("klein4b", "black-forest-labs/FLUX.2-klein-4B"),):
         result = benchmark_free_image_model.remote(repo)
         for name in FREE_IMAGE_PROMPTS:
             open(f"samples/{label}-{name}.png", "wb").write(result[name])
