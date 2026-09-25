@@ -1751,6 +1751,7 @@ studio_image = (
     # which in turn needs transformers 5.x.
     .uv_pip_install(
         "torch==2.14.0",
+        "torchvision==0.29.0",  # Qwen2-VL image processor used by the edit pipeline
         "diffusers==0.40.0",
         "transformers==5.17.0",
         "accelerate==1.15.0",
