@@ -41,6 +41,23 @@ export const TRANSITIONS = [
 const VOICES = ["none", "female", "male"];
 export const TEXT_POSITIONS = ["bottom", "top", "center"];
 const ENDINGS = ["none", "fade_to_black"];
+export const CAPTION_STYLES = ["headline_bold", "headline_clean"];
+
+function wordKey(word) {
+  return String(word || "").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+// Accent words must actually appear in the on-screen text; at most two.
+function pickAccents(raw, caption) {
+  if (!caption || !Array.isArray(raw)) return [];
+  const present = new Set(caption.split(" ").map(wordKey));
+  const picked = [];
+  for (const word of raw) {
+    const key = wordKey(word);
+    if (key && present.has(key) && !picked.includes(key)) picked.push(key);
+  }
+  return picked.slice(0, 2);
+}
 
 const SYSTEM_PROMPT = `You are NOVA's video director. Convert a customer's request (any language, usually Brazilian Portuguese) into a production plan for a short AI-generated video.
 
@@ -57,10 +74,13 @@ Return ONLY a JSON object with this exact shape:
       "narration": "Customer's language. Spoken voice-over for this shot, or empty string.",
       "on_screen_text": "Exact text to show on screen during this shot, or empty string.",
       "text_position": "one of: ${TEXT_POSITIONS.join(", ")}",
+      "accent_words": ["1-2 key words from on_screen_text to highlight in an accent color, or empty list"],
       "transition_to_next": "one of: ${TRANSITIONS.join(", ")}"
     }
   ],
   "on_camera_speech": "true if a person in the video speaks the narration to the camera (lip-synced); false for an off-screen voice-over",
+  "subtitles": "true to burn subtitles of the spoken words (default true when anything is spoken); false only if the customer asked for no subtitles",
+  "caption_style": "one of: ${CAPTION_STYLES.join(", ")}",
   "ending": "one of: ${ENDINGS.join(", ")}",
   "voice": "one of: ${VOICES.join(", ")}",
   "music_mood": "one of: ${MUSIC_MOODS.join(", ")}",
@@ -151,6 +171,7 @@ export function normalizePlan(raw, { duration }) {
       narration: oneLine(shot.narration, 600),
       caption: oneLine(shot.on_screen_text, MAX_ON_SCREEN_TEXT),
       captionPosition: pick(shot.text_position, TEXT_POSITIONS, "bottom"),
+      accentWords: pickAccents(shot.accent_words, oneLine(shot.on_screen_text, MAX_ON_SCREEN_TEXT)),
       audio: "",
       transition: index === shots.length - 1 ? "cut" : pick(shot.transition_to_next, TRANSITIONS, "fade"),
     };
@@ -176,6 +197,8 @@ export function normalizePlan(raw, { duration }) {
   const onCameraSpeech = hasNarration && (raw.on_camera_speech === true || /^true$/i.test(oneLine(raw.on_camera_speech)));
 
   return {
+    subtitles: hasNarration && raw.subtitles !== false && !/^false$/i.test(oneLine(raw.subtitles)),
+    captionStyle: pick(raw.caption_style, CAPTION_STYLES, "headline_bold"),
     onCameraSpeech,
     ending: pick(raw.ending, ENDINGS, "none"),
     ambience,
@@ -200,7 +223,7 @@ export function shouldPlanWithLlm(director, mode) {
 // is the Apache-2.0 stack on NOVA's own GPUs. NOVA_VIDEO_ENGINE_ORDER limits
 // which families may run (e.g. "wan" alone if LTX licensing becomes an issue).
 // On-camera speech uses LTX's native voice only for languages verified to
-// sound right (NOVA_LTX_SPEECH_LANGUAGES); others go to Wan S2V + Kokoro first.
+// sound right (NOVA_LTX_SPEECH_LANGUAGES); others get LTX picture + Kokoro dub.
 export function engineOrderFor(director, env = process.env) {
   if (!director?.providerHints?.llmPlanned) return [];
   const families = String(env.NOVA_VIDEO_ENGINE_ORDER || "ltx,wan")
@@ -209,10 +232,11 @@ export function engineOrderFor(director, env = process.env) {
     .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
   const language = String(director.language || "").toLowerCase();
 
+  // Wan S2V measured ~25 A100-minutes per 10s clip, so it is not in the chain.
   let order = ["ltx", "wan"];
   if (director.onCameraSpeech) {
     const ltxSpeaks = speechLanguages.some((code) => language.startsWith(code));
-    order = ltxSpeaks ? ["ltx-speech", "wan-speech", "wan"] : ["wan-speech", "ltx", "wan"];
+    order = ltxSpeaks ? ["ltx-speech", "wan"] : ["ltx", "wan"];
   }
   return order.filter((name) => families.includes(name.split("-")[0]));
 }
@@ -261,7 +285,7 @@ function voiceDescription(plan) {
 // post-production, and off-screen narration is dubbed with NOVA's own TTS, so
 // the model is only asked to speak when a person talks on camera.
 export function ltxPrompt(plan, { nativeSpeech = false } = {}) {
-  const parts = [];
+  const parts = ["Clean frame with no subtitles, no captions and no text anywhere."];
   plan.beats.forEach((beat, index) => {
     const lead = plan.beats.length === 1 ? "" : index === 0 ? "The video opens on: " : "Then: ";
     parts.push(`${lead}${beat.visual}${beat.camera ? ` ${beat.camera}` : ""}`.trim());
@@ -300,6 +324,8 @@ export function applyPlanToDirector(director, plan) {
     language: plan.language,
     onCameraSpeech: plan.onCameraSpeech,
     ending: plan.ending,
+    subtitles: plan.subtitles,
+    captionStyle: plan.captionStyle,
     ltxPrompt: ltxPrompt(plan),
     ltxSpeechPrompt: ltxPrompt(plan, { nativeSpeech: true }),
     publicSummary: {

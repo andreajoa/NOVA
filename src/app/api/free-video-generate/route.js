@@ -422,6 +422,8 @@ export async function POST(req) {
     director_music: director.musicMood || "",
     director_language: director.language || "",
     director_ending: director.ending || "",
+    ...(typeof director.subtitles === "boolean" && { director_subtitles: director.subtitles }),
+    ...(director.captionStyle && { director_caption_style: director.captionStyle }),
     ...(director.needsWorkerPlan && { needs_plan: true }),
     ...(director.providerHints.llmPlanned && {
       engine_order: engineOrderFor(director),

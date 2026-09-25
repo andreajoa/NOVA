@@ -52,6 +52,7 @@ NORMAL_PACKAGES = [
     "torchvision",
     "tqdm",
     "transformers>=4.49,<=4.51.3",
+    "faster-whisper>=1.1,<2",
 ]
 
 # Mirrors Wan2.2/requirements_s2v.txt so built-in CosyVoice TTS can self-install
@@ -90,11 +91,16 @@ base_image = (
             "TOKENIZERS_PARALLELISM": "false",
         }
     )
-    # Headline font for top/center on-screen text (Bebas Neue, SIL Open Font License).
+    # Caption fonts, all SIL Open Font License: Bebas Neue and Anton for
+    # headlines, Montserrat ExtraBold for subtitles.
     .run_commands(
-        "mkdir -p /opt/fonts && python -c \"import urllib.request; urllib.request.urlretrieve("
-        "'https://github.com/google/fonts/raw/main/ofl/bebasneue/BebasNeue-Regular.ttf', "
-        "'/opt/fonts/BebasNeue-Regular.ttf')\""
+        "mkdir -p /opt/fonts && python -c \"import urllib.request as u; "
+        "u.urlretrieve('https://github.com/google/fonts/raw/main/ofl/bebasneue/BebasNeue-Regular.ttf', "
+        "'/opt/fonts/BebasNeue-Regular.ttf'); "
+        "u.urlretrieve('https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf', "
+        "'/opt/fonts/Anton-Regular.ttf'); "
+        "u.urlretrieve('https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-ExtraBold.ttf', "
+        "'/opt/fonts/Montserrat-ExtraBold.ttf')\""
     )
 )
 
@@ -457,6 +463,7 @@ def _director_timeline(payload: dict) -> list[dict]:
                 "audio": str(item.get("audio") or "").strip(),
                 "transition": _transition_name(item.get("transition")),
                 "caption_position": _caption_position(item.get("captionPosition") or item.get("caption_position")),
+                "accent_words": [str(word) for word in (item.get("accentWords") or item.get("accent_words") or [])][:4],
             }
         )
     return timeline
@@ -807,6 +814,252 @@ def _build_director_audio(
 HEADLINE_FONT = Path("/opt/fonts/BebasNeue-Regular.ttf")
 
 
+# ---------------------------------------------------------------------------
+# On-screen text. Rendered with Pillow as full-frame RGBA overlays so a single
+# word can take an accent color, an underline, a stroke and a soft shadow —
+# none of which ffmpeg 5.1's drawtext can do per word.
+# ---------------------------------------------------------------------------
+FONT_FILES = {
+    "anton": "/opt/fonts/Anton-Regular.ttf",
+    "bebas": "/opt/fonts/BebasNeue-Regular.ttf",
+    "montserrat": "/opt/fonts/Montserrat-ExtraBold.ttf",
+    "dejavu": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+}
+CAPTION_TEMPLATES = {
+    # Headlines: condensed display face, keyword in amber with an underline.
+    "headline_bold": {"font": "anton", "scale": 0.092, "color": (255, 255, 255, 255), "accent": (255, 179, 0, 255),
+                      "underline": True, "upper": True, "stroke": 0.0, "shadow": True, "box": False},
+    "headline_clean": {"font": "bebas", "scale": 0.1, "color": (255, 255, 255, 255), "accent": (255, 179, 0, 255),
+                       "underline": False, "upper": True, "stroke": 0.0, "shadow": True, "box": False},
+    # Subtitles: heavy rounded sans, current word lit, dark pill behind so any
+    # text the video model drew in the lower third is covered.
+    "subtitle_pop": {"font": "montserrat", "scale": 0.062, "color": (255, 255, 255, 255), "accent": (255, 212, 0, 255),
+                     "underline": False, "upper": False, "stroke": 0.09, "shadow": True, "box": True},
+}
+CAPTION_STYLES = ("headline_bold", "headline_clean")
+
+
+def _font(name: str, size: int):
+    from PIL import ImageFont
+
+    for candidate in (FONT_FILES.get(name), FONT_FILES["dejavu"]):
+        if candidate and Path(candidate).exists():
+            return ImageFont.truetype(candidate, size)
+    return ImageFont.load_default()
+
+
+def _word_key(word: str) -> str:
+    return "".join(ch for ch in word.lower() if ch.isalnum())
+
+
+def _layout_lines(words: list[str], font, max_width: int, draw) -> list[list[int]]:
+    lines, current, width = [], [], 0.0
+    space = draw.textlength(" ", font=font)
+    for index, word in enumerate(words):
+        length = draw.textlength(word, font=font)
+        if current and width + space + length > max_width:
+            lines.append(current)
+            current, width = [], 0.0
+        width += (space if current else 0) + length
+        current.append(index)
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _render_text_png(text: str, template: str, frame: tuple[int, int], position: str, output: Path,
+                     accent_words: tuple[str, ...] = (), highlight: int | None = None) -> None:
+    """Draw text on a transparent full-frame PNG.
+
+    accent_words take the accent color; highlight (a word index) does too and
+    is used for karaoke-style subtitles.
+    """
+    from PIL import Image, ImageDraw, ImageFilter
+
+    style = CAPTION_TEMPLATES[template]
+    width, height = frame
+    words = [word for word in str(text).split() if word]
+    if style["upper"]:
+        words = [word.upper() for word in words]
+    size = max(18, int(width * style["scale"]))
+    font = _font(style["font"], size)
+    layer = Image.new("RGBA", frame, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    lines = _layout_lines(words, font, int(width * 0.86), draw)
+    ascent, descent = font.getmetrics()
+    line_height = int((ascent + descent) * (1.02 if style["upper"] else 1.18))
+    block = line_height * len(lines)
+    if position == "top":
+        top = int(height * 0.1)
+    elif position == "center":
+        top = (height - block) // 2
+    else:
+        top = int(height * 0.8) - block
+    space = draw.textlength(" ", font=font)
+    accents = {_word_key(word) for word in accent_words if _word_key(word)}
+    stroke = int(size * style["stroke"])
+
+    placements = []
+    for row, indexes in enumerate(lines):
+        line_width = sum(draw.textlength(words[i], font=font) for i in indexes) + space * (len(indexes) - 1)
+        x = (width - line_width) / 2
+        y = top + row * line_height
+        for i in indexes:
+            placements.append((i, x, y))
+            x += draw.textlength(words[i], font=font) + space
+
+    if style["box"] and placements:
+        pad = int(size * 0.35)
+        left = min(x for _, x, _ in placements) - pad
+        right = max(x + draw.textlength(words[i], font=font) for i, x, _ in placements) + pad
+        draw.rounded_rectangle((left, top - pad * 0.6, right, top + block + pad * 0.3),
+                               radius=int(size * 0.35), fill=(0, 0, 0, 150))
+
+    if style["shadow"]:
+        shadow = Image.new("RGBA", frame, (0, 0, 0, 0))
+        shadow_draw = ImageDraw.Draw(shadow)
+        offset = max(2, size // 18)
+        for i, x, y in placements:
+            shadow_draw.text((x + offset, y + offset), words[i], font=font, fill=(0, 0, 0, 170))
+        layer = Image.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(max(2, size // 14))), layer)
+        draw = ImageDraw.Draw(layer)
+
+    for i, x, y in placements:
+        lit = (highlight is not None and i == highlight) or _word_key(words[i]) in accents
+        fill = style["accent"] if lit else style["color"]
+        draw.text((x, y), words[i], font=font, fill=fill, stroke_width=stroke, stroke_fill=(0, 0, 0, 255))
+        if lit and style["underline"] and highlight is None:
+            word_width = draw.textlength(words[i], font=font)
+            bar = max(4, size // 12)
+            base = y + ascent + bar
+            draw.rounded_rectangle((x, base, x + word_width, base + bar), radius=bar // 2, fill=style["accent"])
+    layer.save(output)
+
+
+def _overlay_pngs(source: Path, overlays: list[tuple], output: Path) -> None:
+    """Composite (png, start, end[, fade_in, fade_out]) overlays.
+
+    Karaoke word states chain without fades so the phrase never blinks; only
+    a phrase's first and last state fade.
+    """
+    inputs, filters = [], []
+    previous = "[0:v]"
+    for index, overlay in enumerate(overlays, start=1):
+        png, start, end = overlay[:3]
+        fade_in, fade_out = (overlay[3], overlay[4]) if len(overlay) > 3 else (True, True)
+        fade = min(0.2, max(0.04, (end - start) / 5))
+        inputs += ["-loop", "1", "-i", str(png)]
+        chain = f"[{index}:v]format=rgba"
+        if fade_in:
+            chain += f",fade=t=in:st={start:.3f}:d={fade:.3f}:alpha=1"
+        if fade_out:
+            chain += f",fade=t=out:st={max(start, end - fade):.3f}:d={fade:.3f}:alpha=1"
+        filters.append(f"{chain}[o{index}]")
+        label = f"[v{index}]"
+        filters.append(f"{previous}[o{index}]overlay=0:0:enable='between(t,{start:.3f},{end:.3f})':shortest=1{label}")
+        previous = label
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", str(source), *inputs, "-filter_complex", ";".join(filters),
+         "-map", previous, "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+         "-pix_fmt", "yuv420p", "-c:a", "copy", str(output)],
+        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+
+
+# --- subtitles timed on the real audio -------------------------------------
+WHISPER_REPO = "Systran/faster-whisper-base"
+WHISPER_DIR = MODEL_ROOT / "faster-whisper-base"
+
+
+def _transcribe_words(audio: Path, language: str) -> list[dict]:
+    from faster_whisper import WhisperModel
+
+    _ensure_model(WHISPER_REPO, WHISPER_DIR)
+    model = WhisperModel(str(WHISPER_DIR), device="cpu", compute_type="int8")
+    code = (language or "").split("-")[0].lower() or None
+    segments, _ = model.transcribe(str(audio), language=code, word_timestamps=True, vad_filter=True)
+    return [{"word": w.word.strip(), "start": float(w.start), "end": float(w.end)}
+            for segment in segments for w in (segment.words or []) if w.word.strip()]
+
+
+def _align_script(script_words: list[str], heard: list[dict]) -> list[dict]:
+    """Put the exact script words on Whisper's timings (Whisper may mishear)."""
+    import difflib
+
+    if not heard:
+        return []
+    if not script_words:
+        return heard
+    matcher = difflib.SequenceMatcher(a=[_word_key(w) for w in script_words], b=[_word_key(h["word"]) for h in heard],
+                                      autojunk=False)
+    times: list[tuple[float, float] | None] = [None] * len(script_words)
+    for tag, a0, a1, b0, b1 in matcher.get_opcodes():
+        if tag == "equal" or (tag == "replace" and a1 - a0 == b1 - b0):
+            for offset in range(a1 - a0):
+                times[a0 + offset] = (heard[b0 + offset]["start"], heard[b0 + offset]["end"])
+        elif tag == "replace" and b1 > b0:
+            span_start, span_end = heard[b0]["start"], heard[b1 - 1]["end"]
+            step = (span_end - span_start) / (a1 - a0)
+            for offset in range(a1 - a0):
+                times[a0 + offset] = (span_start + step * offset, span_start + step * (offset + 1))
+    # Interpolate words Whisper never heard between known neighbours.
+    known = [i for i, t in enumerate(times) if t]
+    if not known:
+        return []
+    for i, t in enumerate(times):
+        if t:
+            continue
+        before = max((k for k in known if k < i), default=None)
+        after = min((k for k in known if k > i), default=None)
+        start = times[before][1] if before is not None else times[after][0] - 0.3
+        end = times[after][0] if after is not None else start + 0.3
+        times[i] = (start, max(start + 0.05, end))
+    return [{"word": word, "start": t[0], "end": t[1]} for word, t in zip(script_words, times)]
+
+
+def _subtitle_phrases(words: list[dict], max_words: int = 3) -> list[list[dict]]:
+    phrases, current = [], []
+    for word in words:
+        current.append(word)
+        if len(current) >= max_words or word["word"].endswith((".", "!", "?", ",", ";", ":")):
+            phrases.append(current)
+            current = []
+    if current:
+        phrases.append(current)
+    return phrases
+
+
+def _subtitle_overlays(payload: dict, video: Path, tmp: Path, frame: tuple[int, int]) -> list[tuple[Path, float, float]]:
+    if payload.get("director_subtitles") is False:
+        return []
+    timeline = _director_timeline(payload)
+    script = " ".join(item["narration"] for item in timeline if item.get("narration")).split()
+    if not script or not _has_audio(video):
+        return []
+    audio = tmp / "subtitle-audio.wav"
+    subprocess.run(["ffmpeg", "-y", "-i", str(video), "-vn", "-ac", "1", "-ar", "16000", str(audio)],
+                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        words = _align_script(script, _transcribe_words(audio, str(payload.get("director_language") or "")))
+    except Exception as error:
+        print(f"[NOVA_VIDEO] subtitles skipped: {str(error)[:200]}", flush=True)
+        return []
+    overlays = []
+    phrases = _subtitle_phrases(words)
+    for p_index, phrase in enumerate(phrases):
+        text = " ".join(item["word"] for item in phrase)
+        phrase_end = phrases[p_index + 1][0]["start"] if p_index + 1 < len(phrases) else phrase[-1]["end"] + 0.4
+        for w_index, item in enumerate(phrase):
+            png = tmp / f"sub-{p_index:03d}-{w_index:02d}.png"
+            _render_text_png(text, "subtitle_pop", frame, "bottom", png, highlight=w_index)
+            end = phrase[w_index + 1]["start"] if w_index + 1 < len(phrase) else phrase_end
+            overlays.append((png, item["start"], max(item["start"] + 0.08, end),
+                             w_index == 0, w_index == len(phrase) - 1))
+    return overlays
+
+
+
+
 def _wrapped_caption(text: str, width: int) -> str:
     import textwrap
 
@@ -814,69 +1067,34 @@ def _wrapped_caption(text: str, width: int) -> str:
     return "\n".join(textwrap.wrap(words, width=max(12, width), break_long_words=False))
 
 
+def _video_size(path: Path) -> tuple[int, int]:
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+         "-of", "csv=p=0:s=x", str(path)], capture_output=True, text=True, check=True)
+    width, height = probe.stdout.strip().split("x")[:2]
+    return int(width), int(height)
+
+
 def _overlay_director_captions(source: Path, payload: dict, output: Path, aspect: str) -> bool:
-    timeline = [item for item in _director_timeline(payload) if item.get("caption")]
-    if not timeline:
-        return False
-
-    filters = []
-    for index, item in enumerate(timeline):
-        start = float(item["start"])
-        end = float(item["end"])
-        fade = min(0.3, max(0.05, (end - start) / 4))
+    """Headlines from the director plus subtitles timed on the video's audio."""
+    tmp = output.parent
+    frame = _video_size(source)
+    subtitles = _subtitle_overlays(payload, source, tmp, frame)
+    style = str(payload.get("director_caption_style") or "headline_bold")
+    if style not in CAPTION_STYLES:
+        style = "headline_bold"
+    overlays = []
+    for index, item in enumerate(item for item in _director_timeline(payload) if item.get("caption")):
         position = item.get("caption_position", "bottom")
-        headline = position in {"top", "center"} and HEADLINE_FONT.exists()
-        fontfile = str(HEADLINE_FONT) if headline else "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-        fontsize = (72 if aspect == "9:16" else 64) if headline else (46 if aspect == "9:16" else 40)
-        margin = 150 if aspect == "9:16" else 80
-        # Bebas is condensed, so headlines fit more characters per line.
-        width = (22 if aspect == "9:16" else 40) if headline else (28 if aspect == "9:16" else 44)
-        lines = _wrapped_caption(str(item["caption"]), width).split("\n")
-        line_height = int(fontsize * (1.08 if headline else 1.35))
-        block = line_height * len(lines)
-        # Alpha ramps in and out so text never pops on or off between shots.
-        alpha = (
-            f"if(lt(t,{start:.3f}),0,if(lt(t,{start + fade:.3f}),(t-{start:.3f})/{fade:.3f},"
-            f"if(lt(t,{end - fade:.3f}),1,if(lt(t,{end:.3f}),({end:.3f}-t)/{fade:.3f},0))))"
-        )
-        # One drawtext per line so every line is centered (ffmpeg 5.1 has no
-        # text_align for multi-line text).
-        for row, line in enumerate(lines):
-            caption_file = output.with_name(f"caption-{index:02d}-{row:02d}.txt")
-            caption_file.write_text(line, encoding="utf-8")
-            if position == "top":
-                y_expr = f"{int(margin * 0.9) + row * line_height}"
-            elif position == "center":
-                y_expr = f"(h-{block})/2+{row * line_height}"
-            else:
-                y_expr = f"h-{margin}-{block - row * line_height}"
-            filters.append(
-                "drawtext="
-                f"fontfile={fontfile}:"
-                f"textfile='{caption_file.as_posix()}':"
-                "fontcolor=white:"
-                f"fontsize={fontsize}:"
-                "borderw=3:bordercolor=black@0.85:"
-                "shadowx=2:shadowy=3:shadowcolor=black@0.6:"
-                f"box={0 if headline else 1}:boxcolor=black@0.28:boxborderw=14:"
-                "x=(w-text_w)/2:"
-                f"y={y_expr}:"
-                f"alpha='{alpha}':"
-                f"enable='between(t,{start:.3f},{end:.3f})'"
-            )
-
-    subprocess.run(
-        [
-            "ffmpeg", "-y", "-i", str(source),
-            "-vf", ",".join(filters),
-            "-map", "0:v:0", "-map", "0:a?",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
-            "-pix_fmt", "yuv420p", "-c:a", "copy", str(output),
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+        if subtitles and position == "bottom":
+            position = "top"  # the lower third belongs to the subtitles
+        png = tmp / f"headline-{index:02d}.png"
+        _render_text_png(item["caption"], style, frame, position, png, accent_words=tuple(item.get("accent_words") or ()))
+        overlays.append((png, float(item["start"]), float(item["end"])))
+    overlays += subtitles
+    if not overlays:
+        return False
+    _overlay_pngs(source, overlays, output)
     return True
 
 
@@ -931,9 +1149,6 @@ def _finish_video(result: Path, payload: dict, tmp: Path, aspect: str, total_sec
     """
     if not _director_timeline(payload):
         return result
-    captioned = tmp / "finish-captioned.mp4"
-    if _overlay_director_captions(result, payload, captioned, aspect):
-        result = captioned
 
     base_audio = None
     if _has_audio(result):
@@ -946,6 +1161,17 @@ def _finish_video(result: Path, payload: dict, tmp: Path, aspect: str, total_sec
         mixed = tmp / "finish-with-audio.mp4"
         _mux_director_audio(result, audio, mixed, total_seconds)
         result = mixed
+    elif base_audio is not None:
+        # Nothing to mix in, but the engine's own track still gets NOVA's loudness.
+        leveled = tmp / "finish-leveled.mp4"
+        subprocess.run(["ffmpeg", "-y", "-i", str(result), "-c:v", "copy", "-af", "loudnorm=I=-15:TP=-1.5:LRA=11",
+                        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(leveled)],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        result = leveled
+
+    captioned = tmp / "finish-captioned.mp4"
+    if _overlay_director_captions(result, payload, captioned, aspect):
+        result = captioned
 
     ended = tmp / "finish-ending.mp4"
     if _apply_ending(result, payload, ended):
@@ -1367,6 +1593,7 @@ def preload_models(include_speech: bool = False):
     """Download checkpoints on CPU so no GPU minutes are burned by downloads."""
     _ensure_model(TI2V_REPO, TI2V_DIR)
     _ensure_model(PLAN_MODEL_REPO, PLAN_MODEL_DIR)
+    _ensure_model(WHISPER_REPO, WHISPER_DIR)
     if include_speech:
         _ensure_model(S2V_REPO, S2V_DIR)
     return {"normal": TI2V_DIR.exists(), "speech": S2V_DIR.exists(), "planner": PLAN_MODEL_DIR.exists()}
@@ -1643,10 +1870,13 @@ Return ONLY a JSON object with this exact shape:
       "narration": "Spoken words for this shot, or empty string.",
       "on_screen_text": "Exact text to show on screen during this shot, or empty string.",
       "text_position": "one of: bottom, top, center",
+      "accent_words": ["1-2 key words from on_screen_text to highlight in an accent color, or empty list"],
       "transition_to_next": "one of: cut, fade, dissolve, slideleft, slideright, wipeleft, circleopen, smoothleft"
     }
   ],
   "on_camera_speech": "true if a person in the video speaks the narration to the camera; false for an off-screen voice-over",
+  "subtitles": "true to burn subtitles of the spoken words (default true when anything is spoken); false only if the customer asked for no subtitles",
+  "caption_style": "one of: headline_bold, headline_clean",
   "ending": "one of: none, fade_to_black",
   "voice": "one of: none, female, male",
   "music_mood": "one of: none, calm, upbeat, cinematic, emotional, corporate, lofi, epic, romantic, tense, playful",
@@ -1701,6 +1931,18 @@ def _plan_extract_json(text: str) -> dict:
     return json.loads(raw[first:last + 1])
 
 
+def _plan_accents(raw, caption: str) -> list[str]:
+    if not caption or not isinstance(raw, list):
+        return []
+    present = {"".join(ch for ch in word.lower() if ch.isalnum()) for word in caption.split()}
+    picked = []
+    for word in raw:
+        key = "".join(ch for ch in str(word).lower() if ch.isalnum())
+        if key and key in present and key not in picked:
+            picked.append(key)
+    return picked[:2]
+
+
 def _plan_max_shots(duration: float) -> int:
     return 2 if float(duration) <= 5 else 3
 
@@ -1744,6 +1986,7 @@ def _normalize_plan(raw, duration: float) -> dict | None:
             "captionPosition": _plan_pick(shot.get("text_position"), PLAN_TEXT_POSITIONS, "bottom"),
             "audio": "",
             "transition": "cut" if index == len(shots) - 1 else _plan_pick(shot.get("transition_to_next"), PLAN_TRANSITIONS, "fade"),
+            "accentWords": _plan_accents(shot.get("accent_words"), _plan_line(shot.get("on_screen_text"), 48)),
         })
 
     remaining = int(max(0.0, total - 2 * PLAN_EDGE_SECONDS) * PLAN_WORDS_PER_SECOND)
@@ -1764,6 +2007,8 @@ def _normalize_plan(raw, duration: float) -> dict | None:
     on_camera = raw.get("on_camera_speech")
     on_camera = has_narration and (on_camera is True or _plan_line(on_camera).lower() == "true")
     return {
+        "subtitles": has_narration and raw.get("subtitles") is not False and _plan_line(raw.get("subtitles")).lower() != "false",
+        "captionStyle": _plan_pick(raw.get("caption_style"), list(CAPTION_STYLES), "headline_bold"),
         "onCameraSpeech": on_camera,
         "ending": _plan_pick(raw.get("ending"), PLAN_ENDINGS, "none"),
         "ambience": ambience,
@@ -1777,7 +2022,7 @@ def _normalize_plan(raw, duration: float) -> dict | None:
 
 
 def _plan_ltx_prompt(plan: dict, native_speech: bool = False) -> str:
-    parts = []
+    parts = ["Clean frame with no subtitles, no captions and no text anywhere."]
     beats = plan["beats"]
     for index, beat in enumerate(beats):
         lead = "" if len(beats) == 1 else ("The video opens on: " if index == 0 else "Then: ")
@@ -1800,10 +2045,11 @@ def _plan_ltx_prompt(plan: dict, native_speech: bool = False) -> str:
 def _plan_engine_order(plan: dict) -> list[str]:
     families = [item.strip().lower() for item in os.environ.get("NOVA_VIDEO_ENGINE_ORDER", "ltx,wan").split(",") if item.strip()]
     speech_languages = [item.strip().lower() for item in os.environ.get("NOVA_LTX_SPEECH_LANGUAGES", "en").split(",") if item.strip()]
+    # Wan S2V measured ~25 A100-minutes per 10s clip, so it is not in the chain.
     order = ["ltx", "wan"]
     if plan["onCameraSpeech"]:
         ltx_speaks = any(plan["language"].lower().startswith(code) for code in speech_languages)
-        order = ["ltx-speech", "wan-speech", "wan"] if ltx_speaks else ["wan-speech", "ltx", "wan"]
+        order = ["ltx-speech", "wan"] if ltx_speaks else ["ltx", "wan"]
     return [name for name in order if name.split("-")[0] in families]
 
 
@@ -1818,6 +2064,8 @@ def _apply_plan(payload: dict, plan: dict) -> dict:
         "director_timeline": plan["beats"],
         "director_visual_style": plan["style"],
         "director_ending": plan["ending"],
+        "director_subtitles": plan["subtitles"],
+        "director_caption_style": plan["captionStyle"],
         "director_voiceover": "" if plan["voice"] == "none" else f"{plan['voice']} voice, {plan['language']}",
         "director_music": plan["musicMood"],
         "director_language": plan["language"],
