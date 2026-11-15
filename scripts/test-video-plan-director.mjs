@@ -148,6 +148,23 @@ assert.deepEqual(cfCalls, [
 assert.equal(planned.provider, "cloudflare");
 assert.equal(planned.beats.length, 2);
 
+// NexaCloud reserves CLOUDFLARE_* names. Its project-scoped credentials
+// must still reach the same provider, including when legacy values exist.
+const hosted = await planVideoWithLlm({
+  prompt: customerPrompt,
+  duration: 5,
+  aspectRatio: "9:16",
+  env: {
+    CLOUDFLARE_ACCOUNT_ID: "legacy-account",
+    CLOUDFLARE_AI_API_TOKEN: "legacy-token",
+    NOVA_CF_ACCOUNT_ID: "acct",
+    NOVA_CF_AI_API_TOKEN: "tok",
+  },
+  fetchImpl: cfFetch,
+});
+assert.equal(hosted.provider, "cloudflare");
+assert.equal(cfCalls.at(-1), cfCalls[0]);
+
 // JSON mode responses may already be objects.
 assert.deepEqual(extractJson({ a: 1 }), { a: 1 });
 assert.deepEqual(extractJson('noise {"shots": []} trailing'), { shots: [] });

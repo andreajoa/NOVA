@@ -415,8 +415,8 @@ async function postJson(fetchImpl, url, headers, body) {
 }
 
 function cloudflareCredentials(env) {
-  const accountId = oneLine(env.CLOUDFLARE_AI_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID);
-  const apiToken = oneLine(env.CLOUDFLARE_AI_API_TOKEN || env.CLOUDFLARE_API_TOKEN);
+  const accountId = oneLine((env.NOVA_CF_AI_ACCOUNT_ID || env.CLOUDFLARE_AI_ACCOUNT_ID) || (env.NOVA_CF_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID));
+  const apiToken = oneLine((env.NOVA_CF_AI_API_TOKEN || env.CLOUDFLARE_AI_API_TOKEN) || (env.NOVA_CF_API_TOKEN || env.CLOUDFLARE_API_TOKEN));
   return accountId && apiToken ? { accountId, apiToken } : null;
 }
 

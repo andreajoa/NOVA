@@ -22,7 +22,9 @@ export async function GET() {
       "CLOUDFLARE_API_TOKEN",
     ]
 
-    const missing = requiredEnv.filter((key) => !process.env[key])
+    const missing = requiredEnv.filter((key) =>
+      !process.env[key.replace("CLOUDFLARE_", "NOVA_CF_")] && !process.env[key]
+    )
 
     if (missing.length) {
       return NextResponse.json(

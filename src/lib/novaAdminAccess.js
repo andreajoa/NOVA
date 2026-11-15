@@ -112,20 +112,20 @@ async function getUserEmailFromClerk(userId) {
 async function getUserEmailFromD1(userId) {
   if (
     !userId ||
-    !process.env.CLOUDFLARE_ACCOUNT_ID ||
-    !process.env.CLOUDFLARE_D1_DATABASE_ID ||
-    !process.env.CLOUDFLARE_API_TOKEN
+    !(process.env.NOVA_CF_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID) ||
+    !(process.env.NOVA_CF_D1_DATABASE_ID || process.env.CLOUDFLARE_D1_DATABASE_ID) ||
+    !(process.env.NOVA_CF_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN)
   ) {
     return "";
   }
 
-  const base = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/d1/database/${process.env.CLOUDFLARE_D1_DATABASE_ID}`;
+  const base = `https://api.cloudflare.com/client/v4/accounts/${(process.env.NOVA_CF_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID)}/d1/database/${(process.env.NOVA_CF_D1_DATABASE_ID || process.env.CLOUDFLARE_D1_DATABASE_ID)}`;
 
   try {
     const res = await fetch(`${base}/query`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+        Authorization: `Bearer ${(process.env.NOVA_CF_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN)}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

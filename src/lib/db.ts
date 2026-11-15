@@ -6,7 +6,7 @@ type D1Response = {
   raw?: string
 }
 
-const CLOUDFLARE_BASE = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/d1/database/${process.env.CLOUDFLARE_D1_DATABASE_ID}`
+const CLOUDFLARE_BASE = `https://api.cloudflare.com/client/v4/accounts/${(process.env.NOVA_CF_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID)}/d1/database/${(process.env.NOVA_CF_D1_DATABASE_ID || process.env.CLOUDFLARE_D1_DATABASE_ID)}`
 
 export async function queryD1(sql: string, params: unknown[] = []): Promise<D1Response> {
   const controller = new AbortController()
@@ -16,7 +16,7 @@ export async function queryD1(sql: string, params: unknown[] = []): Promise<D1Re
     const res = await fetch(`${CLOUDFLARE_BASE}/query`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+        Authorization: `Bearer ${(process.env.NOVA_CF_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN)}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ sql, params }),
